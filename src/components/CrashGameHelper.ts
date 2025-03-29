@@ -485,7 +485,7 @@ export function addBackgroundEffects(
     if (!ctx.value || !gameCanvas.value) return;
 
     const width = gameCanvas.value.width;
-    const height = gameCanvas.value.height - Y_PADDING;
+    const height = gameCanvas.value.height;
 
     // Create background gradient
     const spaceGradient = ctx.value.createLinearGradient(0, 0, 0, height);
@@ -509,12 +509,12 @@ export function addBackgroundEffects(
 
     const gridSize = 40;
     const gridWidth = Math.ceil(width / gridSize);
-    const gridHeight = Math.ceil(height / gridSize);
+    const gridHeight = Math.ceil((height - Y_PADDING) / gridSize);
 
     for (let i = 0; i <= gridWidth; i++) {
         ctx.value.beginPath();
         ctx.value.moveTo(i * gridSize, 0);
-        ctx.value.lineTo(i * gridSize, height);
+        ctx.value.lineTo(i * gridSize, height - Y_PADDING);
         ctx.value.stroke();
     }
 

@@ -14,7 +14,6 @@
             <div v-else-if="!gameStarted" class="game-waiting">
                 <div class="waiting-text">GAME STARTING SOON!</div>
                 <div class="players-bet">Players Ready: {{ playersWhoBet }}</div>
-                <div class="countdown-timer">3</div>
             </div>
 
             <div v-else-if="gameStarted" class="current-multiplier">
@@ -150,6 +149,18 @@ const handleActionButton = () => {
         crashGameService.returnToBoard();
     }
 };
+
+/*
+// Temp hack: make it look like the game is on and we bet
+crashGameState.minigame = {
+    is_running: true,
+    current_multiplier: 1.4,
+    waiting_for_start: false,
+    active_bets: {
+        [gameState.playerId]: { amount: 34, cashed_out_at: null },
+    },
+};
+*/
 
 const gameStartTime = ref(0);
 watchEffect(() => {
@@ -333,7 +344,7 @@ watch(gameEnded, (newValue) => {
             results.sort((a, b) => b.profit - a.profit);
             finalResults.value = results;
             showFinalResults.value = true;
-        }, 1500); // 1.5 second delay to show crash animation
+        }, 3000); // 3 second delay to show crash animation
     }
 });
 </script>
@@ -372,10 +383,11 @@ watch(gameEnded, (newValue) => {
     width: 100%;
     aspect-ratio: 16/9;
     background: #1a237e;
-    border-radius: var(--border-radius);
+    border-radius: 20px;
     overflow: hidden;
-    border: 8px solid var(--accent-color);
-    box-shadow: var(--box-shadow);
+    border: 6px solid #ffd700;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3),
+                0 0 20px rgba(255, 215, 0, 0.3);
 }
 
 /* Game Title */
@@ -418,7 +430,7 @@ watch(gameEnded, (newValue) => {
 }
 
 /* Common Overlay Styles */
-.overlay {
+.game-over, .game-waiting, .current-multiplier, .overlay {
     position: absolute;
     top: 50%;
     left: 50%;
@@ -427,42 +439,149 @@ watch(gameEnded, (newValue) => {
     flex-direction: column;
     align-items: center;
     z-index: 4;
-    background: rgba(255, 255, 255, 0.95);
-    border: 6px solid #e67e22;
-    border-radius: var(--border-radius);
-    padding: 1.5rem 2.5rem;
-    box-shadow: var(--box-shadow);
+    background: linear-gradient(135deg, #ff6b6b, #ff8e8e);
+    border: 6px solid #ffd700;
+    border-radius: 20px;
+    padding: 2rem 3rem;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+    animation: float 3s ease-in-out infinite;
+    backdrop-filter: blur(5px);
 }
 
-/* Game States */
-.game-over, .game-waiting, .current-multiplier {
-    composes: overlay;
+/* Game Over Specific Styles */
+.game-over {
+    background: linear-gradient(135deg, #ff4757, #ff6b81);
+    border-color: #ffd700;
 }
 
-/* Text Styles */
-.title-text {
-    font-family: var(--font-secondary);
-    font-weight: 800;
-    font-size: 2rem;
-    color: #333;
-    text-shadow: var(--text-shadow);
+.crash-title {
+    font-family: var(--font-primary);
+    font-size: 3rem;
+    color: white;
+    text-shadow: 3px 3px 0 rgba(0, 0, 0, 0.3),
+                 0 0 10px rgba(255, 215, 0, 0.5);
+    margin-bottom: 1rem;
+    animation: bounce 0.5s ease infinite;
 }
 
-.value-text {
-    font-family: var(--font-secondary);
-    font-weight: 800;
+.crash-value {
+    font-family: var(--font-primary);
+    font-size: 5rem;
+    color: #ffd700;
+    text-shadow: 3px 3px 0 rgba(0, 0, 0, 0.3),
+                 0 0 20px rgba(255, 215, 0, 0.7);
+    margin-bottom: 1rem;
+}
+
+.crash-face {
     font-size: 4rem;
-    color: var(--mario-red);
-    text-shadow: var(--text-shadow);
+    animation: shake 0.5s ease infinite;
+}
+
+/* Game Waiting Specific Styles */
+.game-waiting {
+    background: linear-gradient(135deg, #2ecc71, #27ae60);
+    border-color: #ffd700;
+}
+
+.waiting-text {
+    font-family: var(--font-primary);
+    font-size: 2.5rem;
+    color: white;
+    text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.3);
+    margin-bottom: 1rem;
+    text-align: center;
+}
+
+.players-bet {
+    font-family: var(--font-secondary);
+    font-size: 1.5rem;
+    color: #fff;
+    background: rgba(0, 0, 0, 0.2);
+    padding: 0.5rem 1.5rem;
+    border-radius: 20px;
+    margin-bottom: 1rem;
+    border: 4px solid rgba(255, 215, 0, 0.3);
+}
+
+.countdown-timer {
+    font-family: var(--font-primary);
+    font-size: 4rem;
+    color: #ffd700;
+    text-shadow: 3px 3px 0 rgba(0, 0, 0, 0.3);
+    animation: countdown 1s ease infinite;
+}
+
+/* Current Multiplier Specific Styles */
+.current-multiplier {
+    background: linear-gradient(135deg, #4834d4, #686de0);
+    border-color: #ffd700;
+}
+
+.multiplier-value {
+    font-family: var(--font-primary);
+    font-size: 4.5rem;
+    color: #ffd700;
+    text-shadow: 3px 3px 0 rgba(0, 0, 0, 0.3),
+                 0 0 20px rgba(255, 215, 0, 0.7);
+    margin-bottom: 0.5rem;
+    animation: glow 2s ease-in-out infinite;
+}
+
+.multiplier-x {
+    font-size: 3rem;
+    margin-left: 0.2rem;
+}
+
+.current-payout {
+    font-family: var(--font-secondary);
+    font-size: 1.2rem;
+    color: white;
+    text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.3);
+    margin-bottom: 0.5rem;
+}
+
+.profit-display {
+    font-family: var(--font-secondary);
+    font-size: 1.5rem;
+    color: #2ecc71;
+    text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.3);
+}
+
+/* New Animations */
+@keyframes float {
+    0%, 100% { transform: translate(-50%, -50%) translateY(0); }
+    50% { transform: translate(-50%, -50%) translateY(-10px); }
+}
+
+@keyframes bounce {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+}
+
+@keyframes shake {
+    0%, 100% { transform: rotate(0deg); }
+    25% { transform: rotate(-10deg); }
+    75% { transform: rotate(10deg); }
+}
+
+@keyframes countdown {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.1); }
+}
+
+@keyframes glow {
+    0%, 100% { text-shadow: 3px 3px 0 rgba(0, 0, 0, 0.3), 0 0 20px rgba(255, 215, 0, 0.7); }
+    50% { text-shadow: 3px 3px 0 rgba(0, 0, 0, 0.3), 0 0 30px rgba(255, 215, 0, 0.9); }
 }
 
 /* Game Controls */
 .game-controls {
     width: 100%;
     background: linear-gradient(to bottom, #ff9c38, #ff6f1e);
-    border: 4px solid white;
-    border-radius: var(--border-radius);
-    box-shadow: var(--box-shadow);
+    border: 6px solid #ffd700;
+    border-radius: 20px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
     padding: 1.2rem;
     margin-bottom: 1.5rem;
 }
@@ -501,8 +620,8 @@ watch(gameEnded, (newValue) => {
     padding: 0.8rem 3rem;
     font-size: 1.2rem;
     font-weight: 700;
-    border: 4px solid white;
-    border-radius: 12px;
+    border: 4px solid #ffd700;
+    border-radius: 20px;
     background: #f0f4ff;
     color: #222266;
     box-shadow: inset 0 0 0 4px rgba(84, 209, 255, 0.3), 0 4px 0 rgba(0, 0, 0, 0.2);
@@ -522,8 +641,8 @@ watch(gameEnded, (newValue) => {
     font-size: 1rem;
     background: #54d1ff;
     color: white;
-    border: 3px solid white;
-    border-radius: 10px;
+    border: 4px solid #ffd700;
+    border-radius: 20px;
     font-weight: 700;
     font-family: var(--font-secondary);
     box-shadow: 0 4px 0 rgba(0, 0, 0, 0.2);
@@ -537,13 +656,14 @@ watch(gameEnded, (newValue) => {
     font-size: 1.3rem;
     text-transform: uppercase;
     letter-spacing: 1px;
-    border-radius: 15px;
+    border-radius: 20px;
     font-weight: 800;
     font-family: var(--font-secondary);
     position: relative;
     overflow: hidden;
-    border: 4px solid white;
-    box-shadow: var(--box-shadow);
+    border: 4px solid #ffd700;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3),
+                0 0 20px rgba(255, 215, 0, 0.3);
     text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.3);
     padding: 0.2rem 1.5rem;
 }
@@ -554,7 +674,7 @@ watch(gameEnded, (newValue) => {
 
 .cashout-action {
     background: linear-gradient(to bottom, #53e37c, #36c55d);
-    animation: pulsing 0.7s infinite alternate;
+    animation: pulse 0.7s infinite alternate;
 }
 
 .next-action {
@@ -562,10 +682,19 @@ watch(gameEnded, (newValue) => {
 }
 
 /* Animations */
-@keyframes pulsing {
-    0% { box-shadow: 0 0 15px rgba(77, 255, 77, 0.5); }
-    50% { box-shadow: 0 0 25px rgba(77, 255, 77, 0.8); }
-    100% { box-shadow: 0 0 15px rgba(77, 255, 77, 0.5); }
+@keyframes pulse {
+    0% { 
+        transform: scale(1);
+        box-shadow: 0 0 15px rgba(77, 255, 77, 0.5);
+    }
+    50% { 
+        transform: scale(1.05);
+        box-shadow: 0 0 25px rgba(77, 255, 77, 0.8);
+    }
+    100% { 
+        transform: scale(1);
+        box-shadow: 0 0 15px rgba(77, 255, 77, 0.5);
+    }
 }
 
 @keyframes wiggle {
@@ -590,15 +719,16 @@ watch(gameEnded, (newValue) => {
     top: 20px;
     left: 20px;
     background: rgba(0, 0, 0, 0.7);
-    border: 3px solid #4dff4d;
-    border-radius: 12px;
-    padding: 12px;
+    border: 6px solid #ffd700;
+    border-radius: 20px;
+    padding: 1.5rem;
     color: white;
     z-index: 10;
     text-align: center;
     animation: pulse 2s infinite;
-    box-shadow: 0 0 15px rgba(77, 255, 77, 0.5);
-    max-width: 220px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3),
+                0 0 20px rgba(255, 215, 0, 0.3);
+    backdrop-filter: blur(5px);
 }
 
 .cashout-content {
@@ -632,18 +762,6 @@ watch(gameEnded, (newValue) => {
     font-size: 1.1rem;
 }
 
-@keyframes pulse {
-    0% {
-        box-shadow: 0 0 15px rgba(77, 255, 77, 0.5);
-    }
-    50% {
-        box-shadow: 0 0 25px rgba(77, 255, 77, 0.8);
-    }
-    100% {
-        box-shadow: 0 0 15px rgba(77, 255, 77, 0.5);
-    }
-}
-
 .current-time {
     position: absolute;
     bottom: 1rem;
@@ -653,11 +771,11 @@ watch(gameEnded, (newValue) => {
     color: white;
     font-family: var(--font-tertiary);
     background: rgba(34, 34, 102, 0.7);
-    padding: 0.4rem 1rem;
-    border-radius: 50px;
-    border: 2px solid white;
+    padding: 0.4rem 1.5rem;
+    border-radius: 20px;
+    border: 4px solid #ffd700;
     z-index: 2;
-    box-shadow: 0 3px 0 rgba(0, 0, 0, 0.2);
+    box-shadow: 0 4px 0 rgba(0, 0, 0, 0.2);
     font-weight: 600;
 }
 

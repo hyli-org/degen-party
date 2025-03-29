@@ -11,7 +11,6 @@ A delightful mini-game collection built with Vue.js. This project offers a color
 
 ### Prerequisites
 
-- Node.js (v14+)
 - Bun
 
 ### Installation
@@ -49,20 +48,6 @@ bun run build
 
 # Build Docker image (uses debug build by default)
 docker build -t degen-party-mac .
-```
-
-### Production Build for linux
-
-```bash
-docker build -t rust-helper -f Dockerfile.rust --platform linux/amd64 .
-
-# Build frontend
-bun run build
-
-# Build Docker image with release binary
-docker build -t degen-party  --platform linux/amd64 .
-docker tag degen-party europe-west3-docker.pkg.dev/hyle-413414/hyle-docker/degen-party:latest
-docker push europe-west3-docker.pkg.dev/hyle-413414/hyle-docker/degen-party:latest
 ```
 
 Run the container:
