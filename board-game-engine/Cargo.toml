@@ -1,0 +1,4 @@
+[workspace]
+members = ["zkprogram", "rollup", "crash_game"]
+resolver = "2"
+default-members = ["zkprogram", "rollup", "crash_game"]

@@ -1,0 +1,12 @@
+**/target/
+
+# Node/Bun
+**/node_modules/
+
+# Development
+**/.git/
+**/.DS_Store
+.vscode/
+
+# Keep the frontend build
+!dist/ 
