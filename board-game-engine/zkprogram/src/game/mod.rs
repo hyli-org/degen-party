@@ -46,13 +46,13 @@ pub enum Space {
     Finish,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, BorshSerialize, BorshDeserialize, PartialEq)]
 pub struct MinigameResult {
     pub contract_name: ContractName,
     pub player_results: Vec<PlayerMinigameResult>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, BorshSerialize, BorshDeserialize, PartialEq)]
 pub struct PlayerMinigameResult {
     pub player_id: Identity,
     pub coins_delta: i32,
@@ -64,18 +64,18 @@ pub enum GamePhase {
     Registration,
     Rolling,
     Moving,
-    MinigameStart,
-    MinigamePlay,
+    MinigameStart(ContractName),
+    MinigamePlay(ContractName),
     TurnEnd,
     GameOver,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, BorshSerialize, BorshDeserialize, PartialEq)]
 pub enum GameAction {
     RegisterPlayer { name: String },
     StartGame,
     RollDice,
-    StartMinigame { minigame_type: String },
+    StartMinigame,
     EndMinigame { result: MinigameResult },
     EndTurn,
 }
@@ -306,7 +306,7 @@ impl GameState {
                     }
                     Space::MinigameSpace => {
                         if let Some(minigame_type) = self.minigames.first() {
-                            self.phase = GamePhase::MinigameStart;
+                            self.phase = GamePhase::MinigameStart(minigame_type.clone());
                             events.push(GameEvent::MinigameReady {
                                 minigame_type: minigame_type.clone().0,
                             });
@@ -341,18 +341,17 @@ impl GameState {
             }
 
             // Minigame Setup Phase
-            (GamePhase::MinigameStart, GameAction::StartMinigame { minigame_type }) => {
-                if !self.minigames.contains(&minigame_type.clone().into()) {
-                    return Err(anyhow!("Invalid minigame type"));
-                }
-                events.push(GameEvent::MinigameStarted { minigame_type });
-                self.phase = GamePhase::MinigamePlay;
+            (GamePhase::MinigameStart(minigame_type), GameAction::StartMinigame) => {
+                events.push(GameEvent::MinigameStarted {
+                    minigame_type: minigame_type.0.clone(),
+                });
+                self.phase = GamePhase::MinigamePlay(minigame_type.clone());
             }
 
             // Minigame End Phase
-            (GamePhase::MinigamePlay, GameAction::EndMinigame { result }) => {
+            (GamePhase::MinigamePlay(minigame_type), GameAction::EndMinigame { result }) => {
                 // Verify the minigame contract is valid
-                if !self.minigames.contains(&result.contract_name) {
+                if minigame_type != result.contract_name {
                     return Err(anyhow!("Invalid minigame contract"));
                 }
 

@@ -647,6 +647,20 @@ watch(gameEnded, (newValue) => {
     font-family: var(--font-secondary);
     box-shadow: 0 4px 0 rgba(0, 0, 0, 0.2);
     text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.3);
+    transition: all 0.2s ease-in-out;
+    cursor: pointer;
+}
+
+.quick-amount:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 7px 0 rgba(0, 0, 0, 0.2),
+                0 0 20px rgba(84, 209, 255, 0.4);
+    background: #6ad8ff;
+}
+
+.quick-amount:active {
+    transform: translateY(2px);
+    box-shadow: 0 2px 0 rgba(0, 0, 0, 0.2);
 }
 
 /* Action Buttons */
@@ -662,14 +676,32 @@ watch(gameEnded, (newValue) => {
     position: relative;
     overflow: hidden;
     border: 4px solid #ffd700;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3),
+    box-shadow: 0 8px 0 rgba(0, 0, 0, 0.3),
                 0 0 20px rgba(255, 215, 0, 0.3);
     text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.3);
     padding: 0.2rem 1.5rem;
+    cursor: pointer;
+    transition: all 0.2s ease-in-out;
+}
+
+.action-button:hover {
+    transform: translateY(-4px) scale(1.02);
+    box-shadow: 0 12px 0 rgba(0, 0, 0, 0.3),
+                0 0 30px rgba(255, 215, 0, 0.5);
+}
+
+.action-button:active {
+    transform: translateY(2px);
+    box-shadow: 0 4px 0 rgba(0, 0, 0, 0.3),
+                0 0 10px rgba(255, 215, 0, 0.2);
 }
 
 .bet-action {
     background: linear-gradient(to bottom, #7c5cff, #6045de);
+}
+
+.bet-action:hover {
+    background: linear-gradient(to bottom, #8d71ff, #715af0);
 }
 
 .cashout-action {
@@ -677,8 +709,16 @@ watch(gameEnded, (newValue) => {
     animation: pulse 0.7s infinite alternate;
 }
 
+.cashout-action:hover {
+    background: linear-gradient(to bottom, #65f58e, #44d76b);
+}
+
 .next-action {
     background: linear-gradient(to bottom, #54d1ff, #30a8d5);
+}
+
+.next-action:hover {
+    background: linear-gradient(to bottom, #6adbff, #42b6e0);
 }
 
 /* Animations */

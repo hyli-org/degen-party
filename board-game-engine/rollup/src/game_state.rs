@@ -1,29 +1,39 @@
-use crate::crash_game::CrashGameEvent;
-use anyhow::Result;
-use board_game_engine::game::{GameAction, GameEvent, GameState};
+use crate::{
+    crash_game::CrashGameCommand,
+    websocket::{InboundWebsocketMessage, OutboundWebsocketMessage},
+};
+use anyhow::{bail, Result};
+use board_game_engine::{
+    game::{GameAction, GameEvent, GamePhase, GameState},
+    GameActionBlob,
+};
+use crash_game::ChainActionBlob;
 use hyle::{
     bus::{command_response::Query, BusClientSender, BusMessage},
-    model::TxHash,
     module_bus_client, module_handle_messages,
     rest::client::NodeApiHttpClient,
     utils::modules::Module,
 };
-use hyle_contract_sdk::{ContractName, Identity};
+use hyle_contract_sdk::{BlobIndex, BlobTransaction, ContractName, Identity};
+use hyle_contract_sdk::{ContractAction, StructuredBlobData};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
+use uuid::Uuid;
+
+use crate::fake_lane_manager::InboundTxMessage;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type", content = "payload")]
+pub enum GameStateCommand {
+    SubmitAction { action: GameAction },
+    Reset,
+    Initialize { player_count: u32, board_size: u32 },
+    SendState,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", content = "payload")]
 pub enum GameStateEvent {
-    ActionSubmitted {
-        action: GameAction,
-    },
-    Reset,
-    Initialize {
-        player_count: u32,
-        board_size: u32,
-    },
-    SendState,
     StateUpdated {
         state: Option<GameState>,
         events: Vec<GameEvent>,
@@ -34,17 +44,21 @@ pub enum GameStateEvent {
     },
 }
 
-impl BusMessage for GameStateEvent {}
+impl BusMessage for GameStateCommand {}
 
 #[derive(Clone)]
 pub struct QueryGameState;
 
 module_bus_client! {
 pub struct GameStateBusClient {
-    sender(GameStateEvent),
-    sender(CrashGameEvent),
+    sender(GameStateCommand),
+    sender(CrashGameCommand),
+    sender(InboundTxMessage),
+    sender(OutboundWebsocketMessage),
     receiver(Query<QueryGameState, GameState>),
-    receiver(GameStateEvent),
+    receiver(GameStateCommand),
+    receiver(InboundTxMessage),
+    receiver(InboundWebsocketMessage),
 }
 }
 
@@ -58,7 +72,6 @@ pub struct GameStateModule {
     bus: GameStateBusClient,
     state: Option<GameState>,
     hyle_client: Arc<NodeApiHttpClient>,
-    active_minigame: Option<ContractName>,
 }
 
 impl Module for GameStateModule {
@@ -74,7 +87,6 @@ impl Module for GameStateModule {
             bus,
             state: None,
             hyle_client,
-            active_minigame: None,
         })
     }
 
@@ -87,9 +99,18 @@ impl Module for GameStateModule {
                     None => Err(anyhow::anyhow!("Game not initialized"))
                 }
             }
-            listen<GameStateEvent> event => {
-                if let Err(e) = self.handle_event(event).await {
-                    tracing::warn!("Error handling event: {:?}", e);
+            listen<InboundWebsocketMessage> msg => {
+                if let InboundWebsocketMessage::GameState(event) = msg {
+                    if let Err(e) = self.handle_user_message(event).await {
+                        tracing::warn!("Error handling event: {:?}", e);
+                    }
+                }
+            }
+            listen<InboundTxMessage> msg => {
+                match msg {
+                    InboundTxMessage::NewTransaction(tx) => {
+                        self.handle_tx(tx).await?;
+                    }
                 }
             }
         };
@@ -99,21 +120,20 @@ impl Module for GameStateModule {
 }
 
 impl GameStateModule {
-    async fn handle_event(&mut self, event: GameStateEvent) -> Result<()> {
+    async fn handle_user_message(&mut self, event: GameStateCommand) -> Result<()> {
         match event {
-            GameStateEvent::ActionSubmitted { action } => {
-                self.handle_action_submitted(action).await
-            }
-            GameStateEvent::Reset => self.handle_reset().await,
-            GameStateEvent::Initialize {
+            GameStateCommand::SubmitAction { action } => self.handle_submit_action(action).await,
+            GameStateCommand::Reset => self.handle_reset().await,
+            GameStateCommand::Initialize {
                 player_count,
                 board_size,
             } => {
                 self.initialize(player_count as usize, board_size as usize)
                     .await
             }
-            GameStateEvent::SendState => self.handle_send_state().await,
-            GameStateEvent::MinigameEnded {
+            GameStateCommand::SendState => self.handle_send_state().await,
+            /*
+            GameStateCommand::MinigameEnded {
                 contract_name,
                 final_results,
             } => {
@@ -130,7 +150,7 @@ impl GameStateModule {
                                     .unwrap()
                                     .players
                                     .iter()
-                                    .find(|p| &p.id == &player_id)
+                                    .find(|p| p.id == player_id)
                                     .unwrap()
                                     .coins,
                             stars_delta: 0, // Crash game doesn't affect stars
@@ -146,81 +166,133 @@ impl GameStateModule {
                 self.handle_action_submitted(GameAction::EndMinigame { result })
                     .await
             }
-            GameStateEvent::StateUpdated { .. } => {
-                // Ignore these events
-                Ok(())
-            }
+             */
         }
     }
 
-    async fn handle_action_submitted(&mut self, action: GameAction) -> Result<()> {
-        if self.state.is_some() {
-            match &action {
-                GameAction::StartMinigame { minigame_type } => {
-                    if self.active_minigame.is_some() {
-                        return Err(anyhow::anyhow!("Minigame already active"));
-                    }
-                    // Track the minigame start
-                    self.active_minigame = Some(minigame_type.clone().into());
-
-                    // If it's the crash game, initialize it
-                    if minigame_type == "crash_game" {
-                        if let Some(state) = &self.state {
-                            let players: Vec<(Identity, String, Option<u64>)> = state
-                                .players
-                                .iter()
-                                .map(|p| (p.id.clone(), p.name.clone(), Some(p.coins as u64)))
-                                .collect();
-                            self.bus.send(CrashGameEvent::Initialize { players })?;
-                        }
-                    }
-                }
-                GameAction::EndMinigame { result } => {
-                    // Verify this is the active minigame
-                    if let Some(active) = &self.active_minigame {
-                        if active != &result.contract_name {
-                            return Err(anyhow::anyhow!(
-                                "Invalid minigame end: expected {}, got {}",
-                                active,
-                                result.contract_name
-                            ));
-                        }
-                        self.active_minigame = None;
-                    } else {
-                        return Err(anyhow::anyhow!("No active minigame to end"));
-                    }
-                }
-                _ => {}
-            }
-
-            let _ = self.submit_to_blockchain(&action).await;
-            let events = self.apply_action(&action).await?;
-
-            // Notify state update
-            self.bus.send(GameStateEvent::StateUpdated {
-                state: Some(self.state.as_ref().unwrap().clone()),
-                events,
-            })?;
+    async fn handle_submit_action(&mut self, action: GameAction) -> Result<()> {
+        if self.state.is_none() {
+            return Err(anyhow::anyhow!("Game not initialized"));
         }
+        let mut blobs = vec![];
+
+        match &action {
+            GameAction::StartMinigame => {
+                let players: Vec<(Identity, String, Option<u64>)> = self
+                    .state
+                    .as_ref()
+                    .unwrap()
+                    .players
+                    .iter()
+                    .map(|p| (p.id.clone(), p.name.clone(), Some(p.coins as u64)))
+                    .collect();
+                blobs.push(
+                    GameActionBlob(Uuid::new_v4().to_string(), action.clone()).as_blob(
+                        "board_game".into(),
+                        None,
+                        Some(vec![BlobIndex(1)]),
+                    ),
+                );
+                // TODO: we should make sure that our current state is synchronised
+                if let GamePhase::MinigameStart(minigame_type) = &self.state.as_ref().unwrap().phase
+                {
+                    if minigame_type.0 == "crash_game" {
+                        blobs.push(
+                            ChainActionBlob(
+                                Uuid::new_v4().to_string(),
+                                crash_game::ChainAction::InitMinigame { players },
+                            )
+                            .as_blob(
+                                "crash_game".into(),
+                                Some(BlobIndex(0)),
+                                None,
+                            ),
+                        );
+                    } else {
+                        bail!("Unsupported minigame type: {}", minigame_type);
+                    }
+                } else {
+                    bail!("Not ready to start a game");
+                }
+                /*
+                if self.active_minigame.is_some() {
+                    return Err(anyhow::anyhow!("Minigame already active"));
+                }
+                // Track the minigame start
+                self.active_minigame = Some(minigame_type.clone().into());
+
+                // If it's the crash game, initialize it
+                if minigame_type == "crash_game" {
+                    if let Some(state) = &self.state {
+                        let players: Vec<(Identity, String, Option<u64>)> = state
+                            .players
+                            .iter()
+                            .map(|p| (p.id.clone(), p.name.clone(), Some(p.coins as u64)))
+                            .collect();
+                        self.bus.send(CrashGameEvent::Initialize { players })?;
+                    }
+                }
+                 */
+            }
+            GameAction::EndMinigame { result } => {
+                /*
+                // Verify this is the active minigame
+                if let Some(active) = &self.active_minigame {
+                    if active != &result.contract_name {
+                        return Err(anyhow::anyhow!(
+                            "Invalid minigame end: expected {}, got {}",
+                            active,
+                            result.contract_name
+                        ));
+                    }
+                    self.active_minigame = None;
+                } else {
+                    return Err(anyhow::anyhow!("No active minigame to end"));
+                }
+                */
+            }
+            _ => {
+                // Submit the action as a blob
+                // With a random UUID to avoid hash collisions
+                blobs.push(
+                    GameActionBlob(Uuid::new_v4().to_string(), action.clone()).as_blob(
+                        "board_game".into(),
+                        None,
+                        None,
+                    ),
+                );
+            }
+        }
+
+        let tx = BlobTransaction::new("toto.board_game", blobs);
+
+        self.bus.send(InboundTxMessage::NewTransaction(tx))?;
+
+        // The state will be updated when we receive the transaction confirmation
+        // through the InboundTxMessage receiver
+
         Ok(())
     }
 
     async fn handle_reset(&mut self) -> Result<()> {
         self.state = None;
-        self.active_minigame = None;
-        self.bus.send(GameStateEvent::StateUpdated {
-            state: None,
-            events: vec![],
-        })?;
+        self.bus.send(OutboundWebsocketMessage::GameStateEvent(
+            GameStateEvent::StateUpdated {
+                state: None,
+                events: vec![],
+            },
+        ))?;
         Ok(())
     }
 
     async fn handle_send_state(&mut self) -> Result<()> {
         if let Some(state) = &self.state {
-            self.bus.send(GameStateEvent::StateUpdated {
-                state: Some(state.clone()),
-                events: vec![],
-            })?;
+            self.bus.send(OutboundWebsocketMessage::GameStateEvent(
+                GameStateEvent::StateUpdated {
+                    state: Some(state.clone()),
+                    events: vec![],
+                },
+            ))?;
         }
         Ok(())
     }
@@ -233,10 +305,12 @@ impl GameStateModule {
         );
         let new_state = GameState::new(player_count, board_size);
         self.state = Some(new_state.clone());
-        self.bus.send(GameStateEvent::StateUpdated {
-            state: Some(new_state),
-            events: vec![],
-        })?;
+        self.bus.send(OutboundWebsocketMessage::GameStateEvent(
+            GameStateEvent::StateUpdated {
+                state: Some(new_state),
+                events: vec![],
+            },
+        ))?;
 
         /*
         // TODO: do this for real but it's slow when changing the ELF regularly.
@@ -279,6 +353,30 @@ impl GameStateModule {
         Ok(())
     }
 
+    async fn handle_tx(&mut self, tx: BlobTransaction) -> Result<()> {
+        // Transaction confirmed, now we can update the state
+        for blob in &tx.blobs {
+            if blob.contract_name != ContractName::from("board_game") {
+                continue;
+            }
+            // parse as structured blob of gameactionblob
+            let t = StructuredBlobData::<GameActionBlob>::try_from(blob.data.clone());
+            if let Ok(StructuredBlobData::<GameActionBlob> { parameters, .. }) = t {
+                tracing::debug!("Received blob: {:?}", parameters);
+                let events = self.apply_action(&parameters.1).await?;
+                self.bus.send(OutboundWebsocketMessage::GameStateEvent(
+                    GameStateEvent::StateUpdated {
+                        state: Some(self.state.clone().unwrap()),
+                        events,
+                    },
+                ))?;
+            } else {
+                tracing::warn!("Failed to parse blob as GameActionBlob");
+            }
+        }
+        Ok(())
+    }
+
     async fn apply_action(&mut self, action: &GameAction) -> Result<Vec<GameEvent>> {
         // Apply action optimistically to local state
         match &mut self.state {
@@ -288,26 +386,6 @@ impl GameStateModule {
                 Ok(events)
             }
             None => Err(anyhow::anyhow!("Game not initialized")),
-        }
-    }
-
-    async fn submit_to_blockchain(&self, action: &GameAction) -> Result<TxHash> {
-        match action {
-            GameAction::StartMinigame { minigame_type } => {
-                tracing::info!("Starting minigame: {}", minigame_type);
-                // TODO: Implement blockchain submission
-                Ok("".into())
-            }
-            GameAction::EndMinigame { result } => {
-                tracing::info!(
-                    "Ending minigame: {} with {} player results",
-                    result.contract_name.0,
-                    result.player_results.len()
-                );
-                // TODO: Implement blockchain submission
-                Ok("".into())
-            }
-            _ => Ok("".into()),
         }
     }
 }

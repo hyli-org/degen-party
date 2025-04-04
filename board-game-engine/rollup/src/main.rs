@@ -4,7 +4,8 @@ use hyle::{
     utils::modules::ModulesHandler,
 };
 use rollup::{
-    crash_game::CrashGameModule, game_state::GameStateModule, websocket::WebSocketModule,
+    crash_game::CrashGameModule, fake_lane_manager::FakeLaneManager, game_state::GameStateModule,
+    websocket::WebSocketModule,
 };
 use std::sync::Arc;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
@@ -35,6 +36,7 @@ async fn main() -> Result<()> {
     handler.build_module::<GameStateModule>(ctx.clone()).await?;
     handler.build_module::<CrashGameModule>(ctx.clone()).await?;
     handler.build_module::<WebSocketModule>(ctx.clone()).await?;
+    handler.build_module::<FakeLaneManager>(ctx.clone()).await?;
 
     tracing::info!("Starting modules");
 

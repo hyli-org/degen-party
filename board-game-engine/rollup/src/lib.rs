@@ -8,6 +8,7 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 
 pub mod crash_game;
+pub mod fake_lane_manager;
 pub mod game_state;
 pub mod websocket;
 

@@ -1,4 +1,7 @@
-use anyhow::Result;
+use std::sync::Arc;
+use std::time::Duration;
+
+use anyhow::{Context, Error, Result};
 use axum::{
     extract::{
         ws::{Message, WebSocket, WebSocketUpgrade},
@@ -9,19 +12,74 @@ use axum::{
     routing::get,
     Router,
 };
-use futures::{sink::SinkExt, stream::StreamExt};
+use futures::{
+    sink::SinkExt,
+    stream::{SplitSink, SplitStream, StreamExt},
+};
 use hyle::{
-    bus::{BusClientSender, SharedMessageBus},
-    handle_messages, module_bus_client, module_handle_messages,
+    bus::{BusClientSender, BusMessage},
+    module_bus_client, module_handle_messages,
     utils::modules::Module,
 };
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
 use thiserror::Error;
+use tokio::{sync::Mutex, task::JoinSet};
 use tracing::{debug, error, info};
 
-use crate::crash_game::CrashGameEvent;
-use crate::game_state::GameStateEvent;
+use crate::{crash_game::CrashGameCommand, game_state::GameStateEvent};
+use crate::{crash_game::CrashGameEvent, game_state::GameStateCommand};
+
+/// Messages received from WebSocket clients that will be processed by the system
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type", content = "payload")]
+pub enum InboundWebsocketMessage {
+    GameState(GameStateCommand),
+    CrashGame(CrashGameCommand),
+}
+
+impl BusMessage for InboundWebsocketMessage {}
+
+/// Messages sent to WebSocket clients from the system
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type", content = "payload")]
+pub enum OutboundWebsocketMessage {
+    GameStateEvent(GameStateEvent),
+    CrashGame(CrashGameEvent),
+}
+
+impl BusMessage for OutboundWebsocketMessage {}
+
+module_bus_client! {
+#[derive(Debug)]
+pub struct WebSocketBusClient {
+    sender(InboundWebsocketMessage),
+    receiver(OutboundWebsocketMessage),
+}
+}
+
+/// Configuration for the WebSocket module
+#[derive(Debug, Clone)]
+pub struct WebSocketConfig {
+    /// The port number to bind the WebSocket server to
+    pub port: u16,
+    /// The endpoint path for WebSocket connections
+    pub ws_path: String,
+    /// The endpoint path for health checks
+    pub health_path: String,
+    /// The interval at which to check for new peers
+    pub peer_check_interval: Duration,
+}
+
+impl Default for WebSocketConfig {
+    fn default() -> Self {
+        Self {
+            port: 8080,
+            ws_path: "/ws".to_string(),
+            health_path: "/ws_health".to_string(),
+            peer_check_interval: Duration::from_millis(100),
+        }
+    }
+}
 
 #[derive(Error, Debug)]
 pub enum WebSocketError {
@@ -35,92 +93,61 @@ pub enum WebSocketError {
     ServerError(String),
 }
 
-// Helper functions for common operations
-async fn send_bus_event(
-    bus: &mut WebSocketBusClient,
-    event: GameStateEvent,
-) -> Result<(), WebSocketError> {
-    bus.send(event)
-        .map_err(|e| WebSocketError::BusSendError(e.to_string()))
-        .map(|_| ())
-}
-
-async fn send_crash_game_event(
-    bus: &mut WebSocketBusClient,
-    event: CrashGameEvent,
-) -> Result<(), WebSocketError> {
-    bus.send(event)
-        .map_err(|e| WebSocketError::BusSendError(e.to_string()))
-        .map(|_| ())
-}
-
-async fn send_ws_message(
-    sender: &mut futures::stream::SplitSink<WebSocket, Message>,
-    msg: WebSocketMessage,
-) -> Result<(), WebSocketError> {
-    let text = serde_json::to_string(&msg)
-        .map_err(|e| WebSocketError::InvalidMessageFormat(e.to_string()))?;
-    sender
-        .send(Message::Text(text.into()))
-        .await
-        .map_err(|e| WebSocketError::WebSocketSendError(e.to_string()))
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "type", content = "payload")]
-pub enum WebSocketMessage {
-    GameState(GameStateEvent),
-    CrashGame(CrashGameEvent),
-}
-
-module_bus_client! {
-#[derive(Debug)]
-pub struct WebSocketBusClient {
-    sender(GameStateEvent),
-    sender(CrashGameEvent),
-    receiver(GameStateEvent),
-    receiver(CrashGameEvent),
-}
-}
-
 /// A WebSocket module that handles real-time communication for the board game.
 /// This module sets up WebSocket endpoints for both the board game and crash game,
 /// handling message passing between clients and the game state.
 pub struct WebSocketModule {
     bus: WebSocketBusClient,
     app: Option<Router>,
+    peer_senders: Vec<SplitSink<WebSocket, Message>>,
+    #[allow(clippy::type_complexity)]
+    peer_receivers: JoinSet<
+        Option<(
+            SplitStream<WebSocket>,
+            Result<InboundWebsocketMessage, Error>,
+        )>,
+    >,
+    new_peers: NewPeers,
+    config: WebSocketConfig,
 }
 
-struct BusState(pub SharedMessageBus);
-impl Clone for BusState {
-    fn clone(&self) -> Self {
-        Self(self.0.new_handle())
-    }
-}
+#[derive(Clone, Default)]
+struct NewPeers(pub Arc<Mutex<Vec<WebSocket>>>);
 
 impl Module for WebSocketModule {
     type Context = Arc<crate::Context>;
 
     async fn build(ctx: Self::Context) -> Result<Self> {
+        let config = WebSocketConfig::default();
+        let new_peers = NewPeers::default();
         let app = Router::new()
-            .route("/ws", get(ws_handler))
-            .route("/ws_health", get(health_check))
-            .with_state(BusState(ctx.bus.new_handle()));
+            .route(&config.ws_path, get(ws_handler))
+            .route(&config.health_path, get(health_check))
+            .with_state(new_peers.clone());
 
         Ok(Self {
             bus: WebSocketBusClient::new_from_bus(ctx.bus.new_handle()).await,
             app: Some(app),
+            peer_senders: Vec::new(),
+            peer_receivers: JoinSet::new(),
+            new_peers,
+            config,
         })
     }
 
     async fn run(&mut self) -> Result<()> {
         // Start the server
-        let listener = tokio::net::TcpListener::bind("0.0.0.0:8080")
-            //let listener = tokio::net::TcpListener::bind("127.0.0.1:8080")
+        let bind_addr = format!("0.0.0.0:{}", self.config.port);
+        let listener = tokio::net::TcpListener::bind(&bind_addr)
             .await
-            .map_err(|e| WebSocketError::ServerError(format!("Failed to bind to port: {}", e)))?;
+            .map_err(|e| {
+                WebSocketError::ServerError(format!(
+                    "Failed to bind to port {}: {}",
+                    self.config.port, e
+                ))
+            })?;
 
-        info!("WebSocket server listening on http://127.0.0.1:8080");
+        info!("WebSocket server listening on port {}", self.config.port);
 
         let app = self
             .app
@@ -135,6 +162,38 @@ impl Module for WebSocketModule {
 
         module_handle_messages! {
             on_bus self.bus,
+            listen<OutboundWebsocketMessage> msg => {
+                if let Err(e) = self.handle_outgoing_message(msg).await {
+                    error!("Error sending outbound message: {}", e);
+                    break;
+                }
+            }
+            Some(Ok(Some(msg))) = self.peer_receivers.join_next() => {
+                match msg {
+                    (socket_stream, Ok(msg)) => {
+                        debug!("Received message: {:?}", msg);
+                        if let Err(e) = self.handle_incoming_message(msg).await {
+                            error!("Error handling incoming message: {}", e);
+                            break;
+                        }
+                        // Add it again to the receiver
+                        self.peer_receivers.spawn(process_websocket_incoming(socket_stream));
+                    }
+                    (_, Err(e)) => {
+                        error!("Error receiving message: {}", e);
+                        break;
+                    }
+                }
+            }
+            _ = tokio::time::sleep(self.config.peer_check_interval) => {
+                // Check for new peers
+                let mut peers = self.new_peers.0.lock().await;
+                for peer in peers.drain(..) {
+                    let (sender, receiver) = peer.split();
+                    self.peer_senders.push(sender);
+                    self.peer_receivers.spawn(process_websocket_incoming(receiver));
+                }
+            }
         };
 
         server.abort_handle().abort();
@@ -142,120 +201,108 @@ impl Module for WebSocketModule {
     }
 }
 
-async fn ws_handler(ws: WebSocketUpgrade, State(state): State<BusState>) -> impl IntoResponse {
-    ws.on_upgrade(move |socket| handle_socket(socket, state.0))
+async fn ws_handler(ws: WebSocketUpgrade, State(state): State<NewPeers>) -> impl IntoResponse {
+    ws.on_upgrade(async move |socket| {
+        debug!("New WebSocket connection established");
+        let mut state = state.0.lock().await;
+        state.push(socket);
+    })
 }
 
-async fn handle_socket(socket: WebSocket, bus: SharedMessageBus) {
-    let (mut sender, mut receiver) = socket.split();
-
-    let id = uuid::Uuid::new_v4();
-    tracing::info!("WebSocket connection established {}", id);
-
-    let mut poll_bus = WebSocketBusClient::new_from_bus(bus.new_handle()).await;
-    let mut sender_bus = WebSocketBusClient::new_from_bus(bus.new_handle()).await;
-    // Request initial board game state
-    if let Err(e) = send_bus_event(&mut sender_bus, GameStateEvent::SendState).await {
-        error!("Failed to send initial state request: {}", e);
-        return;
-    }
-
-    // Handle incoming messages from the WebSocket client
-    let _recv_task = {
-        let mut sender_bus = WebSocketBusClient::new_from_bus(bus.new_handle()).await;
-        tokio::spawn(async move {
-            while let Some(msg) = receiver.next().await {
-                match msg {
-                    Ok(Message::Text(text)) => {
-                        debug!("Received message: {:?}", text);
-                        if let Err(e) = handle_incoming_message(&text, &mut sender_bus).await {
-                            error!("Error handling incoming message: {}", e);
-                            break;
-                        }
-                    }
-                    Ok(Message::Close(_)) => {
-                        debug!("Client initiated close");
-                        break;
-                    }
-                    Err(e) => {
-                        error!("WebSocket receive error: {}", e);
-                        break;
-                    }
-                    _ => {} // Ignore other message types
-                }
+async fn process_websocket_incoming(
+    mut receiver: SplitStream<WebSocket>,
+) -> Option<(
+    SplitStream<WebSocket>,
+    Result<InboundWebsocketMessage, Error>,
+)> {
+    while let Some(msg) = receiver.next().await {
+        match msg {
+            Ok(Message::Text(text)) => {
+                debug!("Received message: {:?}", text);
+                return Some((
+                    receiver,
+                    serde_json::from_str::<InboundWebsocketMessage>(text.as_str())
+                        .context("Failed to parse message"),
+                ));
             }
-            debug!("Receiver task {} shutting down", id);
-        })
-    };
-
-    let _send_task = {
-        tokio::spawn(async move {
-            handle_messages! {
-                on_bus poll_bus,
-                listen<GameStateEvent> event => {
-                    if let Err(e) = handle_outgoing_message(&mut sender, event).await {
-                        error!("Error sending game state message: {}", e);
-                        break;
-                    }
-                }
-                listen<CrashGameEvent> event => {
-                    if let Err(e) = handle_outgoing_message(&mut sender, event).await {
-                        error!("Error sending crash game message: {}", e);
-                        break;
-                    }
-                }
+            Ok(Message::Close(_)) => {
+                debug!("Client initiated close");
+                break;
             }
-            debug!("Sender task {} shutting down", id);
-            let _ = sender.send(Message::Close(None)).await;
-        })
-    };
-}
-
-async fn handle_incoming_message(
-    text: &str,
-    sender_bus: &mut WebSocketBusClient,
-) -> Result<(), WebSocketError> {
-    let ws_msg = serde_json::from_str::<WebSocketMessage>(text).map_err(|e| {
-        WebSocketError::InvalidMessageFormat(format!("Failed to parse message: {}", e))
-    })?;
-
-    match ws_msg {
-        WebSocketMessage::GameState(event) => {
-            debug!("Received game state event: {:?}", event);
-            send_bus_event(sender_bus, event).await.map_err(|e| {
-                WebSocketError::BusSendError(format!("Failed to send game state event: {}", e))
-            })?;
-        }
-        WebSocketMessage::CrashGame(event) => {
-            debug!("Received crash game event: {:?}", event);
-            send_crash_game_event(sender_bus, event)
-                .await
-                .map_err(|e| {
-                    WebSocketError::BusSendError(format!("Failed to send crash game event: {}", e))
-                })?;
+            Err(e) => {
+                error!("WebSocket receive error: {}", e);
+                break;
+            }
+            _ => {} // Ignore other message types
         }
     }
-    Ok(())
+    None
 }
 
-async fn handle_outgoing_message(
-    sender: &mut futures::stream::SplitSink<WebSocket, Message>,
-    event: impl Into<WebSocketMessage>,
-) -> Result<(), WebSocketError> {
-    let ws_msg = event.into();
-    send_ws_message(sender, ws_msg).await
+impl WebSocketModule {
+    async fn handle_incoming_message(
+        &mut self,
+        msg: InboundWebsocketMessage,
+    ) -> Result<(), WebSocketError> {
+        self.bus.send(msg).map_err(|e| {
+            WebSocketError::BusSendError(format!("Failed to send inbound message: {}", e))
+        })?;
+        Ok(())
+    }
+
+    async fn handle_outgoing_message(
+        &mut self,
+        msg: OutboundWebsocketMessage,
+    ) -> Result<(), WebSocketError> {
+        let mut at_least_one_ok = false;
+
+        let text = serde_json::to_string(&msg)
+            .map_err(|e| WebSocketError::InvalidMessageFormat(e.to_string()))?;
+        let text: Message = Message::Text(text.clone().into());
+
+        let send_futures: Vec<_> = self
+            .peer_senders
+            .iter_mut()
+            .map(|peer| {
+                let text = text.clone();
+                async move { peer.send(text).await }
+            })
+            .collect();
+
+        let results = futures::future::join_all(send_futures).await;
+
+        for idx in (0..self.peer_senders.len()).rev() {
+            match &results[idx] {
+                Ok(_) => {
+                    at_least_one_ok = true;
+                }
+                Err(e) => {
+                    debug!("Failed to send message to WebSocket: {}", e);
+                    let _ = self.peer_senders.swap_remove(idx);
+                }
+            }
+        }
+
+        if at_least_one_ok {
+            Ok(())
+        } else {
+            Err(WebSocketError::WebSocketSendError(
+                "Failed to send message to all WebSocket peers".to_string(),
+            ))
+        }
+    }
 }
 
-// Add implementations to convert events to WebSocketMessage
-impl From<GameStateEvent> for WebSocketMessage {
+// Implement conversions from events to OutboundWebsocketMessage
+impl From<GameStateEvent> for OutboundWebsocketMessage {
     fn from(event: GameStateEvent) -> Self {
-        WebSocketMessage::GameState(event)
+        OutboundWebsocketMessage::GameStateEvent(event)
     }
 }
 
-impl From<CrashGameEvent> for WebSocketMessage {
+impl From<CrashGameEvent> for OutboundWebsocketMessage {
     fn from(event: CrashGameEvent) -> Self {
-        WebSocketMessage::CrashGame(event)
+        OutboundWebsocketMessage::CrashGame(event)
     }
 }
 

@@ -1,7 +1,8 @@
 use anyhow::{anyhow, Context, Result};
-use board_game_engine::game::GameAction;
+use board_game_engine::game::{GameAction, MinigameResult, PlayerMinigameResult};
 use board_game_engine::GameActionBlob;
 use borsh::{BorshDeserialize, BorshSerialize};
+use hyle_contract_sdk::caller::ExecutionContext;
 use hyle_contract_sdk::utils::parse_contract_input;
 use hyle_contract_sdk::{
     info, Blob, BlobData, BlobIndex, ContractAction, ContractInput, ContractName, HyleContract,
@@ -97,6 +98,7 @@ pub enum ChainEvent {
 pub enum ServerAction {
     Start,
     Update { current_time: u64 },
+    GetEndResults,
 }
 
 // Server-side events for UI updates
@@ -116,13 +118,15 @@ pub enum ServerEvent {
         max: u64,
         provided: u64,
     },
+    MinigameEnded {
+        final_results: Vec<(Identity, i32)>,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
 pub struct ChainActionBlob(pub String, pub ChainAction);
 
-// Modify ChainAction to implement ContractAction trait
-impl ContractAction for ChainAction {
+impl ContractAction for ChainActionBlob {
     fn as_blob(
         &self,
         contract_name: ContractName,
@@ -145,34 +149,12 @@ impl HyleContract for GameState {
         let (action, mut exec_ctx) =
             parse_contract_input::<ChainActionBlob>(contract_input).map_err(|e| e.to_string())?;
 
-        let endgameblob = contract_input.blobs.iter().find(|blob| {
-            if blob.contract_name != ContractName("board_game".into()) {
-                return false;
-            }
-            let Some(blob) = StructuredBlobData::<GameActionBlob>::try_from(blob.data.clone()).ok()
-            else {
-                return false;
-            };
-            matches!(blob.parameters.1, GameAction::EndMinigame { .. })
-        });
-
-        if let ChainAction::Done = &action.1 {
-            // When ending the minigame, verify that the board game is also being updated
-            exec_ctx
-                .is_in_callee_blobs(
-                    &ContractName("board_game".into()),
-                    endgameblob
-                        .ok_or_else(|| {
-                            "Missing board game EndMinigame action in transaction".to_string()
-                        })?
-                        .clone(),
-                )
-                .map_err(|_| "Missing board game EndMinigame action in transaction".to_string())?;
+        let events = if let ChainAction::Done = &action.1 {
+            self.process_done(&action, &mut exec_ctx)
+        } else {
+            self.process_chain_action(action.1)
         }
-
-        let events = self
-            .process_chain_action(action.1)
-            .map_err(|e| e.to_string())?;
+        .map_err(|e| e.to_string())?;
 
         let chain_events = events
             .iter()
@@ -322,31 +304,54 @@ impl GameState {
                 events.push(ChainEvent::GameCrashed { final_multiplier });
             }
 
-            ChainAction::Done => {
-                let minigame = self
-                    .current_minigame
-                    .as_ref()
-                    .ok_or_else(|| anyhow!("No active minigame"))?;
-
-                if minigame.is_running {
-                    return Err(anyhow!("Cannot end minigame while it is still running"));
-                }
-
-                let final_results: Vec<(Identity, i32)> = self
-                    .players
-                    .iter()
-                    .map(|(id, player)| {
-                        let coins_delta = player.coins as i32;
-                        (id.clone(), coins_delta)
-                    })
-                    .collect();
-
-                self.current_minigame = None;
-                events.push(ChainEvent::MinigameEnded { final_results });
-            }
+            ChainAction::Done => unreachable!("Handled separately"),
         }
 
         Ok(events)
+    }
+
+    pub fn process_done(
+        &mut self,
+        blob: &ChainActionBlob,
+        exec_ctx: &mut ExecutionContext,
+    ) -> Result<Vec<ChainEvent>> {
+        let minigame = self
+            .current_minigame
+            .as_ref()
+            .ok_or_else(|| anyhow!("No active minigame"))?;
+
+        if minigame.is_running {
+            return Err(anyhow!("Cannot end minigame while it is still running"));
+        }
+
+        let expected_final_results = self.final_results();
+
+        let expected_board_blob = GameActionBlob(
+            blob.0.clone(),
+            board_game_engine::game::GameAction::EndMinigame {
+                result: MinigameResult {
+                    contract_name: ContractName("crash_game".into()),
+                    player_results: expected_final_results
+                        .iter()
+                        .map(|r| PlayerMinigameResult {
+                            player_id: r.0.clone(),
+                            coins_delta: r.1,
+                            stars_delta: 0,
+                        })
+                        .collect(),
+                },
+            },
+        );
+
+        // When ending the minigame, verify that the board game is also being updated
+        exec_ctx
+            .is_in_callee_blobs(&ContractName("board_game".into()), expected_board_blob)
+            .map_err(|_| anyhow!("Missing board game EndMinigame action in transaction"))?;
+
+        self.current_minigame = None;
+        Ok(vec![ChainEvent::MinigameEnded {
+            final_results: expected_final_results,
+        }])
     }
 
     // Process server-side actions for real-time updates
@@ -397,6 +402,19 @@ impl GameState {
                     multiplier: new_multiplier,
                 });
             }
+
+            ServerAction::GetEndResults => {
+                let minigame = self
+                    .current_minigame
+                    .as_ref()
+                    .ok_or_else(|| anyhow!("No active minigame"))?;
+
+                if minigame.is_running {
+                    return Err(anyhow!("Game is still running"));
+                }
+                let final_results = self.final_results();
+                events.push(ServerEvent::MinigameEnded { final_results });
+            }
         }
 
         Ok(events)
@@ -432,5 +450,12 @@ impl GameState {
         }
 
         Ok(())
+    }
+
+    pub fn final_results(&self) -> Vec<(Identity, i32)> {
+        self.players
+            .iter()
+            .map(|(id, player)| (id.clone(), player.coins as i32))
+            .collect::<Vec<_>>()
     }
 }

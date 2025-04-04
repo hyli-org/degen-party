@@ -8,6 +8,33 @@ export interface ChainEvent {
     };
 }
 
+export type CrashGameCommand =
+    | {
+          type: "Initialize";
+          payload: { players: Array<[bigint, string]> };
+      }
+    | {
+          type: "PlaceBet";
+          payload: { player_id: bigint; amount: number };
+      }
+    | {
+          type: "CashOut";
+          payload: { player_id: bigint };
+      }
+    | {
+          type: "Start";
+          payload: null;
+      }
+    | {
+          type: "End";
+          payload: null;
+      };
+
+export type CrashGameEvent = {
+    type: "StateUpdated";
+    payload: { state: CrashGameState | null; events: ChainEvent[] };
+};
+
 export interface CrashGameMinigameState {
     is_running: boolean;
     current_multiplier: number;
@@ -28,38 +55,13 @@ export const crashGameState = reactive({
     } as CrashGameMinigameState | null,
 });
 
-export type CrashGameEvent =
-    | {
-          type: "Initialize";
-          payload: { players: Array<[bigint, string]> };
-      }
-    | {
-          type: "PlaceBet";
-          payload: { player_id: bigint; amount: number };
-      }
-    | {
-          type: "CashOut";
-          payload: { player_id: bigint };
-      }
-    | {
-          type: "Start";
-          payload: null;
-      }
-    | {
-          type: "End";
-          payload: null;
-      }
-    | {
-          type: "StateUpdated";
-          payload: { state: CrashGameState | null; events: ChainEvent[] };
-      };
-
 class CrashGameService extends BaseWebSocketService {
     protected override onOpen(): void {
         // No initial action needed
     }
 
     protected override onMessage(data: any) {
+        console.log("Crash game service received data", data);
         if (data.type === "CrashGame") {
             const event = data.payload;
             if (event.type === "StateUpdated") {

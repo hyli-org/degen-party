@@ -47,7 +47,7 @@ export type GameAction =
     | { RollDice: null }
     | { MovePlayer: { player_id: string; spaces: number } }
     | { ApplySpaceEffect: { player_id: string } }
-    | { StartMinigame: { minigame_type: string } }
+    | { StartMinigame }
     | {
           EndMinigame: {
               result: {
@@ -71,25 +71,9 @@ export type GameEvent =
     | { PlayerRegistered: { name: string; player_id: string } }
     | "GameStarted";
 
-export interface GameState {
-    id: string;
-    players: Player[];
-    current_turn: number;
-    board: Board;
-    phase: GamePhase;
-    max_players: number;
-}
-
-export const gameState = reactive({
-    game: null as GameState | null,
-    isInLobby: true,
-    playerId: "1",
-    playerName: "Player 1",
-});
-
-export type GameStateEvent =
+export type GameStateCommand =
     | {
-          type: "ActionSubmitted";
+          type: "SubmitAction";
           payload: { action: GameAction };
       }
     | {
@@ -103,19 +87,38 @@ export type GameStateEvent =
     | {
           type: "SendState";
           payload: null;
-      }
+      };
+
+export type GameStateEvent =
     | {
           type: "StateUpdated";
           payload: { state: GameState | null; events: GameEvent[] };
       }
     | {
           type: "MinigameStarted";
-          payload: { contract_name: string };
+          payload: { minigame_type: string };
       }
     | {
           type: "MinigameEnded";
           payload: { result: MinigameResult };
       };
+
+export interface GameState {
+    id: string;
+    players: Player[];
+    current_turn: number;
+    board: Board;
+    phase: GamePhase;
+    max_players: number;
+}
+
+export const gameState = reactive({
+    game: null as GameState | null,
+    running_minigame: null as string | null,
+    isInLobby: true,
+    playerId: "1",
+    playerName: "Player 1",
+});
 
 class BoardGameService extends BaseWebSocketService {
     onStateUpdated: ((state: { state: GameState | null; events: GameEvent[] }) => void) | null = null;
@@ -123,7 +126,7 @@ class BoardGameService extends BaseWebSocketService {
     protected override onOpen(): void {}
 
     protected override onMessage(data: any) {
-        if (data.type === "GameState") {
+        if (data.type === "GameStateEvent") {
             const event = data.payload;
             if (event.type === "StateUpdated") {
                 gameState.game = event.payload.state;
@@ -141,20 +144,22 @@ class BoardGameService extends BaseWebSocketService {
                         this.send({
                             type: "GameState",
                             payload: {
-                                type: "ActionSubmitted",
+                                type: "SubmitAction",
                                 payload: {
                                     action: {
-                                        StartMinigame: {
-                                            minigame_type: e.MinigameReady.minigame_type,
-                                        },
+                                        StartMinigame: null,
                                     },
                                 },
                             },
                         });
+                    } else if (e instanceof Object && "MinigameStarted" in e) {
+                        gameState.running_minigame = e.MinigameStarted.minigame_type;
+                        console.log("Minigame started", e.MinigameStarted.minigame_type);
+                    } else if (e instanceof Object && "MinigameEnded" in e) {
+                        gameState.running_minigame = null;
+                        console.log("Minigame ended", e.MinigameEnded.result);
                     }
                 }
-            } else if (event.type === "MinigameStarted") {
-                console.log("Minigame started", event.payload.contract_name);
             }
         }
     }
@@ -164,7 +169,7 @@ class BoardGameService extends BaseWebSocketService {
         await this.send({
             type: "GameState",
             payload: {
-                type: "ActionSubmitted",
+                type: "SubmitAction",
                 payload: { action },
             },
         });
@@ -197,7 +202,7 @@ class BoardGameService extends BaseWebSocketService {
         await this.send({
             type: "GameState",
             payload: {
-                type: "ActionSubmitted",
+                type: "SubmitAction",
                 payload: {
                     action: { RegisterPlayer: { name } },
                 },
@@ -209,7 +214,7 @@ class BoardGameService extends BaseWebSocketService {
         await this.send({
             type: "GameState",
             payload: {
-                type: "ActionSubmitted",
+                type: "SubmitAction",
                 payload: {
                     action: { StartGame: null },
                 },

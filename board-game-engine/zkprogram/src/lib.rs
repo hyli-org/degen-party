@@ -19,7 +19,7 @@ pub fn process_game_action(state: &mut GameState, action: GameAction) -> Result<
     state.process_action(action)
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, BorshSerialize, BorshDeserialize, PartialEq)]
 // First string is a UUID just to avoid having the same blob hashes.
 pub struct GameActionBlob(pub String, pub GameAction);
 

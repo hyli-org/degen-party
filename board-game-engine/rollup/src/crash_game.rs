@@ -1,11 +1,16 @@
-use anyhow::Result;
-use crash_game::{ChainAction, ChainEvent, GameState, ServerAction};
+use anyhow::{bail, Result};
+use board_game_engine::{
+    game::{MinigameResult, PlayerMinigameResult},
+    GameActionBlob,
+};
+use crash_game::{ChainAction, ChainActionBlob, ChainEvent, GameState, ServerAction, ServerEvent};
 use hyle::{
     bus::{BusClientSender, BusMessage},
     module_bus_client, module_handle_messages,
     utils::modules::Module,
 };
-use hyle_contract_sdk::Identity;
+use hyle_contract_sdk::{BlobIndex, ContractAction};
+use hyle_contract_sdk::{BlobTransaction, ContractName, Identity, StructuredBlobData};
 use rand;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -14,12 +19,17 @@ use std::{
 };
 use tokio::time;
 use tracing::info;
+use uuid;
 
-use crate::game_state::GameStateEvent;
+use crate::{
+    fake_lane_manager::InboundTxMessage,
+    game_state::GameStateCommand,
+    websocket::{InboundWebsocketMessage, OutboundWebsocketMessage},
+};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", content = "payload")]
-pub enum CrashGameEvent {
+pub enum CrashGameCommand {
     Initialize {
         players: Vec<(Identity, String, Option<u64>)>,
     },
@@ -30,8 +40,15 @@ pub enum CrashGameEvent {
     CashOut {
         player_id: Identity,
     },
-    Start,
+    // This one could be handled by the server, TODO
     End,
+}
+
+impl BusMessage for CrashGameCommand {}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type", content = "payload")]
+pub enum CrashGameEvent {
     StateUpdated {
         state: Option<GameState>,
         events: Vec<ChainEvent>,
@@ -42,9 +59,13 @@ impl BusMessage for CrashGameEvent {}
 
 module_bus_client! {
 pub struct CrashGameBusClient {
-    sender(CrashGameEvent),
-    sender(GameStateEvent),
-    receiver(CrashGameEvent),
+    sender(CrashGameCommand),
+    sender(GameStateCommand),
+    sender(OutboundWebsocketMessage),
+    sender(InboundTxMessage),
+    receiver(CrashGameCommand),
+    receiver(InboundWebsocketMessage),
+    receiver(InboundTxMessage),
 }
 }
 
@@ -60,14 +81,16 @@ impl CrashGameModule {
         &mut self,
         players: Vec<(Identity, String, Option<u64>)>,
     ) -> Result<()> {
-        let mut state = GameState::new();
-        tracing::warn!("Initializing game with {} players", players.len());
-        let events = state.process_chain_action(ChainAction::InitMinigame { players })?;
-        self.state = Some(state);
-        self.bus.send(CrashGameEvent::StateUpdated {
-            state: self.state.clone(),
-            events,
-        })?;
+        let tx = BlobTransaction::new(
+            "toto.crash_game",
+            vec![ChainActionBlob(
+                uuid::Uuid::new_v4().to_string(),
+                ChainAction::InitMinigame { players },
+            )
+            .as_blob("crash_game".into(), None, None)],
+        );
+
+        self.bus.send(InboundTxMessage::NewTransaction(tx))?;
         Ok(())
     }
 
@@ -82,18 +105,16 @@ impl CrashGameModule {
             return Ok(());
         }
 
-        // Process the bet on-chain
-        let events = state.process_chain_action(ChainAction::PlaceBet { player_id, amount })?;
-        self.bus.send(CrashGameEvent::StateUpdated {
-            state: Some(state.clone()),
-            events,
-        })?;
+        let tx = BlobTransaction::new(
+            "toto.crash_game",
+            vec![ChainActionBlob(
+                uuid::Uuid::new_v4().to_string(),
+                ChainAction::PlaceBet { player_id, amount },
+            )
+            .as_blob("crash_game".into(), None, None)],
+        );
 
-        // If everyone has placed their bets, start the game
-        if state.ready_to_start() {
-            self.bus.send(CrashGameEvent::Start)?;
-        }
-
+        self.bus.send(InboundTxMessage::NewTransaction(tx))?;
         Ok(())
     }
 
@@ -106,10 +127,12 @@ impl CrashGameModule {
         let events = state.process_server_action(ServerAction::Start)?;
         if !events.is_empty() {
             self.game_start_time = Some(Instant::now());
-            self.bus.send(CrashGameEvent::StateUpdated {
-                state: Some(state.clone()),
-                events: vec![],
-            })?;
+            self.bus.send(OutboundWebsocketMessage::CrashGame(
+                CrashGameEvent::StateUpdated {
+                    state: Some(state.clone()),
+                    events: vec![],
+                },
+            ))?;
         }
         Ok(())
     }
@@ -123,14 +146,19 @@ impl CrashGameModule {
         };
 
         let current_multiplier = minigame.current_multiplier;
-        let events = state.process_chain_action(ChainAction::CashOut {
-            player_id,
-            multiplier: current_multiplier,
-        })?;
-        self.bus.send(CrashGameEvent::StateUpdated {
-            state: Some(state.clone()),
-            events,
-        })?;
+        let tx = BlobTransaction::new(
+            "toto.crash_game",
+            vec![ChainActionBlob(
+                uuid::Uuid::new_v4().to_string(),
+                ChainAction::CashOut {
+                    player_id,
+                    multiplier: current_multiplier,
+                },
+            )
+            .as_blob("crash_game".into(), None, None)],
+        );
+
+        self.bus.send(InboundTxMessage::NewTransaction(tx))?;
         Ok(())
     }
 
@@ -147,31 +175,41 @@ impl CrashGameModule {
             return Ok(());
         }
 
-        // End the minigame
-        let end_events = state.process_chain_action(ChainAction::Done)?;
-        self.state = None;
-        self.game_start_time = None;
-        self.bus.send(CrashGameEvent::StateUpdated {
-            state: None,
-            events: end_events.clone(),
-        })?;
+        let mut events = state.process_server_action(ServerAction::GetEndResults)?;
+        let Some(ServerEvent::MinigameEnded { final_results }) = events.pop() else {
+            bail!("No minigame ended event");
+        };
 
-        // Extract final results and send them to game state
-        let final_results = end_events
-            .iter()
-            .find_map(|event| {
-                if let ChainEvent::MinigameEnded { final_results } = event {
-                    Some(final_results.clone())
-                } else {
-                    None
-                }
-            })
-            .unwrap_or_default();
+        let uuid = uuid::Uuid::new_v4().to_string();
+        let tx = BlobTransaction::new(
+            "toto.crash_game",
+            vec![
+                ChainActionBlob(uuid.clone(), ChainAction::Done).as_blob(
+                    "crash_game".into(),
+                    None,
+                    Some(vec![BlobIndex(1)]),
+                ),
+                GameActionBlob(
+                    uuid,
+                    board_game_engine::game::GameAction::EndMinigame {
+                        result: MinigameResult {
+                            contract_name: ContractName("crash_game".into()),
+                            player_results: final_results
+                                .iter()
+                                .map(|r| PlayerMinigameResult {
+                                    player_id: r.0.clone(),
+                                    coins_delta: r.1,
+                                    stars_delta: 0,
+                                })
+                                .collect(),
+                        },
+                    },
+                )
+                .as_blob("board_game".into(), None, Some(vec![BlobIndex(0)])),
+            ],
+        );
 
-        self.bus.send(GameStateEvent::MinigameEnded {
-            contract_name: "crash_game".into(),
-            final_results,
-        })?;
+        self.bus.send(InboundTxMessage::NewTransaction(tx))?;
         Ok(())
     }
 
@@ -204,17 +242,88 @@ impl CrashGameModule {
             current_time, crash_probability
         );
 
-        if rand::random::<f64>() < crash_probability {
-            // Send crash event
-            state.process_chain_action(ChainAction::Crash {
-                final_multiplier: state.current_minigame.as_ref().unwrap().current_multiplier,
-            })?;
+        // Debug: never crash before a couple secs
+        if rand::random::<f64>() < crash_probability && elapsed_secs > 2.0 {
+            // Send crash event as transaction
+            let tx = BlobTransaction::new(
+                "toto.crash_game",
+                vec![ChainActionBlob(
+                    uuid::Uuid::new_v4().to_string(),
+                    ChainAction::Crash {
+                        final_multiplier: state
+                            .current_minigame
+                            .as_ref()
+                            .unwrap()
+                            .current_multiplier,
+                    },
+                )
+                .as_blob("crash_game".into(), None, None)],
+            );
+            self.bus.send(InboundTxMessage::NewTransaction(tx))?;
         }
-        self.bus.send(CrashGameEvent::StateUpdated {
-            state: Some(state.clone()),
-            events: vec![], // We don't send server events through StateUpdated
-        })?;
+
+        // Send state update through websocket
+        self.bus.send(OutboundWebsocketMessage::CrashGame(
+            CrashGameEvent::StateUpdated {
+                state: Some(state.clone()),
+                events: vec![], // We don't send server events through StateUpdated
+            },
+        ))?;
         Ok(())
+    }
+
+    async fn handle_tx(&mut self, tx: BlobTransaction) -> Result<()> {
+        // Transaction confirmed, now we can update the state
+        for blob in &tx.blobs {
+            if blob.contract_name != ContractName::from("crash_game") {
+                continue;
+            }
+            // parse as structured blob of ChainActionBlob
+            let t = StructuredBlobData::<ChainActionBlob>::try_from(blob.data.clone());
+            if let Ok(StructuredBlobData::<ChainActionBlob> { parameters, .. }) = t {
+                tracing::debug!("Received blob: {:?}", parameters);
+                let events = self.apply_chain_action(&parameters.1).await?;
+                self.bus.send(OutboundWebsocketMessage::CrashGame(
+                    CrashGameEvent::StateUpdated {
+                        state: self.state.clone(),
+                        events,
+                    },
+                ))?;
+            } else {
+                tracing::warn!("Failed to parse blob as ChainActionBlob");
+            }
+        }
+        Ok(())
+    }
+
+    async fn apply_chain_action(&mut self, action: &ChainAction) -> Result<Vec<ChainEvent>> {
+        if let ChainAction::InitMinigame { .. } = &action {
+            // Initialize the game state
+            self.state = Some(GameState::new());
+        } else if let ChainAction::Done = &action {
+            // End the game
+            self.state = None;
+            // TODO: process this 'for real'
+            return Ok(vec![ChainEvent::MinigameEnded {
+                final_results: vec![],
+            }]);
+        }
+        // Apply action optimistically to local state
+        match &mut self.state {
+            Some(state) => {
+                let events = state.process_chain_action(action.clone())?;
+                tracing::debug!("Applied action {:?}, got events: {:?}", action, events);
+
+                if let ChainAction::PlaceBet { .. } = &action {
+                    // If everyone has placed their bets, start the game
+                    if state.ready_to_start() {
+                        self.handle_start().await?;
+                    }
+                }
+                Ok(events)
+            }
+            None => Err(anyhow::anyhow!("Game not initialized")),
+        }
     }
 }
 
@@ -237,17 +346,26 @@ impl Module for CrashGameModule {
 
         module_handle_messages! {
             on_bus self.bus,
-            listen<CrashGameEvent> event => {
-                if let Err(e) = async {
-                    match event {
-                        CrashGameEvent::Initialize { players } => self.handle_initialize(players).await,
-                        CrashGameEvent::PlaceBet { player_id, amount } => self.handle_place_bet(player_id, amount).await,
-                        CrashGameEvent::Start => self.handle_start().await,
-                        CrashGameEvent::CashOut { player_id } => self.handle_cash_out(player_id).await,
-                        CrashGameEvent::End => self.handle_end().await,
-                        CrashGameEvent::StateUpdated { .. } => { Ok(()) }
-                    }}.await {
-                    tracing::warn!("Error handling event: {:?}", e);
+            listen<InboundWebsocketMessage> msg => {
+                if let InboundWebsocketMessage::CrashGame(event) = msg {
+                    if let Err(e) = async {
+                        match event {
+                            CrashGameCommand::Initialize { players } => self.handle_initialize(players).await,
+                            CrashGameCommand::PlaceBet { player_id, amount } => self.handle_place_bet(player_id, amount).await,
+                            CrashGameCommand::CashOut { player_id } => self.handle_cash_out(player_id).await,
+                            CrashGameCommand::End => self.handle_end().await,
+                        }}.await {
+                        tracing::warn!("Error handling event: {:?}", e);
+                    }
+                }
+            }
+            listen<InboundTxMessage> msg => {
+                match msg {
+                    InboundTxMessage::NewTransaction(tx) => {
+                        if let Err(e) = self.handle_tx(tx).await {
+                            tracing::warn!("Error handling tx: {:?}", e);
+                        }
+                    }
                 }
             }
             _ = update_interval.tick() => {
