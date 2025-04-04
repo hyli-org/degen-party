@@ -42,12 +42,12 @@ pub struct MinigameInstance {
     pub current_multiplier: f64,
     pub waiting_for_start: bool,
     pub active_bets: HashMap<Identity, ActiveBet>,
+    pub players: HashMap<Identity, Player>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
 pub struct GameState {
-    pub players: HashMap<Identity, Player>,
-    pub current_minigame: Option<MinigameInstance>,
+    pub minigame: MinigameInstance,
 }
 
 // Actions that can be performed on-chain
@@ -177,8 +177,13 @@ impl From<StateCommitment> for GameState {
 impl GameState {
     pub fn new() -> Self {
         Self {
-            players: HashMap::new(),
-            current_minigame: None,
+            minigame: MinigameInstance {
+                is_running: false,
+                current_multiplier: 1.0,
+                waiting_for_start: true,
+                active_bets: HashMap::new(),
+                players: HashMap::new(),
+            },
         }
     }
 
@@ -198,7 +203,7 @@ impl GameState {
 
         match action {
             ChainAction::InitMinigame { players } => {
-                if self.current_minigame.is_some() {
+                if self.minigame.is_running {
                     return Err(anyhow!("A minigame is already in progress"));
                 }
 
@@ -206,7 +211,7 @@ impl GameState {
 
                 // Initialize or update player states
                 for (id, name, coins) in players {
-                    self.players.insert(
+                    self.minigame.players.insert(
                         id.clone(),
                         Player {
                             id: id.clone(),
@@ -216,27 +221,20 @@ impl GameState {
                     );
                 }
 
-                self.current_minigame = Some(MinigameInstance {
-                    is_running: false,
-                    current_multiplier: 1.0,
-                    waiting_for_start: true,
-                    active_bets: HashMap::new(),
-                });
+                self.minigame.is_running = false;
+                self.minigame.waiting_for_start = true;
+                self.minigame.current_multiplier = 1.0;
 
                 events.push(ChainEvent::MinigameInitialized { player_count });
             }
 
             ChainAction::PlaceBet { player_id, amount } => {
-                let minigame = self
-                    .current_minigame
-                    .as_mut()
-                    .ok_or_else(|| anyhow!("No active minigame"))?;
-
-                if !minigame.waiting_for_start {
+                if !self.minigame.waiting_for_start {
                     return Err(anyhow!("Cannot place bet while game is in progress"));
                 }
 
                 let player = self
+                    .minigame
                     .players
                     .get_mut(&player_id)
                     .ok_or_else(|| anyhow!("Player not found"))?;
@@ -246,7 +244,7 @@ impl GameState {
                 }
 
                 player.coins -= amount;
-                minigame.active_bets.insert(
+                self.minigame.active_bets.insert(
                     player_id.clone(),
                     ActiveBet {
                         amount,
@@ -261,25 +259,26 @@ impl GameState {
                 player_id,
                 multiplier,
             } => {
-                let minigame = self
-                    .current_minigame
-                    .as_mut()
-                    .ok_or_else(|| anyhow!("No active minigame"))?;
-
-                if !minigame.is_running {
+                if !self.minigame.is_running {
                     return Err(anyhow!("Game is not running"));
                 }
 
-                let bet = minigame
+                let bet = self
+                    .minigame
                     .active_bets
                     .get_mut(&player_id)
                     .ok_or_else(|| anyhow!("Bet not found"))?;
+
+                if bet.cashed_out_at.is_some() {
+                    return Err(anyhow!("Bet already cashed out"));
+                }
 
                 bet.cashed_out_at = Some(multiplier);
 
                 let winnings = Self::calculate_winnings(bet.amount, multiplier);
 
                 let player = self
+                    .minigame
                     .players
                     .get_mut(&player_id)
                     .ok_or_else(|| anyhow!("Player not found"))?;
@@ -293,13 +292,8 @@ impl GameState {
             }
 
             ChainAction::Crash { final_multiplier } => {
-                let minigame = self
-                    .current_minigame
-                    .as_mut()
-                    .ok_or_else(|| anyhow!("No active minigame"))?;
-
-                minigame.is_running = false;
-                minigame.current_multiplier = final_multiplier;
+                self.minigame.is_running = false;
+                self.minigame.current_multiplier = final_multiplier;
 
                 events.push(ChainEvent::GameCrashed { final_multiplier });
             }
@@ -315,12 +309,7 @@ impl GameState {
         blob: &ChainActionBlob,
         exec_ctx: &mut ExecutionContext,
     ) -> Result<Vec<ChainEvent>> {
-        let minigame = self
-            .current_minigame
-            .as_ref()
-            .ok_or_else(|| anyhow!("No active minigame"))?;
-
-        if minigame.is_running {
+        if self.minigame.is_running {
             return Err(anyhow!("Cannot end minigame while it is still running"));
         }
 
@@ -348,7 +337,9 @@ impl GameState {
             .is_in_callee_blobs(&ContractName("board_game".into()), expected_board_blob)
             .map_err(|_| anyhow!("Missing board game EndMinigame action in transaction"))?;
 
-        self.current_minigame = None;
+        self.minigame.is_running = false;
+        self.minigame.current_multiplier = 1.0;
+        self.minigame.waiting_for_start = true;
         Ok(vec![ChainEvent::MinigameEnded {
             final_results: expected_final_results,
         }])
@@ -360,43 +351,33 @@ impl GameState {
 
         match action {
             ServerAction::Start => {
-                let minigame = self
-                    .current_minigame
-                    .as_mut()
-                    .ok_or_else(|| anyhow!("No active minigame"))?;
-
-                if !minigame.waiting_for_start {
+                if !self.minigame.waiting_for_start {
                     return Err(anyhow!("Game is already in progress"));
                 }
 
-                if minigame.active_bets.is_empty() {
+                if self.minigame.active_bets.is_empty() {
                     return Err(anyhow!("No bets placed"));
                 }
 
                 // Check if all players have placed their bets
-                if minigame.active_bets.len() != self.players.len() {
+                if self.minigame.active_bets.len() != self.minigame.players.len() {
                     return Err(anyhow!("Waiting for all players to place their bets"));
                 }
 
-                minigame.is_running = true;
-                minigame.waiting_for_start = false;
-                minigame.current_multiplier = 1.0;
+                self.minigame.is_running = true;
+                self.minigame.waiting_for_start = false;
+                self.minigame.current_multiplier = 1.0;
 
                 events.push(ServerEvent::GameStarted);
             }
 
             ServerAction::Update { current_time } => {
-                let minigame = self
-                    .current_minigame
-                    .as_mut()
-                    .ok_or_else(|| anyhow!("No active minigame"))?;
-
-                if !minigame.is_running {
+                if !self.minigame.is_running {
                     return Ok(events);
                 }
 
                 let new_multiplier = Self::calculate_multiplier(current_time);
-                minigame.current_multiplier = new_multiplier;
+                self.minigame.current_multiplier = new_multiplier;
 
                 events.push(ServerEvent::MultiplierUpdated {
                     multiplier: new_multiplier,
@@ -404,12 +385,7 @@ impl GameState {
             }
 
             ServerAction::GetEndResults => {
-                let minigame = self
-                    .current_minigame
-                    .as_ref()
-                    .ok_or_else(|| anyhow!("No active minigame"))?;
-
-                if minigame.is_running {
+                if self.minigame.is_running {
                     return Err(anyhow!("Game is still running"));
                 }
                 let final_results = self.final_results();
@@ -421,10 +397,10 @@ impl GameState {
     }
 
     pub fn ready_to_start(&self) -> bool {
-        if let Some(minigame) = &self.current_minigame {
-            if minigame.waiting_for_start && minigame.active_bets.len() == self.players.len() {
-                return true;
-            }
+        if self.minigame.waiting_for_start
+            && self.minigame.active_bets.len() == self.minigame.players.len()
+        {
+            return true;
         }
         false
     }
@@ -439,7 +415,7 @@ impl GameState {
             });
         }
 
-        if let Some(player) = self.players.get(&player_id) {
+        if let Some(player) = self.minigame.players.get(&player_id) {
             if player.coins < amount {
                 return Err(ServerEvent::InsufficientFunds {
                     player_id,
@@ -453,7 +429,8 @@ impl GameState {
     }
 
     pub fn final_results(&self) -> Vec<(Identity, i32)> {
-        self.players
+        self.minigame
+            .players
             .iter()
             .map(|(id, player)| (id.clone(), player.coins as i32))
             .collect::<Vec<_>>()

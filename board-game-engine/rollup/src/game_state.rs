@@ -11,7 +11,6 @@ use crash_game::ChainActionBlob;
 use hyle::{
     bus::{command_response::Query, BusClientSender, BusMessage},
     module_bus_client, module_handle_messages,
-    rest::client::NodeApiHttpClient,
     utils::modules::Module,
 };
 use hyle_contract_sdk::{BlobIndex, BlobTransaction, ContractName, Identity};
@@ -71,7 +70,6 @@ pub const CONTRACT_ELF: &[u8] = &[0, 1, 2, 3];
 pub struct GameStateModule {
     bus: GameStateBusClient,
     state: Option<GameState>,
-    hyle_client: Arc<NodeApiHttpClient>,
 }
 
 impl Module for GameStateModule {
@@ -80,14 +78,7 @@ impl Module for GameStateModule {
     async fn build(ctx: Self::Context) -> Result<Self> {
         let bus = GameStateBusClient::new_from_bus(ctx.bus.new_handle()).await;
 
-        // Initialize Hylé client
-        let hyle_client = Arc::new(NodeApiHttpClient::new("http://localhost:4321".to_string())?);
-
-        Ok(Self {
-            bus,
-            state: None,
-            hyle_client,
-        })
+        Ok(Self { bus, state: None })
     }
 
     async fn run(&mut self) -> Result<()> {

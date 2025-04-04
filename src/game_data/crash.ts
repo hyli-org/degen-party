@@ -40,19 +40,15 @@ export interface CrashGameMinigameState {
     current_multiplier: number;
     waiting_for_start: boolean;
     active_bets: Record<string, { amount: number; cashed_out_at?: number | null }>;
+    players: Record<string, { id: string; name: string; coins: number }>;
 }
 
 export interface CrashGameState {
-    minigame: CrashGameMinigameState | null;
+    minigame: CrashGameMinigameState;
 }
 
 export const crashGameState = reactive({
-    minigame: {
-        is_running: false,
-        current_multiplier: 1,
-        waiting_for_start: false,
-        active_bets: {},
-    } as CrashGameMinigameState | null,
+    minigame: null as CrashGameMinigameState | null,
 });
 
 class CrashGameService extends BaseWebSocketService {
@@ -68,7 +64,7 @@ class CrashGameService extends BaseWebSocketService {
                 const state = event.payload.state;
                 if (state) {
                     console.log("Crash game state updated", state.current_minigame);
-                    crashGameState.minigame = state.current_minigame;
+                    crashGameState.minigame = state.minigame;
                 } else {
                     console.log("Crash game state cleared");
                 }

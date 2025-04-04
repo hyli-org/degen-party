@@ -26,7 +26,7 @@ const router = createRouter({
 
 watchEffect(() => {
     // If there's a minigame ongoing, switch to that page
-    if (crashGameState.minigame && gameState.running_minigame) {
+    if (gameState.running_minigame) {
         router.push({ name: "CrashGame" });
     } else {
         router.push({ name: "Board" });
