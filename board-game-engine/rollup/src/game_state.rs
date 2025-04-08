@@ -13,6 +13,7 @@ use hyle::{
     module_bus_client, module_handle_messages,
     utils::modules::Module,
 };
+use hyle_contract_sdk::ZkContract;
 use hyle_contract_sdk::{BlobIndex, BlobTransaction, ContractName, Identity};
 use hyle_contract_sdk::{ContractAction, StructuredBlobData};
 use serde::{Deserialize, Serialize};
@@ -61,12 +62,6 @@ pub struct GameStateBusClient {
 }
 }
 
-/// The ELF file for the Succinct RISC-V zkVM.
-//#[cfg(not(clippy))]
-//pub const CONTRACT_ELF: &[u8] = sp1_sdk::include_elf!("board-game-engine");
-//#[cfg(clippy)]
-pub const CONTRACT_ELF: &[u8] = &[0, 1, 2, 3];
-
 pub struct GameStateModule {
     bus: GameStateBusClient,
     state: Option<GameState>,
@@ -98,10 +93,8 @@ impl Module for GameStateModule {
                 }
             }
             listen<InboundTxMessage> msg => {
-                match msg {
-                    InboundTxMessage::NewTransaction(tx) => {
-                        self.handle_tx(tx).await?;
-                    }
+                if let InboundTxMessage::NewTransaction(tx) = msg {
+                    self.handle_tx(tx).await?;
                 }
             }
         };
@@ -169,6 +162,7 @@ impl GameStateModule {
 
         match &action {
             GameAction::StartMinigame => {
+                let uuid = Uuid::new_v4().to_string();
                 let players: Vec<(Identity, String, Option<u64>)> = self
                     .state
                     .as_ref()
@@ -177,13 +171,12 @@ impl GameStateModule {
                     .iter()
                     .map(|p| (p.id.clone(), p.name.clone(), Some(p.coins as u64)))
                     .collect();
-                blobs.push(
-                    GameActionBlob(Uuid::new_v4().to_string(), action.clone()).as_blob(
-                        "board_game".into(),
-                        None,
-                        Some(vec![BlobIndex(1)]),
-                    ),
-                );
+                // TODO: conceptually, we should perhaps skip this one ?
+                blobs.push(GameActionBlob(uuid.clone(), action.clone()).as_blob(
+                    "board_game".into(),
+                    None,
+                    None,
+                ));
                 // TODO: we should make sure that our current state is synchronised
                 if let GamePhase::MinigameStart(minigame_type) = &self.state.as_ref().unwrap().phase
                 {
@@ -193,11 +186,7 @@ impl GameStateModule {
                                 Uuid::new_v4().to_string(),
                                 crash_game::ChainAction::InitMinigame { players },
                             )
-                            .as_blob(
-                                "crash_game".into(),
-                                Some(BlobIndex(0)),
-                                None,
-                            ),
+                            .as_blob("crash_game".into(), None, None),
                         );
                     } else {
                         bail!("Unsupported minigame type: {}", minigame_type);
@@ -205,43 +194,8 @@ impl GameStateModule {
                 } else {
                     bail!("Not ready to start a game");
                 }
-                /*
-                if self.active_minigame.is_some() {
-                    return Err(anyhow::anyhow!("Minigame already active"));
-                }
-                // Track the minigame start
-                self.active_minigame = Some(minigame_type.clone().into());
-
-                // If it's the crash game, initialize it
-                if minigame_type == "crash_game" {
-                    if let Some(state) = &self.state {
-                        let players: Vec<(Identity, String, Option<u64>)> = state
-                            .players
-                            .iter()
-                            .map(|p| (p.id.clone(), p.name.clone(), Some(p.coins as u64)))
-                            .collect();
-                        self.bus.send(CrashGameEvent::Initialize { players })?;
-                    }
-                }
-                 */
             }
-            GameAction::EndMinigame { result } => {
-                /*
-                // Verify this is the active minigame
-                if let Some(active) = &self.active_minigame {
-                    if active != &result.contract_name {
-                        return Err(anyhow::anyhow!(
-                            "Invalid minigame end: expected {}, got {}",
-                            active,
-                            result.contract_name
-                        ));
-                    }
-                    self.active_minigame = None;
-                } else {
-                    return Err(anyhow::anyhow!("No active minigame to end"));
-                }
-                */
-            }
+            GameAction::EndMinigame { result: _ } => {}
             _ => {
                 // Submit the action as a blob
                 // With a random UUID to avoid hash collisions
@@ -294,8 +248,13 @@ impl GameStateModule {
             player_count,
             board_size
         );
-        let new_state = GameState::new(player_count, board_size);
+        let new_state = GameState::new(player_count, board_size, 7); //rand::rng().next_u64());
         self.state = Some(new_state.clone());
+
+        self.bus.send(InboundTxMessage::RegisterContract((
+            ContractName::from("board_game"),
+            new_state.commit(),
+        )))?;
         self.bus.send(OutboundWebsocketMessage::GameStateEvent(
             GameStateEvent::StateUpdated {
                 state: Some(new_state),
@@ -303,53 +262,27 @@ impl GameStateModule {
             },
         ))?;
 
-        /*
-        // TODO: do this for real but it's slow when changing the ELF regularly.
-        // Load the VK from local file
-        let vk_path = "vk.bin";
-        let vk = if std::path::Path::new(vk_path).exists() {
-            std::fs::read(vk_path)?
-        } else {
-            let client = ProverClient::from_env();
-            let (_, vk) = client.setup(CONTRACT_ELF);
-            let vk = serde_json::to_vec(&vk).unwrap();
-            // Save it locally along with hash of elf
-            // Compute the hash of the ELF file
-            let mut hasher = Sha256::new();
-            hasher.update(CONTRACT_ELF);
-            let elf_hash = hasher.finalize();
+        // Wait some time synchronously for the contract to be registered
+        // TODO: fix this
+        tokio::time::sleep(std::time::Duration::from_secs(2)).await;
 
-            // Save the vk and hash locally
-            let mut file = File::create("vk_and_hash.bin")?;
-            file.write_all(&vk)?;
-            file.write_all(&elf_hash)?;
-            vk
-        };
-
-        // Send the transaction to register the contract
-        let register_tx = APIRegisterContract {
-            verifier: "sp1-4".into(),
-            program_id: hyle_contract_sdk::ProgramId(vk),
-            state_commitment: hyle_contract_sdk::HyleContract::commit(&self.state),
-            contract_name: "board_game".into(),
-        };
-        let res = self
-            .hyle_client
-            .register_contract(&register_tx)
-            .await
-            .unwrap();
-
-        tracing::warn!("✅ Register contract tx sent. Tx hash: {}", res);
-        */
         Ok(())
     }
 
     async fn handle_tx(&mut self, tx: BlobTransaction) -> Result<()> {
         // Transaction confirmed, now we can update the state
-        for blob in &tx.blobs {
+        for (index, blob) in tx.blobs.iter().enumerate() {
             if blob.contract_name != ContractName::from("board_game") {
                 continue;
             }
+
+            // Generate a proof with this state
+            self.bus.send(InboundTxMessage::NewProofRequest((
+                borsh::to_vec(self.state.as_ref().unwrap())?,
+                BlobIndex(index),
+                tx.clone(),
+            )))?;
+
             // parse as structured blob of gameactionblob
             let t = StructuredBlobData::<GameActionBlob>::try_from(blob.data.clone());
             if let Ok(StructuredBlobData::<GameActionBlob> { parameters, .. }) = t {

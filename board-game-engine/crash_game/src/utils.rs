@@ -11,6 +11,9 @@ impl fmt::Display for ChainEvent {
             ChainEvent::BetPlaced { player_id, amount } => {
                 write!(f, "Player {} placed bet of {}", player_id, amount)
             }
+            ChainEvent::GameStarted => {
+                write!(f, "Game started")
+            }
             ChainEvent::PlayerCashedOut {
                 player_id,
                 multiplier,

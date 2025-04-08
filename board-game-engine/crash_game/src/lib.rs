@@ -1,24 +1,21 @@
-use anyhow::{anyhow, Context, Result};
-use board_game_engine::game::{GameAction, MinigameResult, PlayerMinigameResult};
+use anyhow::{anyhow, Result};
+use board_game_engine::game::{MinigameResult, PlayerMinigameResult};
 use board_game_engine::GameActionBlob;
 use borsh::{BorshDeserialize, BorshSerialize};
 use hyle_contract_sdk::caller::ExecutionContext;
-use hyle_contract_sdk::utils::parse_contract_input;
+use hyle_contract_sdk::utils::parse_calldata;
 use hyle_contract_sdk::{
-    info, Blob, BlobData, BlobIndex, ContractAction, ContractInput, ContractName, HyleContract,
-    Identity, RunResult, StateCommitment, StructuredBlobData,
+    info, Blob, BlobData, BlobIndex, Calldata, ContractAction, ContractName, Identity, RunResult,
+    StateCommitment, StructuredBlobData, ZkContract,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 pub mod utils;
 
 // Game constants
 const BASE_SPEED: f64 = 0.02;
 const ACCELERATION: f64 = 0.000015;
-const MIN_MULTIPLIER: f64 = 1.2;
-const MAX_MULTIPLIER: f64 = 25.0;
 const MIN_BET: u64 = 1;
 const MAX_BET: u64 = 100;
 const STARTING_COINS: u64 = 100;
@@ -36,7 +33,7 @@ pub struct ActiveBet {
     pub cashed_out_at: Option<f64>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
 pub struct MinigameInstance {
     pub is_running: bool,
     pub current_multiplier: f64,
@@ -45,7 +42,7 @@ pub struct MinigameInstance {
     pub players: HashMap<Identity, Player>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
 pub struct GameState {
     pub minigame: MinigameInstance,
 }
@@ -60,6 +57,7 @@ pub enum ChainAction {
         player_id: Identity,
         amount: u64,
     },
+    Start,
     CashOut {
         player_id: Identity,
         multiplier: f64,
@@ -80,6 +78,7 @@ pub enum ChainEvent {
         player_id: Identity,
         amount: u64,
     },
+    GameStarted,
     PlayerCashedOut {
         player_id: Identity,
         multiplier: f64,
@@ -96,7 +95,6 @@ pub enum ChainEvent {
 // Server-side actions for real-time updates
 #[derive(Debug, Clone)]
 pub enum ServerAction {
-    Start,
     Update { current_time: u64 },
     GetEndResults,
 }
@@ -104,7 +102,6 @@ pub enum ServerAction {
 // Server-side events for UI updates
 #[derive(Debug, Clone)]
 pub enum ServerEvent {
-    GameStarted,
     MultiplierUpdated {
         multiplier: f64,
     },
@@ -118,6 +115,7 @@ pub enum ServerEvent {
         max: u64,
         provided: u64,
     },
+    // Exists just to answer GetEndResults, bit of a hack.
     MinigameEnded {
         final_results: Vec<(Identity, i32)>,
     },
@@ -144,17 +142,20 @@ impl ContractAction for ChainActionBlob {
     }
 }
 
-impl HyleContract for GameState {
-    fn execute(&mut self, contract_input: &ContractInput) -> RunResult {
+impl ZkContract for GameState {
+    fn execute(&mut self, contract_input: &Calldata) -> RunResult {
         let (action, mut exec_ctx) =
-            parse_contract_input::<ChainActionBlob>(contract_input).map_err(|e| e.to_string())?;
-
+            parse_calldata::<ChainActionBlob>(contract_input).map_err(|e| e.to_string())?;
+        info!("Self Pre: {:?}", self);
+        info!("Action: {:?}", action);
         let events = if let ChainAction::Done = &action.1 {
             self.process_done(&action, &mut exec_ctx)
         } else {
             self.process_chain_action(action.1)
         }
         .map_err(|e| e.to_string())?;
+
+        info!("Self Post: {:?}, {:?}", self, self.commit());
 
         let chain_events = events
             .iter()
@@ -164,27 +165,28 @@ impl HyleContract for GameState {
     }
 
     fn commit(&self) -> StateCommitment {
-        StateCommitment(borsh::to_vec(self).unwrap())
-    }
-}
-
-impl From<StateCommitment> for GameState {
-    fn from(state: StateCommitment) -> Self {
-        GameState::try_from_slice(&state.0).unwrap()
+        match self.minigame.is_running {
+            true => {
+                // While the game is running, don't commit things that are changing quickly.
+                let mut serialized_data = borsh::to_vec(&self.minigame.active_bets).unwrap();
+                serialized_data.extend(borsh::to_vec(&self.minigame.players).unwrap());
+                // Magic data
+                serialized_data.extend([0, 1, 2, 3]);
+                StateCommitment(serialized_data)
+            }
+            false => {
+                let mut serialized_data = borsh::to_vec(&self).unwrap();
+                // Magic data
+                serialized_data.extend([3, 2, 1, 0]);
+                StateCommitment(serialized_data)
+            }
+        }
     }
 }
 
 impl GameState {
     pub fn new() -> Self {
-        Self {
-            minigame: MinigameInstance {
-                is_running: false,
-                current_multiplier: 1.0,
-                waiting_for_start: true,
-                active_bets: HashMap::new(),
-                players: HashMap::new(),
-            },
-        }
+        Self::default()
     }
 
     fn calculate_multiplier(elapsed_millis: u64) -> f64 {
@@ -253,6 +255,27 @@ impl GameState {
                 );
 
                 events.push(ChainEvent::BetPlaced { player_id, amount });
+            }
+
+            ChainAction::Start => {
+                if !self.minigame.waiting_for_start {
+                    return Err(anyhow!("Game is already in progress"));
+                }
+
+                if self.minigame.active_bets.is_empty() {
+                    return Err(anyhow!("No bets placed"));
+                }
+
+                // Check if all players have placed their bets
+                if self.minigame.active_bets.len() != self.minigame.players.len() {
+                    return Err(anyhow!("Waiting for all players to place their bets"));
+                }
+
+                self.minigame.is_running = true;
+                self.minigame.waiting_for_start = false;
+                self.minigame.current_multiplier = 1.0;
+
+                events.push(ChainEvent::GameStarted);
             }
 
             ChainAction::CashOut {
@@ -337,9 +360,7 @@ impl GameState {
             .is_in_callee_blobs(&ContractName("board_game".into()), expected_board_blob)
             .map_err(|_| anyhow!("Missing board game EndMinigame action in transaction"))?;
 
-        self.minigame.is_running = false;
-        self.minigame.current_multiplier = 1.0;
-        self.minigame.waiting_for_start = true;
+        self.minigame = GameState::new().minigame;
         Ok(vec![ChainEvent::MinigameEnded {
             final_results: expected_final_results,
         }])
@@ -350,27 +371,6 @@ impl GameState {
         let mut events = Vec::new();
 
         match action {
-            ServerAction::Start => {
-                if !self.minigame.waiting_for_start {
-                    return Err(anyhow!("Game is already in progress"));
-                }
-
-                if self.minigame.active_bets.is_empty() {
-                    return Err(anyhow!("No bets placed"));
-                }
-
-                // Check if all players have placed their bets
-                if self.minigame.active_bets.len() != self.minigame.players.len() {
-                    return Err(anyhow!("Waiting for all players to place their bets"));
-                }
-
-                self.minigame.is_running = true;
-                self.minigame.waiting_for_start = false;
-                self.minigame.current_multiplier = 1.0;
-
-                events.push(ServerEvent::GameStarted);
-            }
-
             ServerAction::Update { current_time } => {
                 if !self.minigame.is_running {
                     return Ok(events);
@@ -407,7 +407,7 @@ impl GameState {
 
     // Helper function to validate bet amount
     pub fn validate_bet(&self, player_id: Identity, amount: u64) -> Result<(), ServerEvent> {
-        if amount < MIN_BET || amount > MAX_BET {
+        if !(MIN_BET..=MAX_BET).contains(&amount) {
             return Err(ServerEvent::InvalidBetAmount {
                 min: MIN_BET,
                 max: MAX_BET,

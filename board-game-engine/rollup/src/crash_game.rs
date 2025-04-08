@@ -9,6 +9,7 @@ use hyle::{
     module_bus_client, module_handle_messages,
     utils::modules::Module,
 };
+use hyle_contract_sdk::ZkContract;
 use hyle_contract_sdk::{BlobIndex, ContractAction};
 use hyle_contract_sdk::{BlobTransaction, ContractName, Identity, StructuredBlobData};
 use rand;
@@ -113,7 +114,7 @@ impl TransactionBuilder {
                         },
                     },
                 )
-                .as_blob("board_game".into(), None, Some(vec![BlobIndex(0)])),
+                .as_blob("board_game".into(), Some(BlobIndex(0)), None),
             ],
         )
     }
@@ -153,13 +154,22 @@ impl CrashGameModule {
         Ok(())
     }
 
+    async fn handle_start(&mut self) -> Result<()> {
+        let Some(_) = &mut self.state else {
+            return Ok(());
+        };
+
+        let tx = TransactionBuilder::new_crash_game_tx(ChainAction::Start);
+        self.bus.send(InboundTxMessage::NewTransaction(tx))?;
+        Ok(())
+    }
+
     async fn handle_cash_out(&mut self, player_id: Identity) -> Result<()> {
         // Pre-chain validation
-        let current_multiplier = if let Some(state) = &self.state {
-            Some(state.minigame.current_multiplier)
-        } else {
-            None
-        };
+        let current_multiplier = self
+            .state
+            .as_ref()
+            .map(|state| state.minigame.current_multiplier);
 
         let Some(multiplier) = current_multiplier else {
             return Ok(());
@@ -200,21 +210,6 @@ impl CrashGameModule {
     }
 
     // Server-side state management
-    async fn handle_start(&mut self) -> Result<()> {
-        let Some(state) = &mut self.state else {
-            return Ok(());
-        };
-
-        let events = state.process_server_action(ServerAction::Start)?;
-        if !events.is_empty() {
-            tracing::info!("Crash game started");
-            self.game_start_time = Some(Instant::now());
-            let state = state.clone();
-            self.broadcast_state_update(state, vec![])?;
-        }
-        Ok(())
-    }
-
     async fn handle_update(&mut self) -> Result<()> {
         let Some(state) = &mut self.state else {
             return Ok(());
@@ -253,10 +248,17 @@ impl CrashGameModule {
 
     // Chain event processing
     async fn handle_tx(&mut self, tx: BlobTransaction) -> Result<()> {
-        for blob in &tx.blobs {
+        for (index, blob) in tx.blobs.iter().enumerate() {
             if blob.contract_name != ContractName::from("crash_game") {
                 continue;
             }
+
+            // Generate a proof with this state
+            self.bus.send(InboundTxMessage::NewProofRequest((
+                borsh::to_vec(self.state.as_ref().unwrap_or(&GameState::new()))?,
+                BlobIndex(index),
+                tx.clone(),
+            )))?;
 
             if let Ok(StructuredBlobData::<ChainActionBlob> { parameters, .. }) =
                 StructuredBlobData::<ChainActionBlob>::try_from(blob.data.clone())
@@ -277,6 +279,11 @@ impl CrashGameModule {
         match action {
             ChainAction::InitMinigame { .. } => {
                 self.state = Some(GameState::new());
+            }
+            ChainAction::Start => {
+                if self.state.is_some() {
+                    self.game_start_time = Some(Instant::now());
+                }
             }
             ChainAction::Done => {
                 self.state = None;
@@ -333,6 +340,11 @@ impl Module for CrashGameModule {
     async fn run(&mut self) -> Result<()> {
         let mut update_interval = time::interval(self.update_interval);
 
+        self.bus.send(InboundTxMessage::RegisterContract((
+            ContractName::from("crash_game"),
+            GameState::new().commit(),
+        )))?;
+
         module_handle_messages! {
             on_bus self.bus,
             listen<InboundWebsocketMessage> msg => {
@@ -349,11 +361,9 @@ impl Module for CrashGameModule {
                 }
             }
             listen<InboundTxMessage> msg => {
-                match msg {
-                    InboundTxMessage::NewTransaction(tx) => {
-                        if let Err(e) = self.handle_tx(tx).await {
-                            tracing::warn!("Error handling tx: {:?}", e);
-                        }
+                if let InboundTxMessage::NewTransaction(tx) = msg {
+                    if let Err(e) = self.handle_tx(tx).await {
+                        tracing::warn!("Error handling tx: {:?}", e);
                     }
                 }
             }

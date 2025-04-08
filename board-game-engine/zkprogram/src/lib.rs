@@ -4,15 +4,10 @@ use anyhow::Result;
 use borsh::{BorshDeserialize, BorshSerialize};
 use game::{GameAction, GameEvent, GameState};
 use hyle_contract_sdk::{
-    guest::fail, utils::parse_contract_input, Blob, BlobData, BlobIndex, ContractAction,
-    ContractInput, ContractName, HyleContract, RunResult, StateCommitment, StructuredBlobData,
+    guest::fail, info, utils::parse_calldata, Blob, BlobData, BlobIndex, Calldata, ContractAction,
+    ContractName, RunResult, StateCommitment, StructuredBlobData, ZkContract,
 };
 use serde::{Deserialize, Serialize};
-
-/// Creates a new game with the specified number of players and board size
-pub fn create_game(player_count: usize, board_size: usize) -> GameState {
-    GameState::new(player_count, board_size)
-}
 
 /// Process a game action and return the resulting events
 pub fn process_game_action(state: &mut GameState, action: GameAction) -> Result<Vec<GameEvent>> {
@@ -41,19 +36,41 @@ impl ContractAction for GameActionBlob {
     }
 }
 
-impl HyleContract for GameState {
-    fn execute(&mut self, contract_input: &ContractInput) -> RunResult {
-        let (action, mut exec_ctx) =
-            parse_contract_input::<GameActionBlob>(contract_input).map_err(|e| e.to_string())?;
+impl ZkContract for GameState {
+    fn execute(&mut self, contract_input: &Calldata) -> RunResult {
+        let (action, exec_ctx) =
+            parse_calldata::<GameActionBlob>(contract_input).map_err(|e| e.to_string())?;
+
+        info!(
+            "Executing action: {:?} with caller: {:?}",
+            action.1, exec_ctx.caller
+        );
 
         // For EndMinigame actions, verify the caller matches the minigame contract
         if let GameAction::EndMinigame { result } = &action.1 {
             // Verify that the caller matches the minigame contract name
             if exec_ctx.caller.0 != result.contract_name.0 {
                 fail(
-                    contract_input.clone(),
+                    contract_input,
                     self.commit(),
                     "Invalid caller for EndMinigame action",
+                );
+            }
+        } else if let GameAction::StartMinigame = &action.1 {
+            // Check that we're calling the minigame with an approriate blob
+            let game::GamePhase::MinigameStart(contract_name) = &self.phase else {
+                return Err("Invalid game phase for StartMinigame action".into());
+            };
+            // Check that one of the other blobs is for the minigame, but this doesn't really do much TBH.
+            if contract_input
+                .blobs
+                .iter()
+                .all(|blob| blob.contract_name != *contract_name)
+            {
+                fail(
+                    contract_input,
+                    self.commit(),
+                    "No blob to actually start the minigame seem present",
                 );
             }
         }

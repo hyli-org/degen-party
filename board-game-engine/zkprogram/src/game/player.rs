@@ -1,10 +1,8 @@
 use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
-use uuid::Uuid;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
 pub struct PlayerState {
-    pub id: Uuid,
     pub position: usize,
     pub coins: i32,
     pub stars: i32,
@@ -28,17 +26,6 @@ pub enum StatusEffect {
 }
 
 impl PlayerState {
-    pub fn new(id: Uuid) -> Self {
-        Self {
-            id,
-            position: 0,
-            coins: 10,
-            stars: 0,
-            items: Vec::new(),
-            status_effects: Vec::new(),
-        }
-    }
-
     pub fn add_coins(&mut self, amount: i32) -> Result<i32> {
         let new_amount = self
             .coins

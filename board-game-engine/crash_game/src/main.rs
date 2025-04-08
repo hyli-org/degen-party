@@ -11,7 +11,7 @@ sp1_zkvm::entrypoint!(main);
 
 fn main() {
     let env = SP1Env {};
-    let input = env.read();
-    let (_, output) = execute::<GameState>(&input);
+    let (commitment, input): (Vec<u8>, _) = env.read();
+    let output = execute::<GameState>(&commitment, &input);
     env.commit(&output);
 }

@@ -19,6 +19,7 @@ pub struct GameState {
     pub phase: GamePhase,
     pub max_players: usize,
     pub minigames: Vec<ContractName>,
+    pub dice: dice::Dice,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
@@ -129,49 +130,74 @@ impl From<StateCommitment> for GameState {
 }
 
 impl GameState {
-    pub fn new(player_count: usize, board_size: usize) -> Self {
+    pub fn new(player_count: usize, board_size: usize, random_seed: u64) -> Self {
         Self {
             id: 1,
             players: Vec::with_capacity(player_count),
             current_turn: 0,
-            board: Board::new(board_size),
+            board: Board::new(board_size, random_seed),
             phase: GamePhase::Registration,
             max_players: player_count,
             minigames: vec!["crash_game".into()],
+            dice: dice::Dice::new(1, 10, random_seed),
         }
     }
 
     // Helper function for updating coins and generating events
-    fn update_player_coins(player: &mut Player, delta: i32, events: &mut Vec<GameEvent>) {
+    fn update_player_coins(
+        &mut self,
+        player_index: usize,
+        delta: i32,
+        events: &mut Vec<GameEvent>,
+    ) -> Result<()> {
+        let Some(player) = self.players.get_mut(player_index) else {
+            return Err(anyhow!("Player not found"));
+        };
         player.coins = (player.coins + delta).max(0);
         events.push(GameEvent::CoinsChanged {
             player_id: player.id.clone(),
             amount: delta,
         });
+        Ok(())
     }
 
     // Helper function for updating stars and generating events
-    fn update_player_stars(player: &mut Player, delta: i32, events: &mut Vec<GameEvent>) {
+    fn update_player_stars(
+        &mut self,
+        player_index: usize,
+        delta: i32,
+        events: &mut Vec<GameEvent>,
+    ) -> Result<()> {
+        let Some(player) = self.players.get_mut(player_index) else {
+            return Err(anyhow!("Player not found"));
+        };
         player.stars = (player.stars + delta).max(0);
         events.push(GameEvent::StarsChanged {
             player_id: player.id.clone(),
             amount: delta,
         });
+        Ok(())
     }
 
     // Helper function for handling minigame results
     fn apply_minigame_result(
-        player: &mut Player,
+        &mut self,
+        player_index: usize,
         result: &PlayerMinigameResult,
         events: &mut Vec<GameEvent>,
-    ) {
+    ) -> Result<()> {
         if result.coins_delta != 0 {
-            Self::update_player_coins(player, result.coins_delta, events);
+            self.update_player_coins(player_index, result.coins_delta, events)?;
         }
 
         if result.stars_delta != 0 {
-            Self::update_player_stars(player, result.stars_delta, events);
+            self.update_player_stars(player_index, result.stars_delta, events)?;
         }
+        Ok(())
+    }
+
+    fn get_current_player_index(&self) -> usize {
+        self.current_turn % self.players.len()
     }
 
     fn get_current_player(&self) -> Result<&Player> {
@@ -250,8 +276,7 @@ impl GameState {
             // Rolling Phase
             (GamePhase::Rolling, GameAction::RollDice) => {
                 let current_player = self.get_current_player()?.clone();
-                let dice = dice::Dice::default();
-                let roll_value = dice.roll();
+                let roll_value = self.dice.roll();
 
                 events.push(GameEvent::DiceRolled {
                     player_id: current_player.id,
@@ -285,23 +310,23 @@ impl GameState {
                     .get(current_player.position)
                     .ok_or_else(|| anyhow!("Invalid player position"))?;
 
-                let current_player = self.get_current_player_mut()?;
+                let player_index = self.get_current_player_index();
                 match space {
                     Space::Blue => {
-                        Self::update_player_coins(current_player, 3, &mut events);
+                        self.update_player_coins(player_index, 3, &mut events)?;
                     }
                     Space::Red => {
                         if current_player.coins >= 3 {
-                            Self::update_player_coins(current_player, -3, &mut events);
+                            self.update_player_coins(player_index, -3, &mut events)?;
                         } else {
                             let current_coins = current_player.coins;
-                            Self::update_player_coins(current_player, -current_coins, &mut events);
+                            self.update_player_coins(player_index, -current_coins, &mut events)?;
                         }
                     }
                     Space::Star => {
                         if current_player.coins >= 20 {
-                            Self::update_player_coins(current_player, -20, &mut events);
-                            Self::update_player_stars(current_player, 1, &mut events);
+                            self.update_player_coins(player_index, -20, &mut events)?;
+                            self.update_player_stars(player_index, 1, &mut events)?;
                         }
                     }
                     Space::MinigameSpace => {
@@ -317,9 +342,9 @@ impl GameState {
                     }
                     Space::Event => {
                         // For now, events just give or take a random amount of coins (-5 to +5)
-                        let dice = dice::Dice::new(1, 11);
-                        let coin_change = dice.roll() as i32 - 6;
-                        Self::update_player_coins(current_player, coin_change, &mut events);
+                        let roll = self.dice.roll() as i32;
+                        let coin_change = if roll % 2 == 0 { roll } else { -roll };
+                        self.update_player_coins(player_index, coin_change, &mut events)?;
                     }
                     Space::Finish => {
                         // Game is over, determine the winner
@@ -357,14 +382,14 @@ impl GameState {
 
                 // Apply results for each player
                 for player_result in &result.player_results {
-                    Self::apply_minigame_result(
+                    self.apply_minigame_result(
                         self.players
-                            .iter_mut()
-                            .find(|p| p.id == player_result.player_id)
-                            .unwrap(),
+                            .iter()
+                            .position(|p| p.id == player_result.player_id)
+                            .ok_or_else(|| anyhow!("Player not found for minigame result"))?,
                         player_result,
                         &mut events,
-                    );
+                    )?;
                 }
 
                 events.push(GameEvent::MinigameEnded { result });

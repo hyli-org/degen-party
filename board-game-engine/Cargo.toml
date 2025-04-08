@@ -2,3 +2,10 @@
 members = ["zkprogram", "rollup", "crash_game"]
 resolver = "2"
 default-members = ["zkprogram", "rollup", "crash_game"]
+
+[profile.dev.package.sp1-stark]
+opt-level = 3
+[profile.dev.package.sp1-prover]
+opt-level = 3
+[profile.dev.package.sp1-core-machine]
+opt-level = 3

@@ -1,7 +1,4 @@
-use rand::seq::SliceRandom;
-use rand::thread_rng;
-
-use super::{Board, Space};
+use super::{dice::Dice, Board, Space};
 
 pub struct BoardBuilder {
     size: usize,
@@ -10,6 +7,7 @@ pub struct BoardBuilder {
     event_ratio: f32,
     minigame_ratio: f32,
     star_ratio: f32,
+    seed: u64,
 }
 
 impl Default for BoardBuilder {
@@ -21,14 +19,16 @@ impl Default for BoardBuilder {
             event_ratio: 0.2,
             minigame_ratio: 0.15,
             star_ratio: 0.05,
+            seed: 12345,
         }
     }
 }
 
 impl BoardBuilder {
-    pub fn new(size: usize) -> Self {
+    pub fn new(size: usize, seed: u64) -> Self {
         Self {
             size,
+            seed,
             ..Default::default()
         }
     }
@@ -76,8 +76,14 @@ impl BoardBuilder {
         // Truncate if we're over due to rounding
         spaces.truncate(actual_size);
 
-        // Shuffle all spaces except the last one
-        spaces.shuffle(&mut thread_rng());
+        // Shuffle all spaces except the last one using our deterministic RNG
+        let mut dice = Dice::new(0, actual_size as u8 - 1, self.seed);
+        for i in (1..actual_size).rev() {
+            let j = dice.roll() as usize;
+            if j < i {
+                spaces.swap(i, j);
+            }
+        }
 
         // Add the finish space at the end
         spaces.push(Space::Finish);
@@ -102,15 +108,16 @@ pub fn calculate_next_position(current: usize, movement: i32, board_size: usize)
 }
 
 impl Board {
-    pub fn new(size: usize) -> Self {
+    pub fn new(size: usize, seed: u64) -> Self {
         Self {
-            spaces: BoardBuilder::new(size).build(),
+            spaces: BoardBuilder::new(size, seed).build(),
             size,
         }
     }
 
     pub fn with_custom_ratios(
         size: usize,
+        seed: u64,
         blue: f32,
         red: f32,
         event: f32,
@@ -118,7 +125,7 @@ impl Board {
         star: f32,
     ) -> Self {
         Self {
-            spaces: BoardBuilder::new(size)
+            spaces: BoardBuilder::new(size, seed)
                 .with_ratios(blue, red, event, minigame, star)
                 .build(),
             size,
