@@ -121,7 +121,7 @@
 import { ref, onMounted, computed, onUnmounted, defineEmits, watch, watchEffect } from "vue";
 import ConfettiEffect from "./ConfettiEffect.vue";
 import { crashGameService, crashGameState } from "../game_data/crash";
-import { gameState } from "../game_data/game_data";
+import { gameState, getLocalPlayerId } from "../game_data/game_data";
 import { addBackgroundEffects, Cashout, drawFlightPath } from "./CrashGameHelper";
 
 // Define emits for party game integration
@@ -157,7 +157,7 @@ crashGameState.minigame = {
     current_multiplier: 1.4,
     waiting_for_start: false,
     active_bets: {
-        [gameState.playerId]: { amount: 34, cashed_out_at: null },
+        [getLocalPlayerId()]: { amount: 34, cashed_out_at: null },
     },
 };
 */
@@ -181,10 +181,10 @@ const playersWhoBet = computed(() => {
 const canPlaceBet = computed(() => !gameStarted.value);
 
 const hasPlayerCashedOut = computed(() => {
-    return !!crashGameState.minigame?.active_bets?.[gameState.playerId]?.cashed_out_at;
+    return !!crashGameState.minigame?.active_bets?.[getLocalPlayerId()]?.cashed_out_at;
 });
 const playerCashedOutAt = computed(() => {
-    return crashGameState.minigame?.active_bets?.[gameState.playerId]?.cashed_out_at ?? 0;
+    return crashGameState.minigame?.active_bets?.[getLocalPlayerId()]?.cashed_out_at ?? 0;
 });
 
 const cashouts = computed(() => {
@@ -386,8 +386,9 @@ watch(gameEnded, (newValue) => {
     border-radius: 20px;
     overflow: hidden;
     border: 6px solid #ffd700;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3),
-                0 0 20px rgba(255, 215, 0, 0.3);
+    box-shadow:
+        0 10px 30px rgba(0, 0, 0, 0.3),
+        0 0 20px rgba(255, 215, 0, 0.3);
 }
 
 /* Game Title */
@@ -397,8 +398,12 @@ watch(gameEnded, (newValue) => {
     color: var(--primary-color);
     text-align: center;
     margin: 0 auto -20px;
-    text-shadow: -2px -2px 0 var(--secondary-color), 2px -2px 0 var(--secondary-color),
-        -2px 2px 0 var(--secondary-color), 2px 2px 0 var(--secondary-color), 4px 4px 0 #b87d00,
+    text-shadow:
+        -2px -2px 0 var(--secondary-color),
+        2px -2px 0 var(--secondary-color),
+        -2px 2px 0 var(--secondary-color),
+        2px 2px 0 var(--secondary-color),
+        4px 4px 0 #b87d00,
         6px 6px 0 #8b5e00;
     transform: rotate(-2deg);
     transition: transform 0.3s ease;
@@ -430,7 +435,10 @@ watch(gameEnded, (newValue) => {
 }
 
 /* Common Overlay Styles */
-.game-over, .game-waiting, .current-multiplier, .overlay {
+.game-over,
+.game-waiting,
+.current-multiplier,
+.overlay {
     position: absolute;
     top: 50%;
     left: 50%;
@@ -458,8 +466,9 @@ watch(gameEnded, (newValue) => {
     font-family: var(--font-primary);
     font-size: 3rem;
     color: white;
-    text-shadow: 3px 3px 0 rgba(0, 0, 0, 0.3),
-                 0 0 10px rgba(255, 215, 0, 0.5);
+    text-shadow:
+        3px 3px 0 rgba(0, 0, 0, 0.3),
+        0 0 10px rgba(255, 215, 0, 0.5);
     margin-bottom: 1rem;
     animation: bounce 0.5s ease infinite;
 }
@@ -468,8 +477,9 @@ watch(gameEnded, (newValue) => {
     font-family: var(--font-primary);
     font-size: 5rem;
     color: #ffd700;
-    text-shadow: 3px 3px 0 rgba(0, 0, 0, 0.3),
-                 0 0 20px rgba(255, 215, 0, 0.7);
+    text-shadow:
+        3px 3px 0 rgba(0, 0, 0, 0.3),
+        0 0 20px rgba(255, 215, 0, 0.7);
     margin-bottom: 1rem;
 }
 
@@ -522,8 +532,9 @@ watch(gameEnded, (newValue) => {
     font-family: var(--font-primary);
     font-size: 4.5rem;
     color: #ffd700;
-    text-shadow: 3px 3px 0 rgba(0, 0, 0, 0.3),
-                 0 0 20px rgba(255, 215, 0, 0.7);
+    text-shadow:
+        3px 3px 0 rgba(0, 0, 0, 0.3),
+        0 0 20px rgba(255, 215, 0, 0.7);
     margin-bottom: 0.5rem;
     animation: glow 2s ease-in-out infinite;
 }
@@ -550,29 +561,60 @@ watch(gameEnded, (newValue) => {
 
 /* New Animations */
 @keyframes float {
-    0%, 100% { transform: translate(-50%, -50%) translateY(0); }
-    50% { transform: translate(-50%, -50%) translateY(-10px); }
+    0%,
+    100% {
+        transform: translate(-50%, -50%) translateY(0);
+    }
+    50% {
+        transform: translate(-50%, -50%) translateY(-10px);
+    }
 }
 
 @keyframes bounce {
-    0%, 100% { transform: scale(1); }
-    50% { transform: scale(1.05); }
+    0%,
+    100% {
+        transform: scale(1);
+    }
+    50% {
+        transform: scale(1.05);
+    }
 }
 
 @keyframes shake {
-    0%, 100% { transform: rotate(0deg); }
-    25% { transform: rotate(-10deg); }
-    75% { transform: rotate(10deg); }
+    0%,
+    100% {
+        transform: rotate(0deg);
+    }
+    25% {
+        transform: rotate(-10deg);
+    }
+    75% {
+        transform: rotate(10deg);
+    }
 }
 
 @keyframes countdown {
-    0%, 100% { transform: scale(1); }
-    50% { transform: scale(1.1); }
+    0%,
+    100% {
+        transform: scale(1);
+    }
+    50% {
+        transform: scale(1.1);
+    }
 }
 
 @keyframes glow {
-    0%, 100% { text-shadow: 3px 3px 0 rgba(0, 0, 0, 0.3), 0 0 20px rgba(255, 215, 0, 0.7); }
-    50% { text-shadow: 3px 3px 0 rgba(0, 0, 0, 0.3), 0 0 30px rgba(255, 215, 0, 0.9); }
+    0%,
+    100% {
+        text-shadow:
+            3px 3px 0 rgba(0, 0, 0, 0.3),
+            0 0 20px rgba(255, 215, 0, 0.7);
+    }
+    50% {
+        text-shadow:
+            3px 3px 0 rgba(0, 0, 0, 0.3),
+            0 0 30px rgba(255, 215, 0, 0.9);
+    }
 }
 
 /* Game Controls */
@@ -624,7 +666,9 @@ watch(gameEnded, (newValue) => {
     border-radius: 20px;
     background: #f0f4ff;
     color: #222266;
-    box-shadow: inset 0 0 0 4px rgba(84, 209, 255, 0.3), 0 4px 0 rgba(0, 0, 0, 0.2);
+    box-shadow:
+        inset 0 0 0 4px rgba(84, 209, 255, 0.3),
+        0 4px 0 rgba(0, 0, 0, 0.2);
     font-family: var(--font-secondary);
 }
 
@@ -653,8 +697,9 @@ watch(gameEnded, (newValue) => {
 
 .quick-amount:hover {
     transform: translateY(-3px);
-    box-shadow: 0 7px 0 rgba(0, 0, 0, 0.2),
-                0 0 20px rgba(84, 209, 255, 0.4);
+    box-shadow:
+        0 7px 0 rgba(0, 0, 0, 0.2),
+        0 0 20px rgba(84, 209, 255, 0.4);
     background: #6ad8ff;
 }
 
@@ -676,8 +721,9 @@ watch(gameEnded, (newValue) => {
     position: relative;
     overflow: hidden;
     border: 4px solid #ffd700;
-    box-shadow: 0 8px 0 rgba(0, 0, 0, 0.3),
-                0 0 20px rgba(255, 215, 0, 0.3);
+    box-shadow:
+        0 8px 0 rgba(0, 0, 0, 0.3),
+        0 0 20px rgba(255, 215, 0, 0.3);
     text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.3);
     padding: 0.2rem 1.5rem;
     cursor: pointer;
@@ -686,14 +732,16 @@ watch(gameEnded, (newValue) => {
 
 .action-button:hover {
     transform: translateY(-4px) scale(1.02);
-    box-shadow: 0 12px 0 rgba(0, 0, 0, 0.3),
-                0 0 30px rgba(255, 215, 0, 0.5);
+    box-shadow:
+        0 12px 0 rgba(0, 0, 0, 0.3),
+        0 0 30px rgba(255, 215, 0, 0.5);
 }
 
 .action-button:active {
     transform: translateY(2px);
-    box-shadow: 0 4px 0 rgba(0, 0, 0, 0.3),
-                0 0 10px rgba(255, 215, 0, 0.2);
+    box-shadow:
+        0 4px 0 rgba(0, 0, 0, 0.3),
+        0 0 10px rgba(255, 215, 0, 0.2);
 }
 
 .bet-action {
@@ -723,23 +771,27 @@ watch(gameEnded, (newValue) => {
 
 /* Animations */
 @keyframes pulse {
-    0% { 
+    0% {
         transform: scale(1);
         box-shadow: 0 0 15px rgba(77, 255, 77, 0.5);
     }
-    50% { 
+    50% {
         transform: scale(1.05);
         box-shadow: 0 0 25px rgba(77, 255, 77, 0.8);
     }
-    100% { 
+    100% {
         transform: scale(1);
         box-shadow: 0 0 15px rgba(77, 255, 77, 0.5);
     }
 }
 
 @keyframes wiggle {
-    0% { transform: rotate(-5deg); }
-    100% { transform: rotate(5deg); }
+    0% {
+        transform: rotate(-5deg);
+    }
+    100% {
+        transform: rotate(5deg);
+    }
 }
 
 /* Responsive Design */
@@ -766,8 +818,9 @@ watch(gameEnded, (newValue) => {
     z-index: 10;
     text-align: center;
     animation: pulse 2s infinite;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3),
-                0 0 20px rgba(255, 215, 0, 0.3);
+    box-shadow:
+        0 10px 30px rgba(0, 0, 0, 0.3),
+        0 0 20px rgba(255, 215, 0, 0.3);
     backdrop-filter: blur(5px);
 }
 

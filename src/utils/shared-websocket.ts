@@ -1,4 +1,7 @@
 import { reactive } from "vue";
+import { authService } from "../game_data/auth";
+import { v4 as uuidv4 } from "uuid";
+import { SHA256, enc, lib } from "crypto-js";
 
 export interface WebSocketState {
     connected: boolean;
@@ -9,6 +12,14 @@ export const wsState = reactive<WebSocketState>({
     connected: false,
     connectionStatus: "Disconnected",
 });
+
+export interface AuthenticatedMessage {
+    message: any;
+    signature: string;
+    public_key: string;
+    message_id: string;
+    signed_data: string;
+}
 
 class SharedWebSocketService {
     private static instance: SharedWebSocketService;
@@ -115,14 +126,30 @@ class SharedWebSocketService {
         this.messageHandlers.delete(handler);
     }
 
-    async send(message: any) {
+    async send(message: any, signed_data: string) {
         try {
             if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
                 await this.connect();
             }
 
+            // Get the public key or generate one if not exists
+            const publicKey = authService.getSessionKey() || authService.generateSessionKey();
+
+            // Create a string to be signed that includes message ID and identifier
+            const messageId = uuidv4();
+            const stringToSign = `${messageId}:${signed_data}`;
+
+            // Create the authenticated message
+            const authenticatedMessage: AuthenticatedMessage = {
+                message,
+                signature: authService.signMessage(stringToSign),
+                public_key: publicKey,
+                message_id: messageId,
+                signed_data: stringToSign,
+            };
+
             if (this.ws?.readyState === WebSocket.OPEN) {
-                this.ws.send(JSON.stringify(message));
+                this.ws.send(JSON.stringify(authenticatedMessage));
             } else {
                 throw new Error("WebSocket is not connected");
             }

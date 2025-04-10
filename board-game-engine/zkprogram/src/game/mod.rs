@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, bail, Result};
 use borsh::{BorshDeserialize, BorshSerialize};
 use hyle_contract_sdk::{ContractName, Identity, StateCommitment};
 use serde::{Deserialize, Serialize};
@@ -8,11 +8,8 @@ pub mod dice;
 pub mod player;
 pub mod utils;
 
-type IntUuid = u128;
-
 #[derive(Debug, Clone, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
 pub struct GameState {
-    pub id: IntUuid,
     pub players: Vec<Player>,
     pub current_turn: usize,
     pub board: Board,
@@ -29,6 +26,7 @@ pub struct Player {
     pub position: usize,
     pub coins: i32,
     pub stars: i32,
+    pub used_uuids: Vec<u128>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
@@ -73,7 +71,7 @@ pub enum GamePhase {
 
 #[derive(Debug, Clone, Serialize, Deserialize, BorshSerialize, BorshDeserialize, PartialEq)]
 pub enum GameAction {
-    RegisterPlayer { name: String },
+    RegisterPlayer { name: String, identity: Identity },
     StartGame,
     RollDice,
     StartMinigame,
@@ -132,7 +130,6 @@ impl From<StateCommitment> for GameState {
 impl GameState {
     pub fn new(player_count: usize, board_size: usize, random_seed: u64) -> Self {
         Self {
-            id: 1,
             players: Vec::with_capacity(player_count),
             current_turn: 0,
             board: Board::new(board_size, random_seed),
@@ -235,32 +232,52 @@ impl GameState {
         (winner.id.clone(), winner.stars, winner.coins)
     }
 
-    pub fn process_action(&mut self, action: GameAction) -> Result<Vec<GameEvent>> {
+    pub fn process_action(
+        &mut self,
+        caller: &Identity,
+        uuid: u128,
+        action: GameAction,
+    ) -> Result<Vec<GameEvent>> {
         let mut events = Vec::new();
+
+        if let Some(player) = self.players.iter_mut().find(|p| &p.id == caller) {
+            if player.used_uuids.contains(&uuid) {
+                bail!("UUID already used");
+            }
+            player.used_uuids.push(uuid);
+        }
 
         match (self.phase.clone(), action) {
             // Registration Phase
-            (GamePhase::Registration, GameAction::RegisterPlayer { name }) => {
+            (GamePhase::Registration, GameAction::RegisterPlayer { name, identity }) => {
                 if self.players.len() >= self.max_players {
                     return Err(anyhow!("Game is full"));
                 }
 
-                // Check if player already exists
+                // Check if player already exists by public key
+                if self.players.iter().any(|p| p.id == identity) {
+                    return Err(anyhow!(
+                        "Player with public key {} already exists",
+                        identity
+                    ));
+                }
+                // Check if player already exists by name
                 if self.players.iter().any(|p| p.name == name) {
                     return Err(anyhow!("Player with name {} already exists", name));
                 }
 
                 self.players.push(Player {
-                    id: name.clone().into(),
+                    id: identity.clone(),
                     name: name.clone(),
                     position: 0,
                     coins: 100,
                     stars: 0,
+                    used_uuids: Vec::new(),
                 });
 
                 events.push(GameEvent::PlayerRegistered {
                     name: name.clone(),
-                    player_id: name.into(),
+                    player_id: identity,
                 });
             }
 

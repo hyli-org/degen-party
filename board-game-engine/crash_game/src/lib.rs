@@ -122,7 +122,7 @@ pub enum ServerEvent {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
-pub struct ChainActionBlob(pub String, pub ChainAction);
+pub struct ChainActionBlob(pub u128, pub ChainAction);
 
 impl ContractAction for ChainActionBlob {
     fn as_blob(

@@ -1,5 +1,6 @@
 import { reactive } from "vue";
 import { BaseWebSocketService } from "../utils/base-websocket";
+import { authService } from "./auth";
 
 export interface MinigameResult {
     contract_name: string;
@@ -25,6 +26,7 @@ export interface Board {
 
 export interface Player {
     id: string;
+    public_key: string;
     name: string;
     position: number;
     coins: number;
@@ -42,11 +44,10 @@ export type GamePhase =
     | "GameOver";
 
 export type GameAction =
-    | { RegisterPlayer: { name: string } }
+    | { RegisterPlayer: { name: string; identity: string } }
     | { StartGame: null }
     | { RollDice: null }
     | { MovePlayer: { player_id: string; spaces: number } }
-    | { ApplySpaceEffect: { player_id: string } }
     | { StartMinigame }
     | {
           EndMinigame: {
@@ -116,8 +117,6 @@ export const gameState = reactive({
     game: null as GameState | null,
     running_minigame: null as string | null,
     isInLobby: true,
-    playerId: "1",
-    playerName: "Player 1",
 });
 
 class BoardGameService extends BaseWebSocketService {
@@ -135,23 +134,21 @@ class BoardGameService extends BaseWebSocketService {
                     this.onStateUpdated(event.payload);
                 }
                 for (const e of event.payload.events) {
-                    if (e instanceof Object && "PlayerRegistered" in e) {
-                        if (e.PlayerRegistered.name === gameState.playerName) {
-                            console.log("Registered as player", e.PlayerRegistered.player_id);
-                            gameState.playerId = `${e.PlayerRegistered.player_id}`;
-                        }
-                    } else if (e instanceof Object && "MinigameReady" in e) {
-                        this.send({
-                            type: "GameState",
-                            payload: {
-                                type: "SubmitAction",
+                    if (e instanceof Object && "MinigameReady" in e) {
+                        this.send(
+                            {
+                                type: "GameState",
                                 payload: {
-                                    action: {
-                                        StartMinigame: null,
+                                    type: "SubmitAction",
+                                    payload: {
+                                        action: {
+                                            StartMinigame: null,
+                                        },
                                     },
                                 },
                             },
-                        });
+                            "StartMinigame",
+                        );
                     } else if (e instanceof Object && "MinigameStarted" in e) {
                         gameState.running_minigame = e.MinigameStarted.minigame_type;
                         console.log("Minigame started", e.MinigameStarted.minigame_type);
@@ -166,13 +163,16 @@ class BoardGameService extends BaseWebSocketService {
 
     async sendAction(action: GameAction) {
         if (!gameState.game) return;
-        await this.send({
-            type: "GameState",
-            payload: {
-                type: "SubmitAction",
-                payload: { action },
+        await this.send(
+            {
+                type: "GameState",
+                payload: {
+                    type: "SubmitAction",
+                    payload: { action },
+                },
             },
-        });
+            `${Object.keys(action)[0]}`,
+        );
     }
 
     async reset() {
@@ -199,32 +199,51 @@ class BoardGameService extends BaseWebSocketService {
     }
 
     async registerPlayer(name: string) {
-        await this.send({
-            type: "GameState",
-            payload: {
-                type: "SubmitAction",
+        await this.send(
+            {
+                type: "GameState",
                 payload: {
-                    action: { RegisterPlayer: { name } },
+                    type: "SubmitAction",
+                    payload: {
+                        action: {
+                            RegisterPlayer: {
+                                name,
+                                identity: getLocalPlayerId(),
+                            },
+                        },
+                    },
                 },
             },
-        });
+            "RegisterPlayer",
+        );
     }
 
     async startGame() {
-        await this.send({
-            type: "GameState",
-            payload: {
-                type: "SubmitAction",
+        await this.send(
+            {
+                type: "GameState",
                 payload: {
-                    action: { StartGame: null },
+                    type: "SubmitAction",
+                    payload: {
+                        action: { StartGame: null },
+                    },
                 },
             },
-        });
+            "StartGame",
+        );
+    }
+
+    async send(message: { type: "GameState"; payload: GameStateCommand }, data_to_sign: string = "") {
+        await super.send(message, data_to_sign);
     }
 }
 
 export const boardGameService = new BoardGameService();
 boardGameService.connect().catch(console.error);
+
+export function getLocalPlayerId(): string {
+    return `${authService.getSessionKey() || authService.generateSessionKey()}.secp256k1`;
+}
 
 export function isCurrentPlayer(id: string): boolean {
     if (!gameState.game) return false;
@@ -250,6 +269,7 @@ export function playerAvatar(id: string): string {
 export const DEFAULT_PLAYERS: Player[] = [
     {
         id: "1",
+        public_key: "sample_key_1",
         name: "Mario",
         coins: 87,
         position: 23,
@@ -257,6 +277,7 @@ export const DEFAULT_PLAYERS: Player[] = [
     },
     {
         id: "2",
+        public_key: "sample_key_2",
         name: "Luigi",
         coins: 64,
         position: 18,
@@ -264,6 +285,7 @@ export const DEFAULT_PLAYERS: Player[] = [
     },
     {
         id: "3",
+        public_key: "sample_key_3",
         name: "Peach",
         coins: 103,
         position: 27,
@@ -271,6 +293,7 @@ export const DEFAULT_PLAYERS: Player[] = [
     },
     {
         id: "4",
+        public_key: "sample_key_4",
         name: "Toad",
         coins: 52,
         position: 15,

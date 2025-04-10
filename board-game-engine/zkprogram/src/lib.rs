@@ -1,22 +1,16 @@
 pub mod game;
 
-use anyhow::Result;
 use borsh::{BorshDeserialize, BorshSerialize};
-use game::{GameAction, GameEvent, GameState};
+use game::{GameAction, GameState};
 use hyle_contract_sdk::{
-    guest::fail, info, utils::parse_calldata, Blob, BlobData, BlobIndex, Calldata, ContractAction,
+    secp256k1, utils::parse_calldata, Blob, BlobData, BlobIndex, Calldata, ContractAction,
     ContractName, RunResult, StateCommitment, StructuredBlobData, ZkContract,
 };
 use serde::{Deserialize, Serialize};
 
-/// Process a game action and return the resulting events
-pub fn process_game_action(state: &mut GameState, action: GameAction) -> Result<Vec<GameEvent>> {
-    state.process_action(action)
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize, BorshSerialize, BorshDeserialize, PartialEq)]
 // First string is a UUID just to avoid having the same blob hashes.
-pub struct GameActionBlob(pub String, pub GameAction);
+pub struct GameActionBlob(pub u128, pub GameAction);
 
 impl ContractAction for GameActionBlob {
     fn as_blob(
@@ -41,20 +35,11 @@ impl ZkContract for GameState {
         let (action, exec_ctx) =
             parse_calldata::<GameActionBlob>(contract_input).map_err(|e| e.to_string())?;
 
-        info!(
-            "Executing action: {:?} with caller: {:?}",
-            action.1, exec_ctx.caller
-        );
-
         // For EndMinigame actions, verify the caller matches the minigame contract
         if let GameAction::EndMinigame { result } = &action.1 {
             // Verify that the caller matches the minigame contract name
             if exec_ctx.caller.0 != result.contract_name.0 {
-                fail(
-                    contract_input,
-                    self.commit(),
-                    "Invalid caller for EndMinigame action",
-                );
+                return Err("Invalid caller for EndMinigame action".into());
             }
         } else if let GameAction::StartMinigame = &action.1 {
             // Check that we're calling the minigame with an approriate blob
@@ -65,17 +50,38 @@ impl ZkContract for GameState {
             if contract_input
                 .blobs
                 .iter()
-                .all(|blob| blob.contract_name != *contract_name)
+                .all(|(_, blob)| blob.contract_name != *contract_name)
             {
-                fail(
-                    contract_input,
-                    self.commit(),
-                    "No blob to actually start the minigame seem present",
-                );
+                return Err("Invalid contract name for StartMinigame action".into());
+            }
+        } else if let GameAction::RegisterPlayer { identity, .. } = &action.1 {
+            // Check we are this pubkey
+            if &contract_input.identity != identity {
+                return Err("Invalid public key for RegisterPlayer action".into());
             }
         }
 
-        let events = self.process_action(action.1).map_err(|e| e.to_string())?;
+        let expected_data = uuid::Uuid::from_u128(action.0).to_string();
+
+        let expected_action_data = match &action.1 {
+            GameAction::StartGame => "StartGame",
+            GameAction::RegisterPlayer { .. } => "RegisterPlayer",
+            GameAction::RollDice { .. } => "RollDice",
+            GameAction::EndTurn => "EndTurn",
+            GameAction::StartMinigame => "StartMinigame",
+            GameAction::EndMinigame { .. } => "EndMinigame",
+        };
+
+        secp256k1::CheckSecp256k1::new(
+            contract_input,
+            format!("{}:{}", expected_data, expected_action_data).as_bytes(),
+        )
+        .expect()
+        .expect("fuego");
+
+        let events = self
+            .process_action(&contract_input.identity, action.0, action.1)
+            .map_err(|e| e.to_string())?;
 
         let game_events = events
             .iter()

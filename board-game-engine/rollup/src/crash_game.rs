@@ -9,7 +9,7 @@ use hyle::{
     module_bus_client, module_handle_messages,
     utils::modules::Module,
 };
-use hyle_contract_sdk::ZkContract;
+use hyle_contract_sdk::{Blob, Secp256k1Blob, ZkContract};
 use hyle_contract_sdk::{BlobIndex, ContractAction};
 use hyle_contract_sdk::{BlobTransaction, ContractName, Identity, StructuredBlobData};
 use rand;
@@ -25,7 +25,7 @@ use uuid;
 use crate::{
     fake_lane_manager::InboundTxMessage,
     game_state::GameStateCommand,
-    websocket::{InboundWebsocketMessage, OutboundWebsocketMessage},
+    websocket::{AuthenticatedMessage, InboundWebsocketMessage, OutboundWebsocketMessage},
 };
 
 // Message types
@@ -66,58 +66,9 @@ pub struct CrashGameBusClient {
     sender(OutboundWebsocketMessage),
     sender(InboundTxMessage),
     receiver(CrashGameCommand),
-    receiver(InboundWebsocketMessage),
+    receiver(AuthenticatedMessage<InboundWebsocketMessage>),
     receiver(InboundTxMessage),
 }
-}
-
-// Helper struct for creating transactions
-struct TransactionBuilder;
-
-impl TransactionBuilder {
-    fn new_crash_game_tx(action: ChainAction) -> BlobTransaction {
-        BlobTransaction::new(
-            "toto.crash_game",
-            vec![
-                ChainActionBlob(uuid::Uuid::new_v4().to_string(), action).as_blob(
-                    "crash_game".into(),
-                    None,
-                    None,
-                ),
-            ],
-        )
-    }
-
-    fn new_end_game_tx(final_results: Vec<(Identity, i32)>) -> BlobTransaction {
-        let uuid = uuid::Uuid::new_v4().to_string();
-        BlobTransaction::new(
-            "toto.crash_game",
-            vec![
-                ChainActionBlob(uuid.clone(), ChainAction::Done).as_blob(
-                    "crash_game".into(),
-                    None,
-                    Some(vec![BlobIndex(1)]),
-                ),
-                GameActionBlob(
-                    uuid,
-                    board_game_engine::game::GameAction::EndMinigame {
-                        result: MinigameResult {
-                            contract_name: ContractName("crash_game".into()),
-                            player_results: final_results
-                                .iter()
-                                .map(|r| PlayerMinigameResult {
-                                    player_id: r.0.clone(),
-                                    coins_delta: r.1,
-                                    stars_delta: 0,
-                                })
-                                .collect(),
-                        },
-                    },
-                )
-                .as_blob("board_game".into(), Some(BlobIndex(0)), None),
-            ],
-        )
-    }
 }
 
 pub struct CrashGameModule {
@@ -128,43 +79,79 @@ pub struct CrashGameModule {
 }
 
 impl CrashGameModule {
+    async fn handle_player_message(
+        &mut self,
+        event: CrashGameCommand,
+        signature: String,
+        public_key: String,
+        message_id: String,
+        signed_data: String,
+    ) -> Result<()> {
+        let uuid_128: u128 = uuid::Uuid::parse_str(&message_id)?.as_u128();
+        let mut blobs = match event {
+            CrashGameCommand::Initialize { players } => {
+                self.handle_initialize(uuid_128, players).await
+            }
+            CrashGameCommand::PlaceBet { player_id, amount } => {
+                self.handle_place_bet(uuid_128, player_id, amount).await
+            }
+            CrashGameCommand::CashOut { player_id } => {
+                self.handle_cash_out(uuid_128, player_id).await
+            }
+            CrashGameCommand::End => self.handle_end(uuid_128).await,
+        }?;
+
+        let identity = format!("{}.secp256k1", public_key);
+        blobs.push(
+            Secp256k1Blob::new(
+                Identity::from(identity.clone()),
+                signed_data.as_bytes(),
+                &public_key,
+                &signature,
+            )?
+            .as_blob(),
+        );
+        let tx = BlobTransaction::new(identity, blobs);
+        self.bus.send(InboundTxMessage::NewTransaction(tx))?;
+        Ok(())
+    }
+
     // Pre-chain validation and transaction submission
     async fn handle_initialize(
         &mut self,
+        uuid_128: u128,
         players: Vec<(Identity, String, Option<u64>)>,
-    ) -> Result<()> {
-        let tx = TransactionBuilder::new_crash_game_tx(ChainAction::InitMinigame { players });
-        self.bus.send(InboundTxMessage::NewTransaction(tx))?;
-        Ok(())
+    ) -> Result<Vec<Blob>> {
+        Ok(vec![ChainActionBlob(
+            uuid_128,
+            ChainAction::InitMinigame { players },
+        )
+        .as_blob("crash_game".into(), None, None)])
     }
 
-    async fn handle_place_bet(&mut self, player_id: Identity, amount: u64) -> Result<()> {
-        // Pre-chain validation
+    async fn handle_place_bet(
+        &mut self,
+        uuid_128: u128,
+        player_id: Identity,
+        amount: u64,
+    ) -> Result<Vec<Blob>> {
+        // Pre-chain validationsa
         if let Some(state) = &mut self.state {
             if let Err(err) = state.validate_bet(player_id.clone(), amount) {
-                tracing::warn!("Invalid bet: {:?}", err);
-                return Ok(());
+                bail!("Invalid bet: {:?}", err);
             }
         } else {
-            return Ok(());
+            bail!("Game not initialized");
         }
 
-        let tx = TransactionBuilder::new_crash_game_tx(ChainAction::PlaceBet { player_id, amount });
-        self.bus.send(InboundTxMessage::NewTransaction(tx))?;
-        Ok(())
+        Ok(vec![ChainActionBlob(
+            uuid_128,
+            ChainAction::PlaceBet { player_id, amount },
+        )
+        .as_blob("crash_game".into(), None, None)])
     }
 
-    async fn handle_start(&mut self) -> Result<()> {
-        let Some(_) = &mut self.state else {
-            return Ok(());
-        };
-
-        let tx = TransactionBuilder::new_crash_game_tx(ChainAction::Start);
-        self.bus.send(InboundTxMessage::NewTransaction(tx))?;
-        Ok(())
-    }
-
-    async fn handle_cash_out(&mut self, player_id: Identity) -> Result<()> {
+    async fn handle_cash_out(&mut self, uuid_128: u128, player_id: Identity) -> Result<Vec<Blob>> {
         // Pre-chain validation
         let current_multiplier = self
             .state
@@ -172,26 +159,27 @@ impl CrashGameModule {
             .map(|state| state.minigame.current_multiplier);
 
         let Some(multiplier) = current_multiplier else {
-            return Ok(());
+            bail!("Game not initialized");
         };
-
-        let tx = TransactionBuilder::new_crash_game_tx(ChainAction::CashOut {
-            player_id,
-            multiplier,
-        });
-        self.bus.send(InboundTxMessage::NewTransaction(tx))?;
-        Ok(())
+        Ok(vec![ChainActionBlob(
+            uuid_128,
+            ChainAction::CashOut {
+                player_id,
+                multiplier,
+            },
+        )
+        .as_blob("crash_game".into(), None, None)])
     }
 
-    async fn handle_end(&mut self) -> Result<()> {
+    async fn handle_end(&mut self, uuid_128: u128) -> Result<Vec<Blob>> {
         // Pre-chain validation
         match &self.state {
             Some(state) => {
                 if state.minigame.is_running {
-                    return Ok(());
+                    bail!("Game is still running");
                 }
             }
-            None => return Ok(()),
+            None => bail!("Game not initialized"),
         }
 
         // Get end results from server-side state
@@ -204,12 +192,52 @@ impl CrashGameModule {
             bail!("No minigame ended event");
         };
 
-        let tx = TransactionBuilder::new_end_game_tx(final_results.clone());
-        self.bus.send(InboundTxMessage::NewTransaction(tx))?;
-        Ok(())
+        Ok(vec![
+            ChainActionBlob(uuid_128, ChainAction::Done).as_blob(
+                "crash_game".into(),
+                None,
+                Some(vec![BlobIndex(1)]),
+            ),
+            GameActionBlob(
+                uuid_128,
+                board_game_engine::game::GameAction::EndMinigame {
+                    result: MinigameResult {
+                        contract_name: ContractName("crash_game".into()),
+                        player_results: final_results
+                            .iter()
+                            .map(|r| PlayerMinigameResult {
+                                player_id: r.0.clone(),
+                                coins_delta: r.1,
+                                stars_delta: 0,
+                            })
+                            .collect(),
+                    },
+                },
+            )
+            .as_blob("board_game".into(), Some(BlobIndex(0)), None),
+        ])
     }
 
     // Server-side state management
+    async fn handle_start(&mut self) -> Result<()> {
+        let Some(_) = &mut self.state else {
+            bail!("Game not initialized");
+        };
+
+        self.bus
+            .send(InboundTxMessage::NewTransaction(BlobTransaction::new(
+                "backend.crash_game",
+                vec![
+                    ChainActionBlob(uuid::Uuid::new_v4().as_u128(), ChainAction::Start).as_blob(
+                        "crash_game".into(),
+                        None,
+                        None,
+                    ),
+                ],
+            )))?;
+        Ok(())
+    }
+
     async fn handle_update(&mut self) -> Result<()> {
         let Some(state) = &mut self.state else {
             return Ok(());
@@ -235,10 +263,19 @@ impl CrashGameModule {
         );
 
         if rand::random::<f64>() < crash_probability && elapsed_secs > 2.0 {
-            let tx = TransactionBuilder::new_crash_game_tx(ChainAction::Crash {
-                final_multiplier: state.minigame.current_multiplier,
-            });
-            self.bus.send(InboundTxMessage::NewTransaction(tx))?;
+            // TODO: auth
+            let blobs = vec![ChainActionBlob(
+                uuid::Uuid::new_v4().as_u128(),
+                ChainAction::Crash {
+                    final_multiplier: state.minigame.current_multiplier,
+                },
+            )
+            .as_blob("crash_game".into(), None, None)];
+            self.bus
+                .send(InboundTxMessage::NewTransaction(BlobTransaction::new(
+                    "backend.crash_game",
+                    blobs,
+                )))?;
         }
 
         let state = state.clone();
@@ -347,17 +384,16 @@ impl Module for CrashGameModule {
 
         module_handle_messages! {
             on_bus self.bus,
-            listen<InboundWebsocketMessage> msg => {
-                if let InboundWebsocketMessage::CrashGame(event) = msg {
-                    if let Err(e) = async {
-                        match event {
-                            CrashGameCommand::Initialize { players } => self.handle_initialize(players).await,
-                            CrashGameCommand::PlaceBet { player_id, amount } => self.handle_place_bet(player_id, amount).await,
-                            CrashGameCommand::CashOut { player_id } => self.handle_cash_out(player_id).await,
-                            CrashGameCommand::End => self.handle_end().await,
-                        }}.await {
-                        tracing::warn!("Error handling event: {:?}", e);
-                    }
+            listen<AuthenticatedMessage<InboundWebsocketMessage>> msg => {
+                let AuthenticatedMessage {
+                    message,
+                    signature,
+                    public_key,
+                    message_id,
+                    signed_data,
+                } = msg;
+                if let InboundWebsocketMessage::CrashGame(event) = message {
+                    self.handle_player_message(event, signature, public_key, message_id, signed_data).await?;
                 }
             }
             listen<InboundTxMessage> msg => {
