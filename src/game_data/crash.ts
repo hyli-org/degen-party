@@ -1,25 +1,26 @@
 import { reactive } from "vue";
 import { BaseWebSocketService } from "../utils/base-websocket";
-import { boardGameService, gameState } from "./game_data";
+import { boardGameService, gameState, getLocalPlayerId } from "./game_data";
+import { authService } from "./auth";
 
 export interface ChainEvent {
     MinigameEnded?: {
-        final_results: Array<[bigint, number]>;
+        final_results: Array<[string, number]>;
     };
 }
 
 export type CrashGameCommand =
     | {
           type: "Initialize";
-          payload: { players: Array<[bigint, string]> };
+          payload: { players: Array<[string, string]> };
       }
     | {
           type: "PlaceBet";
-          payload: { player_id: bigint; amount: number };
+          payload: { player_id: string; amount: number };
       }
     | {
           type: "CashOut";
-          payload: { player_id: bigint };
+          payload: { player_id: string };
       }
     | {
           type: "Start";
@@ -81,54 +82,45 @@ class CrashGameService extends BaseWebSocketService {
     }
 
     placeBet(amount: number) {
-        if (!gameState.playerId) return;
-        // TODO: Let players handle this
-        const players = gameState.game?.players.length || 0;
         this.send({
             type: "CrashGame",
             payload: {
                 type: "PlaceBet",
                 payload: {
-                    player_id: gameState.playerId,
+                    player_id: getLocalPlayerId(),
                     amount,
                 },
             },
         });
-        // temp hack
-        /*
-        for (let i = 0; i < players; i++) {
-            this.send({
-                type: "CrashGame",
-                payload: {
-                    type: "PlaceBet",
-                    payload: {
-                        player_id: gameState.game?.players[i].id,
-                        amount,
-                    },
-                },
-            });
-        }*/
     }
+
     cashOut() {
-        if (!gameState.playerId) return;
         this.send({
             type: "CrashGame",
             payload: {
                 type: "CashOut",
                 payload: {
-                    player_id: gameState.playerId,
+                    player_id: getLocalPlayerId(),
                 },
             },
         });
     }
+
     returnToBoard() {
-        this.send({
-            type: "CrashGame",
-            payload: {
-                type: "End",
-                payload: null,
+        this.send(
+            {
+                type: "CrashGame",
+                payload: {
+                    type: "End",
+                    payload: null,
+                },
             },
-        });
+            "EndMinigame",
+        );
+    }
+
+    async send(message: any, data_to_sign: string = "") {
+        await super.send(message, data_to_sign);
     }
 }
 

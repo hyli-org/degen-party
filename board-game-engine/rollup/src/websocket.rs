@@ -29,6 +29,15 @@ use tracing::{debug, error, info};
 use crate::{crash_game::CrashGameCommand, game_state::GameStateEvent};
 use crate::{crash_game::CrashGameEvent, game_state::GameStateCommand};
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AuthenticatedMessage<T> {
+    pub message: T,
+    pub signature: String,
+    pub public_key: String,
+    pub message_id: String,
+    pub signed_data: String,
+}
+
 /// Messages received from WebSocket clients that will be processed by the system
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", content = "payload")]
@@ -37,7 +46,7 @@ pub enum InboundWebsocketMessage {
     CrashGame(CrashGameCommand),
 }
 
-impl BusMessage for InboundWebsocketMessage {}
+impl BusMessage for AuthenticatedMessage<InboundWebsocketMessage> {}
 
 /// Messages sent to WebSocket clients from the system
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -52,7 +61,7 @@ impl BusMessage for OutboundWebsocketMessage {}
 module_bus_client! {
 #[derive(Debug)]
 pub struct WebSocketBusClient {
-    sender(InboundWebsocketMessage),
+    sender(AuthenticatedMessage<InboundWebsocketMessage>),
     receiver(OutboundWebsocketMessage),
 }
 }
@@ -104,7 +113,7 @@ pub struct WebSocketModule {
     peer_receivers: JoinSet<
         Option<(
             SplitStream<WebSocket>,
-            Result<InboundWebsocketMessage, Error>,
+            Result<AuthenticatedMessage<InboundWebsocketMessage>, Error>,
         )>,
     >,
     new_peers: NewPeers,
@@ -213,7 +222,7 @@ async fn process_websocket_incoming(
     mut receiver: SplitStream<WebSocket>,
 ) -> Option<(
     SplitStream<WebSocket>,
-    Result<InboundWebsocketMessage, Error>,
+    Result<AuthenticatedMessage<InboundWebsocketMessage>, Error>,
 )> {
     while let Some(msg) = receiver.next().await {
         match msg {
@@ -221,8 +230,10 @@ async fn process_websocket_incoming(
                 debug!("Received message: {:?}", text);
                 return Some((
                     receiver,
-                    serde_json::from_str::<InboundWebsocketMessage>(text.as_str())
-                        .context("Failed to parse message"),
+                    serde_json::from_str::<AuthenticatedMessage<InboundWebsocketMessage>>(
+                        text.as_str(),
+                    )
+                    .context("Failed to parse message"),
                 ));
             }
             Ok(Message::Close(_)) => {
@@ -242,7 +253,7 @@ async fn process_websocket_incoming(
 impl WebSocketModule {
     async fn handle_incoming_message(
         &mut self,
-        msg: InboundWebsocketMessage,
+        msg: AuthenticatedMessage<InboundWebsocketMessage>,
     ) -> Result<(), WebSocketError> {
         self.bus.send(msg).map_err(|e| {
             WebSocketError::BusSendError(format!("Failed to send inbound message: {}", e))

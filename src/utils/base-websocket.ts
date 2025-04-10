@@ -16,9 +16,9 @@ export abstract class BaseWebSocketService {
     protected abstract onOpen(): void;
     protected abstract onMessage(data: any): void;
 
-    public async send(message: any) {
+    async send(message: any, signed_data: string) {
         try {
-            await sharedWebSocket.send(message);
+            await sharedWebSocket.send(message, signed_data);
         } catch (error) {
             console.error("Failed to send message:", error);
             throw error;

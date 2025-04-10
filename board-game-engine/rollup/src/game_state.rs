@@ -1,6 +1,6 @@
 use crate::{
     crash_game::CrashGameCommand,
-    websocket::{InboundWebsocketMessage, OutboundWebsocketMessage},
+    websocket::{AuthenticatedMessage, InboundWebsocketMessage, OutboundWebsocketMessage},
 };
 use anyhow::{bail, Result};
 use board_game_engine::{
@@ -13,12 +13,12 @@ use hyle::{
     module_bus_client, module_handle_messages,
     utils::modules::Module,
 };
+use hyle_contract_sdk::Secp256k1Blob;
 use hyle_contract_sdk::ZkContract;
 use hyle_contract_sdk::{BlobIndex, BlobTransaction, ContractName, Identity};
 use hyle_contract_sdk::{ContractAction, StructuredBlobData};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use uuid::Uuid;
 
 use crate::fake_lane_manager::InboundTxMessage;
 
@@ -58,7 +58,7 @@ pub struct GameStateBusClient {
     receiver(Query<QueryGameState, GameState>),
     receiver(GameStateCommand),
     receiver(InboundTxMessage),
-    receiver(InboundWebsocketMessage),
+    receiver(AuthenticatedMessage<InboundWebsocketMessage>),
 }
 }
 
@@ -85,9 +85,16 @@ impl Module for GameStateModule {
                     None => Err(anyhow::anyhow!("Game not initialized"))
                 }
             }
-            listen<InboundWebsocketMessage> msg => {
-                if let InboundWebsocketMessage::GameState(event) = msg {
-                    if let Err(e) = self.handle_user_message(event).await {
+            listen<AuthenticatedMessage<InboundWebsocketMessage>> msg => {
+                let AuthenticatedMessage {
+                    message,
+                    signature,
+                    public_key,
+                    message_id,
+                    signed_data,
+                } = msg;
+                if let InboundWebsocketMessage::GameState(event) = message {
+                    if let Err(e) = self.handle_user_message(event, signature, public_key, message_id, signed_data).await {
                         tracing::warn!("Error handling event: {:?}", e);
                     }
                 }
@@ -104,9 +111,19 @@ impl Module for GameStateModule {
 }
 
 impl GameStateModule {
-    async fn handle_user_message(&mut self, event: GameStateCommand) -> Result<()> {
+    async fn handle_user_message(
+        &mut self,
+        event: GameStateCommand,
+        signature: String,
+        public_key: String,
+        message_id: String,
+        signed_data: String,
+    ) -> Result<()> {
         match event {
-            GameStateCommand::SubmitAction { action } => self.handle_submit_action(action).await,
+            GameStateCommand::SubmitAction { action } => {
+                self.handle_submit_action(action, signature, public_key, message_id, signed_data)
+                    .await
+            }
             GameStateCommand::Reset => self.handle_reset().await,
             GameStateCommand::Initialize {
                 player_count,
@@ -116,53 +133,26 @@ impl GameStateModule {
                     .await
             }
             GameStateCommand::SendState => self.handle_send_state().await,
-            /*
-            GameStateCommand::MinigameEnded {
-                contract_name,
-                final_results,
-            } => {
-                // Create proper MinigameResult with computed coin deltas
-                let player_results = final_results
-                    .into_iter()
-                    .map(|(player_id, coins_at_end)| {
-                        board_game_engine::game::PlayerMinigameResult {
-                            player_id: player_id.clone(),
-                            coins_delta: coins_at_end
-                                - self
-                                    .state
-                                    .as_ref()
-                                    .unwrap()
-                                    .players
-                                    .iter()
-                                    .find(|p| p.id == player_id)
-                                    .unwrap()
-                                    .coins,
-                            stars_delta: 0, // Crash game doesn't affect stars
-                        }
-                    })
-                    .collect();
-
-                let result = board_game_engine::game::MinigameResult {
-                    contract_name,
-                    player_results,
-                };
-
-                self.handle_action_submitted(GameAction::EndMinigame { result })
-                    .await
-            }
-             */
         }
     }
 
-    async fn handle_submit_action(&mut self, action: GameAction) -> Result<()> {
+    async fn handle_submit_action(
+        &mut self,
+        action: GameAction,
+        signature: String,
+        public_key: String,
+        message_id: String,
+        signed_data: String,
+    ) -> Result<()> {
         if self.state.is_none() {
             return Err(anyhow::anyhow!("Game not initialized"));
         }
         let mut blobs = vec![];
 
+        let uuid_128: u128 = uuid::Uuid::parse_str(&message_id)?.as_u128();
+
         match &action {
             GameAction::StartMinigame => {
-                let uuid = Uuid::new_v4().to_string();
                 let players: Vec<(Identity, String, Option<u64>)> = self
                     .state
                     .as_ref()
@@ -172,7 +162,7 @@ impl GameStateModule {
                     .map(|p| (p.id.clone(), p.name.clone(), Some(p.coins as u64)))
                     .collect();
                 // TODO: conceptually, we should perhaps skip this one ?
-                blobs.push(GameActionBlob(uuid.clone(), action.clone()).as_blob(
+                blobs.push(GameActionBlob(uuid_128, action.clone()).as_blob(
                     "board_game".into(),
                     None,
                     None,
@@ -183,7 +173,7 @@ impl GameStateModule {
                     if minigame_type.0 == "crash_game" {
                         blobs.push(
                             ChainActionBlob(
-                                Uuid::new_v4().to_string(),
+                                uuid_128,
                                 crash_game::ChainAction::InitMinigame { players },
                             )
                             .as_blob("crash_game".into(), None, None),
@@ -199,18 +189,26 @@ impl GameStateModule {
             _ => {
                 // Submit the action as a blob
                 // With a random UUID to avoid hash collisions
-                blobs.push(
-                    GameActionBlob(Uuid::new_v4().to_string(), action.clone()).as_blob(
-                        "board_game".into(),
-                        None,
-                        None,
-                    ),
-                );
+                blobs.push(GameActionBlob(uuid_128, action.clone()).as_blob(
+                    "board_game".into(),
+                    None,
+                    None,
+                ));
             }
         }
 
-        let tx = BlobTransaction::new("toto.board_game", blobs);
-
+        // Add identity blob
+        let identity = format!("{}.secp256k1", public_key);
+        blobs.push(
+            Secp256k1Blob::new(
+                Identity::from(identity.clone()),
+                signed_data.as_bytes(),
+                &public_key,
+                &signature,
+            )?
+            .as_blob(),
+        );
+        let tx = BlobTransaction::new(identity, blobs);
         self.bus.send(InboundTxMessage::NewTransaction(tx))?;
 
         // The state will be updated when we receive the transaction confirmation
@@ -287,7 +285,7 @@ impl GameStateModule {
             let t = StructuredBlobData::<GameActionBlob>::try_from(blob.data.clone());
             if let Ok(StructuredBlobData::<GameActionBlob> { parameters, .. }) = t {
                 tracing::debug!("Received blob: {:?}", parameters);
-                let events = self.apply_action(&parameters.1).await?;
+                let events = self.apply_action(&tx.identity, &parameters).await?;
                 self.bus.send(OutboundWebsocketMessage::GameStateEvent(
                     GameStateEvent::StateUpdated {
                         state: Some(self.state.clone().unwrap()),
@@ -301,12 +299,16 @@ impl GameStateModule {
         Ok(())
     }
 
-    async fn apply_action(&mut self, action: &GameAction) -> Result<Vec<GameEvent>> {
+    async fn apply_action(
+        &mut self,
+        caller: &Identity,
+        blob: &GameActionBlob,
+    ) -> Result<Vec<GameEvent>> {
         // Apply action optimistically to local state
         match &mut self.state {
             Some(state) => {
-                let events = state.process_action(action.clone())?;
-                tracing::debug!("Applied action {:?}, got events: {:?}", action, events);
+                let events = state.process_action(caller, blob.0, blob.1.clone())?;
+                tracing::debug!("Applied action {:?}, got events: {:?}", blob.1, events);
                 Ok(events)
             }
             None => Err(anyhow::anyhow!("Game not initialized")),

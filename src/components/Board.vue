@@ -3,7 +3,7 @@ import { ref, computed, onMounted } from "vue";
 import type { GameState, Space, Player, GameEvent, GamePhase } from "../game_data/game_data";
 import GridBoard from "./GridBoard.vue";
 import DiceModal from "./DiceModal.vue";
-import { boardGameService, gameState, isCurrentPlayer } from "../game_data/game_data";
+import { boardGameService, gameState, isCurrentPlayer, getLocalPlayerId } from "../game_data/game_data";
 import { wsState } from "../utils/shared-websocket";
 
 // Game events
@@ -18,7 +18,7 @@ const currentGame = computed<GameState>(() => {
 
 const isCurrentPlayersTurn = computed(() => {
     if (gameState.isInLobby) return false;
-    return isCurrentPlayer(gameState.playerId);
+    return isCurrentPlayer(getLocalPlayerId());
 });
 
 onMounted(() => {
@@ -132,18 +132,6 @@ async function rollDice() {
     }
 }
 
-async function applySpaceEffect() {
-    try {
-        await boardGameService.sendAction({
-            ApplySpaceEffect: {
-                player_id: gameState.playerId,
-            },
-        });
-    } catch (error) {
-        console.error("Failed to apply space effect:", error);
-    }
-}
-
 async function endTurn() {
     try {
         await boardGameService.sendAction({ EndTurn: null });
@@ -210,8 +198,15 @@ async function resetGame() {
                                     'bg-gradient-to-b from-[#999999] to-[#666666]': !isCurrentPlayersTurn,
                                 }"
                             >
-                                <span class="flex items-center justify-center gap-2" :class="{ 'opacity-50': !isCurrentPlayersTurn }">
-                                    <span class="text-[1.4rem]" :class="{ 'animate-[wiggle_1s_infinite_alternate]': isCurrentPlayersTurn }">🎲</span>
+                                <span
+                                    class="flex items-center justify-center gap-2"
+                                    :class="{ 'opacity-50': !isCurrentPlayersTurn }"
+                                >
+                                    <span
+                                        class="text-[1.4rem]"
+                                        :class="{ 'animate-[wiggle_1s_infinite_alternate]': isCurrentPlayersTurn }"
+                                        >🎲</span
+                                    >
                                     ROLL DICE
                                 </span>
                             </button>

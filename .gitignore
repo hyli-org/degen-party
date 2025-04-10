@@ -25,3 +25,4 @@ dist-ssr
 
 board-game-engine/target
 k8s.yaml
+*.bin
