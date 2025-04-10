@@ -42,6 +42,9 @@ pub enum GameStateEvent {
         contract_name: ContractName,
         final_results: Vec<(Identity, i32)>,
     },
+    TransactionProcessed {
+        transaction: BlobTransaction,
+    },
 }
 
 impl BusMessage for GameStateCommand {}
@@ -273,6 +276,12 @@ impl GameStateModule {
             if blob.contract_name != ContractName::from("board_game") {
                 continue;
             }
+
+            self.bus.send(OutboundWebsocketMessage::GameStateEvent(
+                GameStateEvent::TransactionProcessed {
+                    transaction: tx.clone(),
+                },
+            ))?;
 
             // Generate a proof with this state
             self.bus.send(InboundTxMessage::NewProofRequest((
