@@ -430,9 +430,18 @@ impl GameState {
 
     pub fn final_results(&self) -> Vec<(Identity, i32)> {
         self.minigame
-            .players
+            .active_bets
             .iter()
-            .map(|(id, player)| (id.clone(), player.coins as i32))
+            .map(|(id, bet)| {
+                let delta = if let Some(multiplier) = bet.cashed_out_at {
+                    // Player cashed out - calculate profit
+                    (bet.amount as f64 * multiplier - bet.amount as f64) as i32
+                } else {
+                    // Player didn't cash out - lost their bet
+                    -(bet.amount as i32)
+                };
+                (id.clone(), delta)
+            })
             .collect::<Vec<_>>()
     }
 }

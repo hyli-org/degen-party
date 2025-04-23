@@ -19,7 +19,7 @@ console_error_panic_hook = "0.1"
 
 board-game-engine = { path = "../zkprogram" }
 crash_game = { path = "../crash_game" }
-hyle-contract-sdk = { git = "https://github.com/hyle-org/hyle", branch = "sdk_secp256k1", default-features = false }
-hyle-model = { git = "https://github.com/hyle-org/hyle", branch = "sdk_secp256k1", default-features = false, features = [
+hyle-contract-sdk = { git = "https://github.com/hyle-org/hyle", rev = "111c1a08a282389292d0076f7ec1e732d4439036", default-features = false }
+hyle-model = { git = "https://github.com/hyle-org/hyle", rev = "111c1a08a282389292d0076f7ec1e732d4439036", default-features = false, features = [
     "full",
 ] }

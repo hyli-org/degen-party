@@ -20,13 +20,13 @@ futures = "0.3.31"
 sha2 = "0.10.8"
 rand = { version = "0.9", default-features = false }
 
-hyle = { git = "https://github.com/hyle-org/hyle", branch = "sdk_secp256k1", default-features = false }
-hyle-contract-sdk = { git = "https://github.com/hyle-org/hyle", branch = "sdk_secp256k1", default-features = false, features = [
+hyle = { git = "https://github.com/hyle-org/hyle", rev = "111c1a08a282389292d0076f7ec1e732d4439036", default-features = false }
+hyle-contract-sdk = { git = "https://github.com/hyle-org/hyle", rev = "111c1a08a282389292d0076f7ec1e732d4439036", default-features = false, features = [
     "full-model",
     "tracing",
     "sp1",
 ] }
-hyle-client-sdk = { git = "https://github.com/hyle-org/hyle", branch = "sdk_secp256k1", default-features = false, features = [
+hyle-client-sdk = { git = "https://github.com/hyle-org/hyle", rev = "111c1a08a282389292d0076f7ec1e732d4439036", default-features = false, features = [
     "sp1",
 ] }
 

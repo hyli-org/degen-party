@@ -2,17 +2,6 @@ import { reactive } from "vue";
 import { BaseWebSocketService } from "../utils/base-websocket";
 import { authService } from "./auth";
 
-import init, { GameStateManager } from "board-game-wasm";
-
-let gameStateManager: GameStateManager | null = null;
-
-// Initialize WASM module
-init()
-    .then(() => {
-        gameStateManager = new GameStateManager();
-    })
-    .catch(console.error);
-
 export interface MinigameResult {
     contract_name: string;
     player_results: Array<{
@@ -174,16 +163,6 @@ class BoardGameService extends BaseWebSocketService {
                         console.log("Minigame ended", e.MinigameEnded.result);
                     }
                 }
-            } else if (event.type === "TransactionProcessed") {
-                // Process transaction through WASM
-                if (gameStateManager) {
-                    try {
-                        const result = gameStateManager.process_transaction(event.payload.transaction);
-                        console.log("Transaction processed", result, " => ", gameStateManager.get_state());
-                    } catch (error) {
-                        console.error("Error processing transaction:", error);
-                    }
-                }
             }
         }
     }
@@ -213,13 +192,6 @@ class BoardGameService extends BaseWebSocketService {
     }
 
     async initGame(config: { playerCount: number; boardSize: number }) {
-        if (gameStateManager) {
-            try {
-                gameStateManager.initialize(config.playerCount, config.boardSize);
-            } catch (error) {
-                console.error("Error initializing game state:", error);
-            }
-        }
         await this.send({
             type: "GameState",
             payload: {
@@ -276,7 +248,7 @@ export const boardGameService = new BoardGameService();
 boardGameService.connect().catch(console.error);
 
 export function getLocalPlayerId(): string {
-    return `${authService.getSessionKey() || authService.generateSessionKey()}.secp256k1`;
+    return `${authService.getSessionKey() || authService.generateSessionKey()}@secp256k1`;
 }
 
 export function isCurrentPlayer(id: string): boolean {

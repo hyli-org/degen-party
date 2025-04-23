@@ -13,7 +13,7 @@ use hyle::{
     module_bus_client, module_handle_messages,
     utils::modules::Module,
 };
-use hyle_contract_sdk::Secp256k1Blob;
+use hyle_contract_sdk::verifiers::Secp256k1Blob;
 use hyle_contract_sdk::ZkContract;
 use hyle_contract_sdk::{BlobIndex, BlobTransaction, ContractName, Identity};
 use hyle_contract_sdk::{ContractAction, StructuredBlobData};
@@ -201,7 +201,7 @@ impl GameStateModule {
         }
 
         // Add identity blob
-        let identity = format!("{}.secp256k1", public_key);
+        let identity = format!("{}@secp256k1", public_key);
         blobs.push(
             Secp256k1Blob::new(
                 Identity::from(identity.clone()),
@@ -277,11 +277,13 @@ impl GameStateModule {
                 continue;
             }
 
-            self.bus.send(OutboundWebsocketMessage::GameStateEvent(
+            // Only needed if processing Txs in frontend in WASM
+            /*self.bus.send(OutboundWebsocketMessage::GameStateEvent(
                 GameStateEvent::TransactionProcessed {
                     transaction: tx.clone(),
                 },
             ))?;
+            */
 
             // Generate a proof with this state
             self.bus.send(InboundTxMessage::NewProofRequest((

@@ -1,4 +1,4 @@
-use std::{fs::File, sync::Arc};
+use std::sync::Arc;
 
 use anyhow::{bail, Result};
 use hyle::{
@@ -6,14 +6,22 @@ use hyle::{
     utils::modules::Module,
 };
 use hyle_contract_sdk::{
-    api::APIRegisterContract, guest::execute, BlobIndex, BlobTransaction, Calldata, ContractName,
-    Hashed, ProofData, ProofTransaction, StateCommitment,
+    api::APIRegisterContract, BlobIndex, BlobTransaction, Calldata, ContractName, Hashed,
+    ProofTransaction, StateCommitment,
 };
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
-use sp1_sdk::ProverClient;
-use std::io::Write;
 use tracing::{error, info};
+
+#[cfg(feature = "fake_proofs")]
+use hyle_contract_sdk::{guest::execute, ProofData};
+#[cfg(not(feature = "fake_proofs"))]
+use {
+    hyle_client_sdk::helpers::sp1::SP1Prover,
+    sha2::{Digest, Sha256},
+    sp1_sdk::ProverClient,
+    std::fs::File,
+    std::io::Write,
+};
 
 /// Inbound transaction message type
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -41,10 +49,12 @@ mod elfs {
     pub const CRASH_GAME_ELF: &[u8] = sp1_sdk::include_elf!("crash_game");
 }
 #[cfg(clippy)]
+#[allow(dead_code, unused)]
 mod elfs {
     pub const BOARD_GAME_ELF: &[u8] = &[0, 1, 2, 3];
     pub const CRASH_GAME_ELF: &[u8] = &[0, 1, 2, 3];
 }
+#[allow(dead_code, unused)]
 use elfs::*;
 
 /// Fake Lane Manager module
@@ -73,7 +83,7 @@ impl Module for FakeLaneManager {
             on_bus self.bus,
             listen<InboundTxMessage> msg => {
                 if let Err(e) = self.process_transaction(msg).await {
-                    error!("Error processing transaction: {}", e);
+                    error!("Error processing transaction: {:?}", e);
                     break;
                 }
             }
@@ -177,7 +187,7 @@ impl FakeLaneManager {
                     tx.hashed(),
                     proof_tx_hash
                 );
-                Ok::<_, Error>(())
+                Ok::<_, anyhow::Error>(())
             })()
             .await
             {

@@ -9,9 +9,3 @@ opt-level = 3
 opt-level = 3
 [profile.dev.package.sp1-core-machine]
 opt-level = 3
-
-[patch."https://github.com/hyle-org/hyle"]
-hyle = { path = "../../hyle" }
-hyle-contract-sdk = { path = "../../hyle/crates/contract-sdk" }
-hyle-client-sdk = { path = "../../hyle/crates/client-sdk" }
-hyle-model = { path = "../../hyle/crates/hyle-model" }

@@ -9,9 +9,11 @@ use hyle::{
     module_bus_client, module_handle_messages,
     utils::modules::Module,
 };
-use hyle_contract_sdk::{Blob, Secp256k1Blob, ZkContract};
-use hyle_contract_sdk::{BlobIndex, ContractAction};
-use hyle_contract_sdk::{BlobTransaction, ContractName, Identity, StructuredBlobData};
+use hyle_contract_sdk::verifiers::Secp256k1Blob;
+use hyle_contract_sdk::{
+    Blob, BlobIndex, BlobTransaction, ContractAction, ContractName, Identity, StructuredBlobData,
+    ZkContract,
+};
 use rand;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -101,7 +103,7 @@ impl CrashGameModule {
             CrashGameCommand::End => self.handle_end(uuid_128).await,
         }?;
 
-        let identity = format!("{}.secp256k1", public_key);
+        let identity = format!("{}@secp256k1", public_key);
         blobs.push(
             Secp256k1Blob::new(
                 Identity::from(identity.clone()),
@@ -226,7 +228,7 @@ impl CrashGameModule {
 
         self.bus
             .send(InboundTxMessage::NewTransaction(BlobTransaction::new(
-                "backend.crash_game",
+                "backend@crash_game",
                 vec![
                     ChainActionBlob(uuid::Uuid::new_v4().as_u128(), ChainAction::Start).as_blob(
                         "crash_game".into(),
@@ -273,7 +275,7 @@ impl CrashGameModule {
             .as_blob("crash_game".into(), None, None)];
             self.bus
                 .send(InboundTxMessage::NewTransaction(BlobTransaction::new(
-                    "backend.crash_game",
+                    "backend@crash_game",
                     blobs,
                 )))?;
         }
