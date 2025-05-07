@@ -22,9 +22,10 @@ git clone https://github.com/yourusername/degen-party.git
 cd degen-party
 ```
 
-2. Install dependencies:
+2. Install front dependencies:
 
 ```bash
+cd front
 bun install
 ```
 

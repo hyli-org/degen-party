@@ -1,0 +1,38 @@
+[package]
+name = "zkprogram"
+edition = { workspace = true }
+rust-version = "1.81"
+
+[[bin]]
+name = "zkprogram"
+path = "src/main.rs"
+required-features = ["sp1"]
+test = false
+
+[dependencies]
+anyhow = "1.0.96"
+sdk = { workspace = true, features = ["tracing"] }
+serde = { version = "1.0", default-features = false, features = [
+    "derive",
+    "alloc",
+] }
+borsh = { version = "1.5.7" }
+uuid = { version = "1.6", features = ["serde"], default-features = false }
+
+sp1-zkvm = { version = "4.2.0", default-features = false, optional = true }
+client-sdk = { workspace = true, default-features = false, features = [
+    "sp1",
+    "rest",
+], optional = true }
+
+[dev-dependencies]
+# Active client feature for tests
+zkprogram = { path = ".", features = ["client"] }
+clap = { version = "4.5.23", features = ["derive"] }
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tokio = { version = "1.44.2", features = ["full", "tracing"] }
+
+[features]
+default = []
+client = ["dep:client-sdk"]
+sp1 = ["dep:sp1-zkvm", "sdk/sp1"]

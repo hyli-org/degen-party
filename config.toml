@@ -1,0 +1,4 @@
+id = "degen-party"
+
+[websocket]
+server_port = 8082
