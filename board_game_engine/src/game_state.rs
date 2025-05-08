@@ -7,7 +7,10 @@ use crash_game::ChainActionBlob;
 use hyle_modules::{
     bus::{command_response::Query, BusClientSender},
     module_bus_client, module_handle_messages,
-    modules::{websocket::WsInMessage, Module},
+    modules::{
+        websocket::{WsBroadcastMessage, WsInMessage},
+        Module,
+    },
 };
 use sdk::{verifiers::Secp256k1Blob, ZkContract};
 use sdk::{BlobIndex, BlobTransaction, ContractName, Identity};
@@ -51,7 +54,7 @@ pub struct GameStateBusClient {
     sender(GameStateCommand),
     sender(CrashGameCommand),
     sender(InboundTxMessage),
-    sender(OutboundWebsocketMessage),
+    sender(WsBroadcastMessage<OutboundWebsocketMessage>),
     receiver(Query<QueryGameState, GameState>),
     receiver(GameStateCommand),
     receiver(InboundTxMessage),
@@ -216,23 +219,23 @@ impl GameStateModule {
 
     async fn handle_reset(&mut self) -> Result<()> {
         self.state = None;
-        self.bus.send(OutboundWebsocketMessage::GameStateEvent(
-            GameStateEvent::StateUpdated {
+        self.bus.send(WsBroadcastMessage {
+            message: OutboundWebsocketMessage::GameStateEvent(GameStateEvent::StateUpdated {
                 state: None,
                 events: vec![],
-            },
-        ))?;
+            }),
+        })?;
         Ok(())
     }
 
     async fn handle_send_state(&mut self) -> Result<()> {
         if let Some(state) = &self.state {
-            self.bus.send(OutboundWebsocketMessage::GameStateEvent(
-                GameStateEvent::StateUpdated {
+            self.bus.send(WsBroadcastMessage {
+                message: OutboundWebsocketMessage::GameStateEvent(GameStateEvent::StateUpdated {
                     state: Some(state.clone()),
                     events: vec![],
-                },
-            ))?;
+                }),
+            })?;
         }
         Ok(())
     }
@@ -250,12 +253,12 @@ impl GameStateModule {
             ContractName::from("board_game"),
             new_state.commit(),
         )))?;
-        self.bus.send(OutboundWebsocketMessage::GameStateEvent(
-            GameStateEvent::StateUpdated {
+        self.bus.send(WsBroadcastMessage {
+            message: OutboundWebsocketMessage::GameStateEvent(GameStateEvent::StateUpdated {
                 state: Some(new_state),
                 events: vec![],
-            },
-        ))?;
+            }),
+        })?;
 
         // Wait some time synchronously for the contract to be registered
         // TODO: fix this
@@ -283,12 +286,14 @@ impl GameStateModule {
             if let Ok(StructuredBlobData::<GameActionBlob> { parameters, .. }) = t {
                 tracing::debug!("Received blob: {:?}", parameters);
                 let events = self.apply_action(&tx.identity, &parameters).await?;
-                self.bus.send(OutboundWebsocketMessage::GameStateEvent(
-                    GameStateEvent::StateUpdated {
-                        state: Some(self.state.clone().unwrap()),
-                        events,
-                    },
-                ))?;
+                self.bus.send(WsBroadcastMessage {
+                    message: OutboundWebsocketMessage::GameStateEvent(
+                        GameStateEvent::StateUpdated {
+                            state: Some(self.state.clone().unwrap()),
+                            events,
+                        },
+                    ),
+                })?;
             } else {
                 tracing::warn!("Failed to parse blob as GameActionBlob");
             }
