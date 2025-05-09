@@ -55,7 +55,7 @@ impl Module for FakeLaneManager {
             on_bus self.bus,
             listen<InboundTxMessage> msg => {
                 if let Err(e) = self.process_transaction(msg).await {
-                    error!("Error processing transaction: {}", e);
+                    error!("Error processing transaction: {:?}", e);
                     break;
                 }
             }
