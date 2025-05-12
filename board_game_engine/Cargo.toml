@@ -1,0 +1,43 @@
+[package]
+name = "board_game_engine"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+zkprogram = { workspace = true }
+crash_game = { workspace = true }
+contracts = { workspace = true }
+
+sdk = { workspace = true, features = ["tracing"] }
+client-sdk = { workspace = true, features = ["sp1", "rest"] }
+hyle-modules = { workspace = true }
+
+borsh = { version = "1.2", features = ["derive"] }
+uuid = { version = "1.6", features = ["v4", "serde"] }
+serde_json = "1.0"
+thiserror = "1.0"
+axum = "0.8.3"
+tokio = { version = "1.44", features = ["full", "tracing"] }
+tokio-util = { version = "0.7.14" }
+futures = "0.3.31"
+rand = "0.9.0"
+sha2 = "0.10.8"
+serde = { version = "1.0", features = ["derive"] }
+tower-http = { version = "0.6.2", features = ["cors"] }
+anyhow = "1.0.93"
+hex = "0.4.3"
+
+sp1-sdk = { version = "4.0.0", default-features = false }
+
+tracing = "0.1.41"
+tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
+clap = "4.5.28"
+
+opentelemetry = { version = "0.28" }
+opentelemetry-prometheus = { version = "0.28.0" }
+opentelemetry_sdk = "0.28.0"
+prometheus = { version = "0.13.4" }
+
+[features]
+# Deploy test verifiers for faster/easier testing.
+fake_proofs = []

@@ -1,0 +1,28 @@
+[workspace]
+resolver = "2"
+members = [
+    "contracts",
+    "contracts/crash_game",
+    "contracts/zkprogram",
+    "board_game_engine",
+]
+
+[workspace.dependencies]
+sdk = { git = "https://github.com/Hyle-org/hyle.git", branch = "main", package = "hyle-contract-sdk" }
+client-sdk = { git = "https://github.com/Hyle-org/hyle.git", branch = "main", default-features = false, package = "hyle-client-sdk" }
+hyle-modules = { git = "https://github.com/Hyle-org/hyle.git", branch = "main", package = "hyle-modules" }
+hyle-hyllar = { git = "https://github.com/Hyle-org/hyle.git", branch = "main", default-features = false, package = "hyle-hyllar" }
+hyle-hydentity = { git = "https://github.com/Hyle-org/hyle.git", branch = "main", package = "hyle-hydentity" }
+
+contracts = { path = "contracts", default-features = false, package = "contracts" }
+zkprogram = { path = "contracts/zkprogram", package = "zkprogram" }
+crash_game = { path = "contracts/crash_game", package = "crash_game" }
+
+board_game_engine = { path = "board_game_engine" }
+
+[workspace.package]
+version = "0.4.1"
+edition = "2021"
+
+[patch.crates-io]
+sha2 = { git = "https://github.com/sp1-patches/RustCrypto-hashes", package = "sha2", tag = "patch-sha2-0.10.8-sp1-4.0.0" }

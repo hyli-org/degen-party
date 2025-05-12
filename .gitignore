@@ -7,10 +7,10 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-node_modules
-dist
-dist-ssr
-*.local
+front/node_modules
+front/dist
+front/dist-ssr
+front/*.local
 
 # Editor directories and files
 .vscode/*
@@ -23,6 +23,6 @@ dist-ssr
 *.sln
 *.sw?
 
-board-game-engine/target
+target
 k8s.yaml
 *.bin
