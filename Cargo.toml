@@ -4,7 +4,7 @@ members = [
     "contracts",
     "contracts/crash_game",
     "contracts/zkprogram",
-    "board_game_engine",
+    "degen_party",
 ]
 
 [workspace.dependencies]
@@ -18,7 +18,7 @@ contracts = { path = "contracts", default-features = false, package = "contracts
 zkprogram = { path = "contracts/zkprogram", package = "zkprogram" }
 crash_game = { path = "contracts/crash_game", package = "crash_game" }
 
-board_game_engine = { path = "board_game_engine" }
+degen_party = { path = "degen_party" }
 
 [workspace.package]
 version = "0.4.1"

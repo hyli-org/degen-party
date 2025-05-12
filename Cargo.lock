@@ -1024,40 +1024,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "board_game_engine"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "axum 0.8.4",
- "borsh",
- "clap",
- "contracts",
- "crash_game",
- "futures",
- "hex",
- "hyle-client-sdk",
- "hyle-contract-sdk",
- "hyle-modules",
- "opentelemetry",
- "opentelemetry-prometheus",
- "opentelemetry_sdk",
- "prometheus",
- "rand 0.9.1",
- "serde",
- "serde_json",
- "sha2",
- "sp1-sdk",
- "thiserror 1.0.69",
- "tokio",
- "tokio-util",
- "tower-http",
- "tracing",
- "tracing-subscriber",
- "uuid",
- "zkprogram",
-]
-
-[[package]]
 name = "borsh"
 version = "1.5.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1617,6 +1583,40 @@ name = "data-encoding"
 version = "2.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2a2330da5de22e8a3cb63252ce2abb30116bf5265e89c0e01bc17015ce30a476"
+
+[[package]]
+name = "degen_party"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "axum 0.8.4",
+ "borsh",
+ "clap",
+ "contracts",
+ "crash_game",
+ "futures",
+ "hex",
+ "hyle-client-sdk",
+ "hyle-contract-sdk",
+ "hyle-modules",
+ "opentelemetry",
+ "opentelemetry-prometheus",
+ "opentelemetry_sdk",
+ "prometheus",
+ "rand 0.9.1",
+ "serde",
+ "serde_json",
+ "sha2",
+ "sp1-sdk",
+ "thiserror 1.0.69",
+ "tokio",
+ "tokio-util",
+ "tower-http",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
+ "zkprogram",
+]
 
 [[package]]
 name = "der"

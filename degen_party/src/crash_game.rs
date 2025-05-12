@@ -1,7 +1,7 @@
 use anyhow::{bail, Result};
 use crash_game::{ChainAction, ChainActionBlob, ChainEvent, GameState, ServerAction, ServerEvent};
 use hyle_modules::bus::BusClientSender;
-use hyle_modules::modules::websocket::WsInMessage;
+use hyle_modules::modules::websocket::{WsBroadcastMessage, WsInMessage};
 use hyle_modules::modules::Module;
 use hyle_modules::{module_bus_client, module_handle_messages};
 use rand;
@@ -58,7 +58,7 @@ module_bus_client! {
 pub struct CrashGameBusClient {
     sender(CrashGameCommand),
     sender(GameStateCommand),
-    sender(OutboundWebsocketMessage),
+    sender(WsBroadcastMessage<OutboundWebsocketMessage>),
     sender(InboundTxMessage),
     receiver(CrashGameCommand),
     receiver(WsInMessage<AuthenticatedMessage<InboundWebsocketMessage>>),
@@ -345,12 +345,12 @@ impl CrashGameModule {
 
     // Helper methods
     fn broadcast_state_update(&mut self, state: GameState, events: Vec<ChainEvent>) -> Result<()> {
-        self.bus.send(OutboundWebsocketMessage::CrashGame(
-            CrashGameEvent::StateUpdated {
+        self.bus.send(WsBroadcastMessage {
+            message: OutboundWebsocketMessage::CrashGame(CrashGameEvent::StateUpdated {
                 state: Some(state),
                 events,
-            },
-        ))?;
+            }),
+        })?;
         Ok(())
     }
 }

@@ -66,7 +66,7 @@ impl ZkContract for GameState {
         let expected_action_data = match &action.1 {
             GameAction::StartGame => "StartGame",
             GameAction::RegisterPlayer { .. } => "RegisterPlayer",
-            GameAction::RollDice { .. } => "RollDice",
+            GameAction::RollDice => "RollDice",
             GameAction::EndTurn => "EndTurn",
             GameAction::StartMinigame => "StartMinigame",
             GameAction::EndMinigame { .. } => "EndMinigame",

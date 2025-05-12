@@ -1,16 +1,23 @@
-use std::{fs::File, sync::Arc};
+use std::sync::Arc;
 
-use anyhow::{bail, Error, Result};
-use client_sdk::{helpers::sp1::SP1Prover, rest_client::NodeApiHttpClient};
+use anyhow::{bail, Result};
+use client_sdk::rest_client::NodeApiHttpClient;
 use hyle_modules::{module_bus_client, module_handle_messages, modules::Module};
 use sdk::{
     api::APIRegisterContract, BlobIndex, BlobTransaction, Calldata, ContractName, Hashed,
     ProofTransaction, StateCommitment,
 };
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
-use std::io::Write;
 use tracing::{error, info};
+
+#[cfg(not(feature = "fake_proofs"))]
+use {
+    anyhow::Error,
+    client_sdk::helpers::sp1::SP1Prover,
+    sha2::{Digest, Sha256},
+    std::fs::File,
+    std::io::Write,
+};
 
 /// Inbound transaction message type
 #[derive(Debug, Clone, Serialize, Deserialize)]

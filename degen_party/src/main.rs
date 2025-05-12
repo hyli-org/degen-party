@@ -1,9 +1,9 @@
 use anyhow::{Context, Result};
-use board_game_engine::{
+use clap::{command, Parser};
+use degen_party::{
     crash_game::CrashGameModule, fake_lane_manager::FakeLaneManager, game_state::GameStateModule,
     AuthenticatedMessage, InboundWebsocketMessage, OutboundWebsocketMessage,
 };
-use clap::{command, Parser};
 use hyle_modules::{
     bus::{metrics::BusMetrics, SharedMessageBus},
     modules::{
@@ -40,7 +40,7 @@ async fn main() -> Result<()> {
     let bus = SharedMessageBus::new(BusMetrics::global("rollup".to_string()));
 
     // Create common context
-    let ctx = Arc::new(board_game_engine::Context {
+    let ctx = Arc::new(degen_party::Context {
         bus: bus.new_handle(),
         config: config.clone(),
     });
