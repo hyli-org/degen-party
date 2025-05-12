@@ -1,16 +1,12 @@
 use crash_game::{CrashGameCommand, CrashGameEvent};
 use game_state::{GameStateCommand, GameStateEvent};
-use hyle_modules::{bus::SharedMessageBus, utils::conf::SharedConf};
 use serde::{Deserialize, Serialize};
 
 pub mod crash_game;
 pub mod fake_lane_manager;
 pub mod game_state;
 
-pub struct Context {
-    pub bus: SharedMessageBus,
-    pub config: SharedConf,
-}
+pub struct Context {}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AuthenticatedMessage<T> {

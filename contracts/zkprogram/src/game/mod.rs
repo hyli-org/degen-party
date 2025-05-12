@@ -71,11 +71,21 @@ pub enum GamePhase {
 
 #[derive(Debug, Clone, Serialize, Deserialize, BorshSerialize, BorshDeserialize, PartialEq)]
 pub enum GameAction {
-    RegisterPlayer { name: String, identity: Identity },
+    Initialize {
+        player_count: usize,
+        board_size: usize,
+        random_seed: u64,
+    },
+    RegisterPlayer {
+        name: String,
+        identity: Identity,
+    },
     StartGame,
     RollDice,
     StartMinigame,
-    EndMinigame { result: MinigameResult },
+    EndMinigame {
+        result: MinigameResult,
+    },
     EndTurn,
 }
 
@@ -114,6 +124,11 @@ pub enum GameEvent {
         final_stars: i32,
         final_coins: i32,
     },
+    GameInitialized {
+        player_count: usize,
+        board_size: usize,
+        random_seed: u64,
+    },
     PlayerRegistered {
         name: String,
         player_id: Identity,
@@ -127,13 +142,19 @@ impl From<StateCommitment> for GameState {
     }
 }
 
+impl Default for GameState {
+    fn default() -> Self {
+        GameState::new(4, 30, 4)
+    }
+}
+
 impl GameState {
     pub fn new(player_count: usize, board_size: usize, random_seed: u64) -> Self {
         Self {
             players: Vec::with_capacity(player_count),
             current_turn: 0,
             board: Board::new(board_size, random_seed),
-            phase: GamePhase::Registration,
+            phase: GamePhase::GameOver,
             max_players: player_count,
             minigames: vec!["crash_game".into()],
             dice: dice::Dice::new(1, 10, random_seed),
@@ -248,6 +269,24 @@ impl GameState {
         }
 
         match (self.phase.clone(), action) {
+            // Setup
+            (
+                GamePhase::GameOver,
+                GameAction::Initialize {
+                    player_count,
+                    board_size,
+                    random_seed,
+                },
+            ) => {
+                self.max_players = player_count;
+                self.board = Board::new(board_size, random_seed);
+                self.phase = GamePhase::Registration;
+                events.push(GameEvent::GameInitialized {
+                    player_count,
+                    board_size,
+                    random_seed,
+                });
+            }
             // Registration Phase
             (GamePhase::Registration, GameAction::RegisterPlayer { name, identity }) => {
                 if self.players.len() >= self.max_players {

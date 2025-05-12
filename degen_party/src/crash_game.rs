@@ -1,6 +1,6 @@
 use anyhow::{bail, Result};
 use crash_game::{ChainAction, ChainActionBlob, ChainEvent, GameState, ServerAction, ServerEvent};
-use hyle_modules::bus::BusClientSender;
+use hyle_modules::bus::{BusClientSender, SharedMessageBus};
 use hyle_modules::modules::websocket::{WsBroadcastMessage, WsInMessage};
 use hyle_modules::modules::Module;
 use hyle_modules::{module_bus_client, module_handle_messages};
@@ -280,17 +280,10 @@ impl CrashGameModule {
 
     // Chain event processing
     async fn handle_tx(&mut self, tx: BlobTransaction) -> Result<()> {
-        for (index, blob) in tx.blobs.iter().enumerate() {
+        for blob in &tx.blobs {
             if blob.contract_name != ContractName::from("crash_game") {
                 continue;
             }
-
-            // Generate a proof with this state
-            self.bus.send(InboundTxMessage::NewProofRequest((
-                borsh::to_vec(self.state.as_ref().unwrap_or(&GameState::new()))?,
-                BlobIndex(index),
-                tx.clone(),
-            )))?;
 
             if let Ok(StructuredBlobData::<ChainActionBlob> { parameters, .. }) =
                 StructuredBlobData::<ChainActionBlob>::try_from(blob.data.clone())
@@ -358,8 +351,8 @@ impl CrashGameModule {
 impl Module for CrashGameModule {
     type Context = Arc<crate::Context>;
 
-    async fn build(ctx: Self::Context) -> Result<Self> {
-        let bus = CrashGameBusClient::new_from_bus(ctx.bus.new_handle()).await;
+    async fn build(bus: SharedMessageBus, _ctx: Self::Context) -> Result<Self> {
+        let bus = CrashGameBusClient::new_from_bus(bus.new_handle()).await;
 
         Ok(Self {
             bus,

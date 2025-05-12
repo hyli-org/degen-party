@@ -26,6 +26,12 @@ impl std::fmt::Display for GameEvent {
                     write!(f, "Player {} lost {} stars", player_id, amount.abs())
                 }
             }
+            GameEvent::MinigameReady { minigame_type } => {
+                write!(f, "Minigame '{}' is ready", minigame_type)
+            }
+            GameEvent::MinigameEnded { result } => {
+                write!(f, "Minigame ended with result: {:?}", result)
+            }
             GameEvent::MinigameStarted { minigame_type } => {
                 write!(f, "Minigame '{}' started", minigame_type)
             }
@@ -43,13 +49,23 @@ impl std::fmt::Display for GameEvent {
                     winner_id, final_stars, final_coins
                 )
             }
+            GameEvent::GameInitialized {
+                player_count,
+                board_size,
+                random_seed,
+            } => {
+                write!(
+                    f,
+                    "Game initialized with {} players, board size {}, random seed {}",
+                    player_count, board_size, random_seed
+                )
+            }
             GameEvent::PlayerRegistered { name, player_id } => {
                 write!(f, "Player {} registered as {}", name, player_id)
             }
             GameEvent::GameStarted => {
                 write!(f, "Game started")
             }
-            _ => write!(f, "Unknown event"),
         }
     }
 }

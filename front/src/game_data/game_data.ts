@@ -44,6 +44,13 @@ export type GamePhase =
     | "GameOver";
 
 export type GameAction =
+    | {
+          Initialize: {
+              player_count: number;
+              board_size: number;
+              random_seed: number;
+          };
+      }
     | { RegisterPlayer: { name: string; identity: string } }
     | { StartGame: null }
     | { RollDice: null }
@@ -76,14 +83,6 @@ export type GameStateCommand =
     | {
           type: "SubmitAction";
           payload: { action: GameAction };
-      }
-    | {
-          type: "Reset";
-          payload: null;
-      }
-    | {
-          type: "Initialize";
-          payload: { player_count: number; board_size: number };
       }
     | {
           type: "SendState";
@@ -175,27 +174,25 @@ class BoardGameService extends BaseWebSocketService {
         );
     }
 
-    async reset() {
-        await this.send({
-            type: "GameState",
-            payload: {
-                type: "Reset",
-                payload: null,
-            },
-        });
-    }
-
     async initGame(config: { playerCount: number; boardSize: number }) {
-        await this.send({
-            type: "GameState",
-            payload: {
-                type: "Initialize",
+        await this.send(
+            {
+                type: "GameState",
                 payload: {
-                    player_count: +config.playerCount,
-                    board_size: +config.boardSize,
+                    type: "SubmitAction",
+                    payload: {
+                        action: {
+                            Initialize: {
+                                player_count: +config.playerCount,
+                                board_size: +config.boardSize,
+                                random_seed: 7, //Math.floor(Math.random() * 1000000),
+                            },
+                        },
+                    },
                 },
             },
-        });
+            "Initialize",
+        );
     }
 
     async registerPlayer(name: string) {

@@ -2,10 +2,10 @@ use crate::{
     crash_game::CrashGameCommand, AuthenticatedMessage, InboundWebsocketMessage,
     OutboundWebsocketMessage,
 };
-use anyhow::{bail, Result};
+use anyhow::{bail, Context, Result};
 use crash_game::ChainActionBlob;
 use hyle_modules::{
-    bus::{command_response::Query, BusClientSender},
+    bus::{command_response::Query, BusClientSender, SharedMessageBus},
     module_bus_client, module_handle_messages,
     modules::{
         websocket::{WsBroadcastMessage, WsInMessage},
@@ -13,10 +13,11 @@ use hyle_modules::{
     },
 };
 use sdk::{verifiers::Secp256k1Blob, ZkContract};
-use sdk::{BlobIndex, BlobTransaction, ContractName, Identity};
+use sdk::{BlobTransaction, ContractName, Identity};
 use sdk::{ContractAction, StructuredBlobData};
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
+use std::{fmt::Debug, sync::Arc, time::Duration};
+use tokio::time::sleep;
 use zkprogram::{
     game::{GameAction, GameEvent, GamePhase, GameState},
     GameActionBlob,
@@ -28,8 +29,6 @@ use crate::fake_lane_manager::InboundTxMessage;
 #[serde(tag = "type", content = "payload")]
 pub enum GameStateCommand {
     SubmitAction { action: GameAction },
-    Reset,
-    Initialize { player_count: u32, board_size: u32 },
     SendState,
 }
 
@@ -70,13 +69,22 @@ pub struct GameStateModule {
 impl Module for GameStateModule {
     type Context = Arc<crate::Context>;
 
-    async fn build(ctx: Self::Context) -> Result<Self> {
-        let bus = GameStateBusClient::new_from_bus(ctx.bus.new_handle()).await;
-
+    async fn build(bus: SharedMessageBus, _ctx: Self::Context) -> Result<Self> {
+        let bus = GameStateBusClient::new_from_bus(bus.new_handle()).await;
         Ok(Self { bus, state: None })
     }
 
     async fn run(&mut self) -> Result<()> {
+        self.bus.send(InboundTxMessage::RegisterContract((
+            ContractName::from("board_game"),
+            GameState::default().commit(),
+        )))?;
+
+        // Wait for the contract to be registered.
+        // TODO: fix this
+        sleep(Duration::from_secs(1)).await;
+        self.state = Some(GameState::default());
+
         module_handle_messages! {
             on_bus self.bus,
             command_response<QueryGameState, GameState> _ => {
@@ -124,14 +132,6 @@ impl GameStateModule {
                 self.handle_submit_action(action, signature, public_key, message_id, signed_data)
                     .await
             }
-            GameStateCommand::Reset => self.handle_reset().await,
-            GameStateCommand::Initialize {
-                player_count,
-                board_size,
-            } => {
-                self.initialize(player_count as usize, board_size as usize)
-                    .await
-            }
             GameStateCommand::SendState => self.handle_send_state().await,
         }
     }
@@ -144,9 +144,6 @@ impl GameStateModule {
         message_id: String,
         signed_data: String,
     ) -> Result<()> {
-        if self.state.is_none() {
-            return Err(anyhow::anyhow!("Game not initialized"));
-        }
         let mut blobs = vec![];
 
         let uuid_128: u128 = uuid::Uuid::parse_str(&message_id)?.as_u128();
@@ -156,7 +153,7 @@ impl GameStateModule {
                 let players: Vec<(Identity, String, Option<u64>)> = self
                     .state
                     .as_ref()
-                    .unwrap()
+                    .context("Game not initialized")?
                     .players
                     .iter()
                     .map(|p| (p.id.clone(), p.name.clone(), Some(p.coins as u64)))
@@ -168,7 +165,8 @@ impl GameStateModule {
                     None,
                 ));
                 // TODO: we should make sure that our current state is synchronised
-                if let GamePhase::MinigameStart(minigame_type) = &self.state.as_ref().unwrap().phase
+                if let GamePhase::MinigameStart(minigame_type) =
+                    &self.state.as_ref().context("Game not initialized")?.phase
                 {
                     if minigame_type.0 == "crash_game" {
                         blobs.push(
@@ -217,17 +215,6 @@ impl GameStateModule {
         Ok(())
     }
 
-    async fn handle_reset(&mut self) -> Result<()> {
-        self.state = None;
-        self.bus.send(WsBroadcastMessage {
-            message: OutboundWebsocketMessage::GameStateEvent(GameStateEvent::StateUpdated {
-                state: None,
-                events: vec![],
-            }),
-        })?;
-        Ok(())
-    }
-
     async fn handle_send_state(&mut self) -> Result<()> {
         if let Some(state) = &self.state {
             self.bus.send(WsBroadcastMessage {
@@ -240,46 +227,12 @@ impl GameStateModule {
         Ok(())
     }
 
-    async fn initialize(&mut self, player_count: usize, board_size: usize) -> Result<()> {
-        tracing::warn!(
-            "Initializing game with {} players and board size {}",
-            player_count,
-            board_size
-        );
-        let new_state = GameState::new(player_count, board_size, 7); //rand::rng().next_u64());
-        self.state = Some(new_state.clone());
-
-        self.bus.send(InboundTxMessage::RegisterContract((
-            ContractName::from("board_game"),
-            new_state.commit(),
-        )))?;
-        self.bus.send(WsBroadcastMessage {
-            message: OutboundWebsocketMessage::GameStateEvent(GameStateEvent::StateUpdated {
-                state: Some(new_state),
-                events: vec![],
-            }),
-        })?;
-
-        // Wait some time synchronously for the contract to be registered
-        // TODO: fix this
-        tokio::time::sleep(std::time::Duration::from_secs(2)).await;
-
-        Ok(())
-    }
-
     async fn handle_tx(&mut self, tx: BlobTransaction) -> Result<()> {
         // Transaction confirmed, now we can update the state
-        for (index, blob) in tx.blobs.iter().enumerate() {
+        for blob in &tx.blobs {
             if blob.contract_name != ContractName::from("board_game") {
                 continue;
             }
-
-            // Generate a proof with this state
-            self.bus.send(InboundTxMessage::NewProofRequest((
-                borsh::to_vec(self.state.as_ref().unwrap())?,
-                BlobIndex(index),
-                tx.clone(),
-            )))?;
 
             // parse as structured blob of gameactionblob
             let t = StructuredBlobData::<GameActionBlob>::try_from(blob.data.clone());

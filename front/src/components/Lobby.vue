@@ -28,18 +28,17 @@ const initAndJoinGame = async () => {
         return;
     }
 
-    // If no game exists, create one
-    if (!gameState.game) {
-        await boardGameService.initGame({
-            playerCount: playerCount.value,
-            boardSize: boardSize.value,
-        });
-        // Wait a bit for game to be created
-        await new Promise((resolve) => setTimeout(resolve, 100));
-    }
+    gameState.playerName = playerName.value;
+
+    // Create the game.
+    await boardGameService.initGame({
+        playerCount: playerCount.value,
+        boardSize: boardSize.value,
+    });
+    // Wait a bit for game to be created
+    await new Promise((resolve) => setTimeout(resolve, 100));
 
     // Register the player
-    gameState.playerName = playerName.value;
     await boardGameService.registerPlayer(playerName.value);
     hasJoined.value = true;
 

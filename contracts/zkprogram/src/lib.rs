@@ -64,6 +64,7 @@ impl ZkContract for GameState {
         let expected_data = uuid::Uuid::from_u128(action.0).to_string();
 
         let expected_action_data = match &action.1 {
+            GameAction::Initialize { .. } => "Initialize",
             GameAction::StartGame => "StartGame",
             GameAction::RegisterPlayer { .. } => "RegisterPlayer",
             GameAction::RollDice => "RollDice",
@@ -76,8 +77,7 @@ impl ZkContract for GameState {
             contract_input,
             format!("{}:{}", expected_data, expected_action_data).as_bytes(),
         )
-        .expect()
-        .expect("fuego");
+        .expect()?;
 
         let events = self
             .process_action(&contract_input.identity, action.0, action.1)

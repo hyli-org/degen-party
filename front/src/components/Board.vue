@@ -139,14 +139,6 @@ async function endTurn() {
         console.error("Failed to end turn:", error);
     }
 }
-
-async function resetGame() {
-    try {
-        await boardGameService.reset();
-    } catch (error) {
-        console.error("Failed to reset game:", error);
-    }
-}
 </script>
 
 <template>
@@ -236,7 +228,6 @@ async function resetGame() {
 
                     <button
                         v-if="currentGame.phase === 'GameOver'"
-                        @click="resetGame"
                         class="min-w-[180px] h-[70px] text-[1.3rem] uppercase tracking-wide rounded-[15px] font-extrabold font-['Baloo_2'] relative overflow-hidden bg-gradient-to-b from-[#FF4D4D] to-[#CC0000] border-4 border-white shadow-[0_8px_0_rgba(0,0,0,0.3)] text-shadow-[2px_2px_0_rgba(0,0,0,0.3)] px-6 py-1 cursor-pointer transition-all duration-200 ease-in-out hover:-translate-y-[3px] hover:shadow-[0_11px_0_rgba(0,0,0,0.3)] active:translate-y-1 active:shadow-[0_4px_0_rgba(0,0,0,0.3)]"
                     >
                         <span class="flex items-center justify-center gap-2">

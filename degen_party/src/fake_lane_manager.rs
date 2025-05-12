@@ -1,11 +1,14 @@
 use std::sync::Arc;
 
-use anyhow::{bail, Result};
-use client_sdk::rest_client::NodeApiHttpClient;
-use hyle_modules::{module_bus_client, module_handle_messages, modules::Module};
+use anyhow::Result;
+use borsh::{BorshDeserialize, BorshSerialize};
+use client_sdk::{rest_client::NodeApiHttpClient, transaction_builder::TxExecutorHandler};
+use hyle_modules::{
+    bus::SharedMessageBus, module_bus_client, module_handle_messages, modules::Module,
+};
 use sdk::{
-    api::APIRegisterContract, BlobIndex, BlobTransaction, Calldata, ContractName, Hashed,
-    ProofTransaction, StateCommitment,
+    api::APIRegisterContract, utils::as_hyle_output, BlobTransaction, ContractName,
+    StateCommitment, ZkContract,
 };
 use serde::{Deserialize, Serialize};
 use tracing::{error, info};
@@ -26,7 +29,6 @@ pub enum InboundTxMessage {
     // TODO: do this in sync with blobs
     RegisterContract((ContractName, StateCommitment)),
     NewTransaction(BlobTransaction),
-    NewProofRequest((Vec<u8>, BlobIndex, BlobTransaction)),
 }
 
 module_bus_client! {
@@ -45,12 +47,12 @@ pub struct FakeLaneManager {
 impl Module for FakeLaneManager {
     type Context = Arc<crate::Context>;
 
-    async fn build(ctx: Self::Context) -> Result<Self> {
+    async fn build(bus: SharedMessageBus, _ctx: Self::Context) -> Result<Self> {
         // Initialize Hylé client
         let hyle_client = Arc::new(NodeApiHttpClient::new("http://localhost:4321".to_string())?);
 
         Ok(Self {
-            bus: FakeLaneManagerBusClient::new_from_bus(ctx.bus.new_handle()).await,
+            bus: FakeLaneManagerBusClient::new_from_bus(bus.new_handle()).await,
             hyle_client,
         })
     }
@@ -95,95 +97,7 @@ impl FakeLaneManager {
                     tx_hash
                 );
             }
-            InboundTxMessage::NewProofRequest((state, index, tx)) => {
-                self.generate_and_send_proof(state, index, tx).await?;
-            }
         }
-        Ok(())
-    }
-
-    async fn generate_and_send_proof(
-        &self,
-        state: Vec<u8>,
-        index: BlobIndex,
-        tx: BlobTransaction,
-    ) -> Result<()> {
-        let Some(contract_name) = tx.blobs.get(index.0).map(|b| b.contract_name.clone()) else {
-            bail!("Blob index {} not found in transaction", index);
-        };
-        info!("Generating proof for contract {}", contract_name);
-        let calldata = Calldata {
-            tx_hash: tx.hashed(),
-            identity: tx.identity.clone(),
-            blobs: sdk::IndexedBlobs(
-                tx.blobs
-                    .iter()
-                    .enumerate()
-                    .map(|(i, b)| (BlobIndex(i), b.clone()))
-                    .collect(),
-            ),
-            tx_blob_count: tx.blobs.len(),
-            index,
-            tx_ctx: None,
-            private_input: vec![],
-        };
-
-        let client = self.hyle_client.clone();
-        #[cfg(feature = "fake_proofs")]
-        {
-            info!("Fake proving TX: {:?}", tx.hashed());
-            use sdk::guest::execute;
-            use sdk::ProofData;
-
-            let ho = match contract_name.0.as_str() {
-                "board_game" => execute::<zkprogram::game::GameState>(&state, &[calldata]),
-                "crash_game" => execute::<crash_game::GameState>(&state, &[calldata]),
-                _ => bail!("Unknown contract name: {}", contract_name),
-            };
-            let proof_tx = ProofTransaction {
-                proof: ProofData(borsh::to_vec(&ho).unwrap()),
-                contract_name: contract_name.clone(),
-            };
-
-            let proof_tx_hash = client.send_tx_proof(&proof_tx).await?;
-            info!(
-                "Fake Proof transaction sent for contract {}, tx {}. Hash: {}",
-                contract_name,
-                tx.hashed(),
-                proof_tx_hash
-            );
-        }
-        #[cfg(not(feature = "fake_proofs"))]
-        tokio::spawn(async move {
-            info!("Ready to prove TX: {:?}", tx.hashed());
-            if let Err(e) = async {
-                let prover = match contract_name.0.as_str() {
-                    "board_game" => SP1Prover::new(contracts::ZKPROGRAM_ELF),
-                    "crash_game" => SP1Prover::new(contracts::CRASH_GAME_ELF),
-                    _ => bail!("Unknown contract name: {}", contract_name),
-                };
-
-                let proof = prover.prove(state, vec![calldata]).await?;
-
-                let proof_tx = ProofTransaction {
-                    proof,
-                    contract_name: contract_name.clone(),
-                };
-
-                let proof_tx_hash = client.send_tx_proof(&proof_tx).await?;
-                info!(
-                    "Proof transaction sent for contract {}, tx {}. Hash: {}",
-                    contract_name,
-                    tx.hashed(),
-                    proof_tx_hash
-                );
-                Ok::<_, Error>(())
-            }
-            .await
-            {
-                error!("Error generating proof for {}: {}", tx.hashed(), e);
-            }
-        });
         Ok(())
     }
 
@@ -271,5 +185,49 @@ impl FakeLaneManager {
         );
 
         Ok(())
+    }
+}
+
+#[derive(Default, Debug, BorshSerialize, BorshDeserialize, Clone)]
+pub struct BoardGameExecutor {
+    state: zkprogram::game::GameState,
+}
+
+impl TxExecutorHandler for BoardGameExecutor {
+    fn handle(&mut self, calldata: &sdk::Calldata) -> Result<sdk::HyleOutput, String> {
+        let initial_state_commitment = self.state.commit();
+        let mut res = self.state.execute(calldata);
+        Ok(as_hyle_output(
+            initial_state_commitment,
+            self.state.commit(),
+            calldata,
+            &mut res,
+        ))
+    }
+
+    fn build_commitment_metadata(&self, _blob: &sdk::Blob) -> Result<Vec<u8>, String> {
+        borsh::to_vec(&self.state).map_err(|e| e.to_string())
+    }
+}
+
+#[derive(Default, Debug, BorshSerialize, BorshDeserialize, Clone)]
+pub struct CrashGameExecutor {
+    state: crash_game::GameState,
+}
+
+impl TxExecutorHandler for CrashGameExecutor {
+    fn handle(&mut self, calldata: &sdk::Calldata) -> Result<sdk::HyleOutput, String> {
+        let initial_state_commitment = self.state.commit();
+        let mut res = self.state.execute(calldata);
+        Ok(as_hyle_output(
+            initial_state_commitment,
+            self.state.commit(),
+            calldata,
+            &mut res,
+        ))
+    }
+
+    fn build_commitment_metadata(&self, _blob: &sdk::Blob) -> Result<Vec<u8>, String> {
+        borsh::to_vec(&self.state).map_err(|e| e.to_string())
     }
 }
