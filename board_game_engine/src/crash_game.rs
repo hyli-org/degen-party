@@ -221,7 +221,7 @@ impl CrashGameModule {
 
         self.bus
             .send(InboundTxMessage::NewTransaction(BlobTransaction::new(
-                "backend.crash_game",
+                "backend@crash_game",
                 vec![
                     ChainActionBlob(uuid::Uuid::new_v4().as_u128(), ChainAction::Start).as_blob(
                         "crash_game".into(),
@@ -268,7 +268,7 @@ impl CrashGameModule {
             .as_blob("crash_game".into(), None, None)];
             self.bus
                 .send(InboundTxMessage::NewTransaction(BlobTransaction::new(
-                    "backend.crash_game",
+                    "backend@crash_game",
                     blobs,
                 )))?;
         }
