@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 use clap::{command, Parser};
-use client_sdk::{helpers::test::TxExecutorTestProver, rest_client::NodeApiHttpClient};
+use client_sdk::rest_client::NodeApiHttpClient;
 use degen_party::{
     crash_game::CrashGameModule,
     fake_lane_manager::{BoardGameExecutor, CrashGameExecutor, FakeLaneManager},
@@ -70,11 +70,13 @@ async fn main() -> Result<()> {
     let client = Arc::new(NodeApiHttpClient::new("http://localhost:4321".to_string())?);
 
     #[cfg(not(feature = "fake_proofs"))]
-    let board_game_prover = Arc::new(client_sdk::helpers::SP1Prover::new(
-        contracts::ZKPROGRAM_ELF,
+    let board_game_prover = Arc::new(client_sdk::helpers::sp1::SP1Prover::new(
+        contracts::BOARD_GAME_ELF,
     ));
     #[cfg(feature = "fake_proofs")]
-    let board_game_prover = Arc::new(TxExecutorTestProver::new(BoardGameExecutor::default()));
+    let board_game_prover = Arc::new(client_sdk::helpers::test::TxExecutorTestProver::new(
+        BoardGameExecutor::default(),
+    ));
 
     handler
         .build_module::<AutoProver<BoardGameExecutor>>(
@@ -90,14 +92,16 @@ async fn main() -> Result<()> {
         .await?;
 
     #[cfg(not(feature = "fake_proofs"))]
-    let crash_game_prover = Arc::new(client_sdk::helpers::SP1Prover::new(
+    let crash_game_prover = Arc::new(client_sdk::helpers::sp1::SP1Prover::new(
         contracts::CRASH_GAME_ELF,
     ));
     #[cfg(feature = "fake_proofs")]
-    let crash_game_prover = Arc::new(TxExecutorTestProver::new(CrashGameExecutor::default()));
+    let crash_game_prover = Arc::new(client_sdk::helpers::test::TxExecutorTestProver::new(
+        CrashGameExecutor::default(),
+    ));
 
     handler
-        .build_module::<AutoProver<BoardGameExecutor>>(
+        .build_module::<AutoProver<CrashGameExecutor>>(
             AutoProverCtx {
                 data_directory: config.data_directory.clone(),
                 start_height: BlockHeight(0),

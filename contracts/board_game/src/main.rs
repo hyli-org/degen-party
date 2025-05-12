@@ -2,11 +2,11 @@
 
 extern crate alloc;
 
+use board_game::game::GameState;
 use sdk::{
     guest::{execute, GuestEnv, SP1Env},
     Calldata,
 };
-use zkprogram::game::GameState;
 sp1_zkvm::entrypoint!(main);
 
 fn main() {

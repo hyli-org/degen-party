@@ -3,7 +3,7 @@ resolver = "2"
 members = [
     "contracts",
     "contracts/crash_game",
-    "contracts/zkprogram",
+    "contracts/board_game",
     "degen_party",
 ]
 
@@ -15,7 +15,7 @@ hyle-hyllar = { git = "https://github.com/Hyle-org/hyle.git", branch = "main", d
 hyle-hydentity = { git = "https://github.com/Hyle-org/hyle.git", branch = "main", package = "hyle-hydentity" }
 
 contracts = { path = "contracts", default-features = false, package = "contracts" }
-zkprogram = { path = "contracts/zkprogram", package = "zkprogram" }
+board_game = { path = "contracts/board_game", package = "board_game" }
 crash_game = { path = "contracts/crash_game", package = "crash_game" }
 
 degen_party = { path = "degen_party" }

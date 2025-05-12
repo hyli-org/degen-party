@@ -1,4 +1,6 @@
 use anyhow::{anyhow, Result};
+use board_game::game::{MinigameResult, PlayerMinigameResult};
+use board_game::GameActionBlob;
 use borsh::{BorshDeserialize, BorshSerialize};
 use sdk::caller::ExecutionContext;
 use sdk::utils::parse_calldata;
@@ -8,8 +10,6 @@ use sdk::{
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use zkprogram::game::{MinigameResult, PlayerMinigameResult};
-use zkprogram::GameActionBlob;
 
 pub mod utils;
 
@@ -340,7 +340,7 @@ impl GameState {
 
         let expected_board_blob = GameActionBlob(
             blob.0,
-            zkprogram::game::GameAction::EndMinigame {
+            board_game::game::GameAction::EndMinigame {
                 result: MinigameResult {
                     contract_name: ContractName("crash_game".into()),
                     player_results: expected_final_results

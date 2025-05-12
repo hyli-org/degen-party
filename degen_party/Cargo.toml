@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-zkprogram = { workspace = true }
+board_game = { workspace = true }
 crash_game = { workspace = true }
 contracts = { workspace = true }
 

@@ -8,7 +8,7 @@ path = "metadata.rs"
 
 [dependencies]
 sdk = { workspace = true }
-zkprogram = { workspace = true, features = ["sp1"] }
+board_game = { workspace = true, features = ["sp1"] }
 crash_game = { workspace = true, features = ["sp1"] }
 
 sp1-sdk = "4.2.0"

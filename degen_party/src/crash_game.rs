@@ -17,7 +17,7 @@ use std::{
 use tokio::time;
 use tracing::info;
 use uuid;
-use zkprogram::{
+use board_game::{
     game::{MinigameResult, PlayerMinigameResult},
     GameActionBlob,
 };
@@ -195,7 +195,7 @@ impl CrashGameModule {
             ),
             GameActionBlob(
                 uuid_128,
-                zkprogram::game::GameAction::EndMinigame {
+                board_game::game::GameAction::EndMinigame {
                     result: MinigameResult {
                         contract_name: ContractName("crash_game".into()),
                         player_results: final_results

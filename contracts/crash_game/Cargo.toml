@@ -10,7 +10,7 @@ required-features = ["sp1"]
 test = false
 
 [dependencies]
-zkprogram = { workspace = true }
+board_game = { workspace = true }
 
 anyhow = "1.0.96"
 sdk = { workspace = true, features = ["tracing"] }

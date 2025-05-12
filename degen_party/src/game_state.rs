@@ -18,7 +18,7 @@ use sdk::{ContractAction, StructuredBlobData};
 use serde::{Deserialize, Serialize};
 use std::{fmt::Debug, sync::Arc, time::Duration};
 use tokio::time::sleep;
-use zkprogram::{
+use board_game::{
     game::{GameAction, GameEvent, GamePhase, GameState},
     GameActionBlob,
 };

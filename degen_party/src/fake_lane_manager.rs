@@ -15,8 +15,7 @@ use tracing::{error, info};
 
 #[cfg(not(feature = "fake_proofs"))]
 use {
-    anyhow::Error,
-    client_sdk::helpers::sp1::SP1Prover,
+    anyhow::bail,
     sha2::{Digest, Sha256},
     std::fs::File,
     std::io::Write,
@@ -117,7 +116,7 @@ impl FakeLaneManager {
                 // Verify the hash of the ELF file
                 let mut hasher = Sha256::new();
                 let elf = match contract_name.0.as_str() {
-                    "board_game" => contracts::ZKPROGRAM_ELF,
+                    "board_game" => contracts::BOARD_GAME_ELF,
                     "crash_game" => contracts::CRASH_GAME_ELF,
                     _ => bail!("Unknown contract name: {}", contract_name),
                 };
@@ -137,7 +136,7 @@ impl FakeLaneManager {
                 None => {
                     let client = sp1_sdk::ProverClient::from_env();
                     let elf = match contract_name.0.as_str() {
-                        "board_game" => contracts::ZKPROGRAM_ELF,
+                        "board_game" => contracts::BOARD_GAME_ELF,
                         "crash_game" => contracts::CRASH_GAME_ELF,
                         _ => bail!("Unknown contract name: {}", contract_name),
                     };
@@ -190,7 +189,7 @@ impl FakeLaneManager {
 
 #[derive(Default, Debug, BorshSerialize, BorshDeserialize, Clone)]
 pub struct BoardGameExecutor {
-    state: zkprogram::game::GameState,
+    state: board_game::game::GameState,
 }
 
 impl TxExecutorHandler for BoardGameExecutor {

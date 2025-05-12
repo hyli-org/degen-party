@@ -1,9 +1,9 @@
 use sp1_helper::{build_program_with_args, BuildArgs};
 
 fn main() {
-    println!("cargo:rerun-if-changed=zkprogram/src");
+    println!("cargo:rerun-if-changed=board_game/src");
     build_program_with_args(
-        "./zkprogram",
+        "./board_game",
         BuildArgs {
             features: vec!["sp1".to_string()],
             ..Default::default()

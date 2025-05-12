@@ -1024,6 +1024,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "board_game"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "board_game",
+ "borsh",
+ "clap",
+ "hyle-client-sdk",
+ "hyle-contract-sdk",
+ "serde",
+ "sp1-zkvm",
+ "tokio",
+ "tracing-subscriber",
+ "uuid",
+]
+
+[[package]]
 name = "borsh"
 version = "1.5.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1319,11 +1336,11 @@ checksum = "7c74b8349d32d297c9134b8c88677813a227df8f779daa29bfc29c183fe3dca6"
 name = "contracts"
 version = "0.0.0"
 dependencies = [
+ "board_game",
  "crash_game",
  "hyle-contract-sdk",
  "sp1-helper",
  "sp1-sdk",
- "zkprogram",
 ]
 
 [[package]]
@@ -1356,6 +1373,7 @@ name = "crash_game"
 version = "0.0.0"
 dependencies = [
  "anyhow",
+ "board_game",
  "borsh",
  "clap",
  "crash_game",
@@ -1365,7 +1383,6 @@ dependencies = [
  "sp1-zkvm",
  "tokio",
  "tracing-subscriber",
- "zkprogram",
 ]
 
 [[package]]
@@ -1589,6 +1606,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "axum 0.8.4",
+ "board_game",
  "borsh",
  "clap",
  "contracts",
@@ -1614,7 +1632,6 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "uuid",
- "zkprogram",
 ]
 
 [[package]]
@@ -6969,23 +6986,6 @@ dependencies = [
  "sha2",
  "sha3",
  "subtle",
-]
-
-[[package]]
-name = "zkprogram"
-version = "0.0.0"
-dependencies = [
- "anyhow",
- "borsh",
- "clap",
- "hyle-client-sdk",
- "hyle-contract-sdk",
- "serde",
- "sp1-zkvm",
- "tokio",
- "tracing-subscriber",
- "uuid",
- "zkprogram",
 ]
 
 [[package]]

@@ -1,10 +1,10 @@
 [package]
-name = "zkprogram"
+name = "board_game"
 edition = { workspace = true }
 rust-version = "1.81"
 
 [[bin]]
-name = "zkprogram"
+name = "board_game"
 path = "src/main.rs"
 required-features = ["sp1"]
 test = false
@@ -27,7 +27,7 @@ client-sdk = { workspace = true, default-features = false, features = [
 
 [dev-dependencies]
 # Active client feature for tests
-zkprogram = { path = ".", features = ["client"] }
+board_game = { path = ".", features = ["client"] }
 clap = { version = "4.5.23", features = ["derive"] }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 tokio = { version = "1.44.2", features = ["full", "tracing"] }
