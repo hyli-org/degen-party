@@ -63,7 +63,9 @@ pub async fn setup_auto_provers(
     ));
     #[cfg(feature = "fake_proofs")]
     let board_game_prover = Arc::new(client_sdk::helpers::test::TxExecutorTestProver::new(
-        BoardGameExecutor::default(),
+        BoardGameExecutor {
+            state: borsh::from_slice(&ctx.client.get_contract(&ctx.board_game).await?.state.0)?,
+        },
     ));
 
     handler
@@ -72,7 +74,7 @@ pub async fn setup_auto_provers(
                 data_directory: ctx.data_directory.clone(),
                 start_height: BlockHeight(0),
                 prover: board_game_prover,
-                contract_name: "board_game".into(),
+                contract_name: ctx.board_game.clone(),
                 node: ctx.client.clone(),
             }
             .into(),
@@ -89,7 +91,7 @@ pub async fn setup_auto_provers(
             state: borsh::from_slice(&{
                 // We expect the game to not be running, so we go through the default init path
                 // Skip the last 4 bytes
-                let mut state = ctx.client.get_contract(&"crash_game".into()).await?.state.0;
+                let mut state = ctx.client.get_contract(&ctx.crash_game).await?.state.0;
                 state.pop();
                 state.pop();
                 state.pop();
@@ -105,7 +107,7 @@ pub async fn setup_auto_provers(
                 data_directory: ctx.data_directory.clone(),
                 start_height: BlockHeight(0),
                 prover: crash_game_prover,
-                contract_name: "crash_game".into(),
+                contract_name: ctx.crash_game.clone(),
                 node: ctx.client.clone(),
             }
             .into(),

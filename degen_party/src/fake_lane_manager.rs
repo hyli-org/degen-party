@@ -24,9 +24,9 @@ pub struct FakeLaneManager {
 impl Module for FakeLaneManager {
     type Context = Arc<crate::Context>;
 
-    async fn build(bus: SharedMessageBus, _ctx: Self::Context) -> Result<Self> {
+    async fn build(bus: SharedMessageBus, ctx: Self::Context) -> Result<Self> {
         // Initialize Hylé client
-        let hyle_client = Arc::new(NodeApiHttpClient::new("http://localhost:4321".to_string())?);
+        let hyle_client = ctx.client.clone();
 
         Ok(Self {
             bus: FakeLaneManagerBusClient::new_from_bus(bus.new_handle()).await,

@@ -35,8 +35,9 @@ const initAndJoinGame = async () => {
         playerCount: playerCount.value,
         boardSize: boardSize.value,
     });
+
     // Wait a bit for game to be created
-    await new Promise((resolve) => setTimeout(resolve, 100));
+    await new Promise((resolve) => setTimeout(resolve, 200));
 
     // Register the player
     await boardGameService.registerPlayer(playerName.value);

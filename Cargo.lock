@@ -1610,6 +1610,7 @@ dependencies = [
  "board_game",
  "borsh",
  "clap",
+ "config",
  "contracts",
  "crash_game",
  "futures",
@@ -2385,7 +2386,7 @@ checksum = "df3b46402a9d5adb4c86a0cf463f42e19994e3ee891101b1841f30a545cb49a9"
 [[package]]
 name = "hyle-client-sdk"
 version = "0.13.0-rc.4"
-source = "git+https://github.com/Hyle-org/hyle.git?branch=main#2ec76e27f0243fbcbcd274a0342f51f8f3c3a0b3"
+source = "git+https://github.com/Hyle-org/hyle.git?branch=fix/da_listener_ordering#d026a8ca73605596c7b25c2e0075061e34687b20"
 dependencies = [
  "anyhow",
  "axum 0.8.4",
@@ -2405,7 +2406,7 @@ dependencies = [
 [[package]]
 name = "hyle-contract-sdk"
 version = "0.13.0-rc.4"
-source = "git+https://github.com/Hyle-org/hyle.git?branch=main#2ec76e27f0243fbcbcd274a0342f51f8f3c3a0b3"
+source = "git+https://github.com/Hyle-org/hyle.git?branch=fix/da_listener_ordering#d026a8ca73605596c7b25c2e0075061e34687b20"
 dependencies = [
  "borsh",
  "hyle-model",
@@ -2418,7 +2419,7 @@ dependencies = [
 [[package]]
 name = "hyle-crypto"
 version = "0.13.0-rc.4"
-source = "git+https://github.com/Hyle-org/hyle.git?branch=main#2ec76e27f0243fbcbcd274a0342f51f8f3c3a0b3"
+source = "git+https://github.com/Hyle-org/hyle.git?branch=fix/da_listener_ordering#d026a8ca73605596c7b25c2e0075061e34687b20"
 dependencies = [
  "anyhow",
  "blst",
@@ -2431,7 +2432,7 @@ dependencies = [
 [[package]]
 name = "hyle-model"
 version = "0.13.0-rc.4"
-source = "git+https://github.com/Hyle-org/hyle.git?branch=main#2ec76e27f0243fbcbcd274a0342f51f8f3c3a0b3"
+source = "git+https://github.com/Hyle-org/hyle.git?branch=fix/da_listener_ordering#d026a8ca73605596c7b25c2e0075061e34687b20"
 dependencies = [
  "anyhow",
  "base64",
@@ -2454,14 +2455,13 @@ dependencies = [
 [[package]]
 name = "hyle-modules"
 version = "0.13.0-rc.4"
-source = "git+https://github.com/Hyle-org/hyle.git?branch=main#2ec76e27f0243fbcbcd274a0342f51f8f3c3a0b3"
+source = "git+https://github.com/Hyle-org/hyle.git?branch=fix/da_listener_ordering#d026a8ca73605596c7b25c2e0075061e34687b20"
 dependencies = [
  "anyhow",
  "anymap",
  "assertables",
  "axum 0.8.4",
  "borsh",
- "config",
  "futures",
  "hex",
  "hyle-client-sdk",
@@ -2475,8 +2475,6 @@ dependencies = [
  "rand 0.8.5",
  "serde",
  "serde_json",
- "serde_with",
- "strum_macros 0.27.1",
  "syn 2.0.101",
  "tokio",
  "tokio-util",
@@ -2491,7 +2489,7 @@ dependencies = [
 [[package]]
 name = "hyle-net"
 version = "0.13.0-rc.4"
-source = "git+https://github.com/Hyle-org/hyle.git?branch=main#2ec76e27f0243fbcbcd274a0342f51f8f3c3a0b3"
+source = "git+https://github.com/Hyle-org/hyle.git?branch=fix/da_listener_ordering#d026a8ca73605596c7b25c2e0075061e34687b20"
 dependencies = [
  "anyhow",
  "axum 0.8.4",
@@ -2517,7 +2515,7 @@ dependencies = [
 [[package]]
 name = "hyle-verifiers"
 version = "0.13.0-rc.4"
-source = "git+https://github.com/Hyle-org/hyle.git?branch=main#2ec76e27f0243fbcbcd274a0342f51f8f3c3a0b3"
+source = "git+https://github.com/Hyle-org/hyle.git?branch=fix/da_listener_ordering#d026a8ca73605596c7b25c2e0075061e34687b20"
 dependencies = [
  "anyhow",
  "borsh",

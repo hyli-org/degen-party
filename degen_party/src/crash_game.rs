@@ -71,9 +71,12 @@ pub struct CrashGameBusClient {
 pub struct CrashGameModule {
     bus: CrashGameBusClient,
     state: Option<GameState>,
+    crypto: Arc<CryptoContext>,
+    board_game: ContractName,
+    crash_game: ContractName,
+
     update_interval: Duration,
     game_start_time: Option<Instant>,
-    crypto: Arc<CryptoContext>,
 }
 
 impl CrashGameModule {
@@ -124,7 +127,7 @@ impl CrashGameModule {
             uuid_128,
             ChainAction::InitMinigame { players },
         )
-        .as_blob("crash_game".into(), None, None)])
+        .as_blob(self.crash_game.clone(), None, None)])
     }
 
     async fn handle_place_bet(
@@ -146,7 +149,7 @@ impl CrashGameModule {
             uuid_128,
             ChainAction::PlaceBet { player_id, amount },
         )
-        .as_blob("crash_game".into(), None, None)])
+        .as_blob(self.crash_game.clone(), None, None)])
     }
 
     async fn handle_cash_out(&mut self, uuid_128: u128, player_id: Identity) -> Result<Vec<Blob>> {
@@ -166,7 +169,7 @@ impl CrashGameModule {
                 multiplier,
             },
         )
-        .as_blob("crash_game".into(), None, None)])
+        .as_blob(self.crash_game.clone(), None, None)])
     }
 
     async fn handle_end(&mut self, uuid_128: u128) -> Result<Vec<Blob>> {
@@ -192,7 +195,7 @@ impl CrashGameModule {
 
         Ok(vec![
             ChainActionBlob(uuid_128, ChainAction::Done).as_blob(
-                "crash_game".into(),
+                self.crash_game.clone(),
                 None,
                 Some(vec![BlobIndex(1)]),
             ),
@@ -200,7 +203,7 @@ impl CrashGameModule {
                 uuid_128,
                 board_game::game::GameAction::EndMinigame {
                     result: MinigameResult {
-                        contract_name: ContractName("crash_game".into()),
+                        contract_name: self.crash_game.clone(),
                         player_results: final_results
                             .iter()
                             .map(|r| PlayerMinigameResult {
@@ -212,7 +215,7 @@ impl CrashGameModule {
                     },
                 },
             )
-            .as_blob("board_game".into(), Some(BlobIndex(0)), None),
+            .as_blob(self.board_game.clone(), Some(BlobIndex(0)), None),
         ])
     }
 
@@ -248,7 +251,11 @@ impl CrashGameModule {
                     &signature.to_string(),
                 )?
                 .as_blob(),
-                ChainActionBlob(uuid.as_u128(), action).as_blob("crash_game".into(), None, None),
+                ChainActionBlob(uuid.as_u128(), action).as_blob(
+                    self.crash_game.clone(),
+                    None,
+                    None,
+                ),
             ],
         ))
     }
@@ -301,7 +308,7 @@ impl CrashGameModule {
     // Chain event processing
     async fn handle_tx(&mut self, tx: BlobTransaction) -> Result<()> {
         for blob in &tx.blobs {
-            if blob.contract_name != ContractName::from("crash_game") {
+            if blob.contract_name != self.crash_game.clone() {
                 continue;
             }
 
@@ -327,10 +334,10 @@ impl CrashGameModule {
     ) -> Result<Vec<ChainEvent>> {
         match action {
             ChainAction::InitMinigame { .. } => {
-                self.state = Some(GameState::new(Identity::new(format!(
-                    "{}@secp256k1",
-                    self.crypto.public_key
-                ))));
+                self.state = Some(GameState::new(
+                    self.board_game.clone(),
+                    Identity::new(format!("{}@secp256k1", self.crypto.public_key)),
+                ));
             }
             ChainAction::Start => {
                 if self.state.is_some() {
@@ -387,6 +394,8 @@ impl Module for CrashGameModule {
             update_interval: Duration::from_millis(50),
             game_start_time: None,
             crypto: ctx.crypto.clone(),
+            board_game: ctx.board_game.clone(),
+            crash_game: ctx.crash_game.clone(),
         })
     }
 

@@ -48,6 +48,7 @@ export type GameAction =
           Initialize: {
               player_count: number;
               board_size: number;
+              minigames: string[];
               random_seed: number;
           };
       }
@@ -203,7 +204,8 @@ class BoardGameService extends BaseWebSocketService {
                             Initialize: {
                                 player_count: +config.playerCount,
                                 board_size: +config.boardSize,
-                                random_seed: 7, //Math.floor(Math.random() * 1000000),
+                                minigames: [], // will be overwritten by the server
+                                random_seed: 7, // will be overwritten by the server
                             },
                         },
                     },

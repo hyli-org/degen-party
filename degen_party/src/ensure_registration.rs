@@ -30,15 +30,15 @@ impl Module for EnsureRegistration {
 
     async fn build(bus: SharedMessageBus, ctx: Self::Context) -> Result<Self> {
         // Initialize Hylé client
-        let hyle_client = Arc::new(NodeApiHttpClient::new("http://localhost:4321".to_string())?);
+        let hyle_client = ctx.client.clone();
 
         let mut module = Self {
             bus: EnsureRegistrationBusClient::new_from_bus(bus.new_handle()).await,
             hyle_client,
         };
 
-        let a = ctx.client.get_contract(&"board_game".into()).await;
-        let b = ctx.client.get_contract(&"crash_game".into()).await;
+        let a = ctx.client.get_contract(&ctx.board_game).await;
+        let b = ctx.client.get_contract(&ctx.crash_game).await;
 
         if let (Ok(_), Ok(_)) = (a, b) {
             tracing::info!("Contracts already registered");
@@ -47,25 +47,25 @@ impl Module for EnsureRegistration {
 
         module
             .register_contract(
-                ContractName("board_game".to_string()),
+                ctx.board_game.clone(),
                 board_game::game::GameState::default().commit(),
             )
             .await?;
         module
             .register_contract(
-                ContractName("crash_game".to_string()),
-                crash_game::GameState::new(Identity::new(format!(
-                    "{}@secp256k1",
-                    ctx.crypto.public_key,
-                )))
+                ctx.crash_game.clone(),
+                crash_game::GameState::new(
+                    ctx.board_game.clone(),
+                    Identity::new(format!("{}@secp256k1", ctx.crypto.public_key,)),
+                )
                 .commit(),
             )
             .await?;
 
         tokio::time::timeout(std::time::Duration::from_secs(60), async {
             loop {
-                let a = ctx.client.get_contract(&"board_game".into()).await;
-                let b = ctx.client.get_contract(&"crash_game".into()).await;
+                let a = ctx.client.get_contract(&ctx.board_game).await;
+                let b = ctx.client.get_contract(&ctx.crash_game).await;
                 if let (Ok(_), Ok(_)) = (a, b) {
                     break;
                 }
@@ -103,10 +103,14 @@ impl EnsureRegistration {
                 let elf_hash: Vec<u8> = vk_elf[vk_elf.len() - 32..].to_vec();
                 // Verify the hash of the ELF file
                 let mut hasher = Sha256::new();
-                let elf = match contract_name.0.as_str() {
-                    "board_game" => contracts::BOARD_GAME_ELF,
-                    "crash_game" => contracts::CRASH_GAME_ELF,
-                    _ => bail!("Unknown contract name: {}", contract_name),
+                let elf = {
+                    if contract_name == &ctx.board_game {
+                        contracts::BOARD_GAME_ELF
+                    } else if contract_name == &ctx.crash_game {
+                        contracts::CRASH_GAME_ELF
+                    } else {
+                        bail!("Unknown contract name: {}", contract_name)
+                    }
                 };
                 hasher.update(elf);
                 let computed_hash = hasher.finalize().to_vec();
@@ -123,10 +127,14 @@ impl EnsureRegistration {
                 Some(vk) => vk,
                 None => {
                     let client = sp1_sdk::ProverClient::from_env();
-                    let elf = match contract_name.0.as_str() {
-                        "board_game" => contracts::BOARD_GAME_ELF,
-                        "crash_game" => contracts::CRASH_GAME_ELF,
-                        _ => bail!("Unknown contract name: {}", contract_name),
+                    let elf = {
+                        if contract_name == &ctx.board_game {
+                            contracts::BOARD_GAME_ELF
+                        } else if contract_name == &ctx.crash_game {
+                            contracts::CRASH_GAME_ELF
+                        } else {
+                            bail!("Unknown contract name: {}", contract_name)
+                        }
                     };
                     let (_, vk) = client.setup(elf);
                     let vk = serde_json::to_vec(&vk)?;

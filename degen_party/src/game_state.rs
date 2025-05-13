@@ -60,6 +60,8 @@ pub struct GameStateBusClient {
 
 pub struct GameStateModule {
     bus: GameStateBusClient,
+    board_game: ContractName,
+    crash_game: ContractName,
     state: Option<GameState>,
 }
 
@@ -71,8 +73,10 @@ impl Module for GameStateModule {
 
         Ok(Self {
             bus,
+            board_game: ctx.board_game.clone(),
+            crash_game: ctx.crash_game.clone(),
             state: Some(borsh::from_slice(
-                &ctx.client.get_contract(&"board_game".into()).await?.state.0,
+                &ctx.client.get_contract(&ctx.board_game).await?.state.0,
             )?),
         })
     }
@@ -139,6 +143,8 @@ impl GameStateModule {
 
         let uuid_128: u128 = uuid::Uuid::parse_str(&message_id)?.as_u128();
 
+        tracing::warn!("Handling action: {:?}", action);
+
         match &action {
             GameAction::StartMinigame => {
                 let players: Vec<(Identity, String, Option<u64>)> = self
@@ -151,7 +157,7 @@ impl GameStateModule {
                     .collect();
                 // TODO: conceptually, we should perhaps skip this one ?
                 blobs.push(GameActionBlob(uuid_128, action.clone()).as_blob(
-                    "board_game".into(),
+                    self.board_game.clone(),
                     None,
                     None,
                 ));
@@ -159,13 +165,17 @@ impl GameStateModule {
                 if let GamePhase::MinigameStart(minigame_type) =
                     &self.state.as_ref().context("Game not initialized")?.phase
                 {
-                    if minigame_type.0 == "crash_game" {
+                    if minigame_type == &self.crash_game {
                         blobs.push(
                             ChainActionBlob(
                                 uuid_128,
                                 crash_game::ChainAction::InitMinigame { players },
                             )
-                            .as_blob("crash_game".into(), None, None),
+                            .as_blob(
+                                self.crash_game.clone(),
+                                None,
+                                None,
+                            ),
                         );
                     } else {
                         bail!("Unsupported minigame type: {}", minigame_type);
@@ -175,11 +185,30 @@ impl GameStateModule {
                 }
             }
             GameAction::EndMinigame { result: _ } => {}
+            GameAction::Initialize {
+                player_count,
+                board_size,
+                ..
+            } => {
+                // Overwrite some settings
+                blobs.push(
+                    GameActionBlob(
+                        uuid_128,
+                        GameAction::Initialize {
+                            player_count: *player_count,
+                            board_size: *board_size,
+                            minigames: vec![self.crash_game.clone().0],
+                            random_seed: 7,
+                        },
+                    )
+                    .as_blob(self.board_game.clone(), None, None),
+                );
+            }
             _ => {
                 // Submit the action as a blob
                 // With a random UUID to avoid hash collisions
                 blobs.push(GameActionBlob(uuid_128, action.clone()).as_blob(
-                    "board_game".into(),
+                    self.board_game.clone(),
                     None,
                     None,
                 ));
@@ -221,7 +250,7 @@ impl GameStateModule {
     async fn handle_tx(&mut self, tx: BlobTransaction) -> Result<()> {
         // Transaction confirmed, now we can update the state
         for blob in &tx.blobs {
-            if blob.contract_name != ContractName::from("board_game") {
+            if blob.contract_name != self.board_game.clone() {
                 continue;
             }
 

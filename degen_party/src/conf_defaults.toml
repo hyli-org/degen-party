@@ -1,0 +1,18 @@
+
+log_format = "full"
+data_directory = "degen_data"
+node_api = "http://localhost:4321"
+da_read_from = "127.0.0.1:4141"
+
+start_block = 0
+
+[contracts]
+board_game = "board_game_2"
+crash_game = "crash_game_2"
+
+[websocket]
+port = 8082
+ws_path = "/ws"
+health_path = "/ws_health"
+peer_check_interval.secs = 0
+peer_check_interval.nanos = 100_000_000

@@ -74,6 +74,7 @@ pub enum GameAction {
     Initialize {
         player_count: usize,
         board_size: usize,
+        minigames: Vec<String>,
         random_seed: u64,
     },
     RegisterPlayer {
@@ -144,19 +145,24 @@ impl From<StateCommitment> for GameState {
 
 impl Default for GameState {
     fn default() -> Self {
-        GameState::new(4, 30, 4)
+        GameState::new(4, 30, vec!["crash_game".into()], 4)
     }
 }
 
 impl GameState {
-    pub fn new(player_count: usize, board_size: usize, random_seed: u64) -> Self {
+    pub fn new(
+        player_count: usize,
+        board_size: usize,
+        minigames: Vec<ContractName>,
+        random_seed: u64,
+    ) -> Self {
         Self {
             players: Vec::with_capacity(player_count),
             current_turn: 0,
             board: Board::new(board_size, random_seed),
             phase: GamePhase::GameOver,
             max_players: player_count,
-            minigames: vec!["crash_game".into()],
+            minigames,
             dice: dice::Dice::new(1, 10, random_seed),
         }
     }
@@ -275,10 +281,19 @@ impl GameState {
                 GameAction::Initialize {
                     player_count,
                     board_size,
+                    minigames,
                     random_seed,
                 },
             ) => {
-                *self = GameState::new(player_count, board_size, random_seed);
+                if minigames.is_empty() {
+                    return Err(anyhow!("Minigames cannot be empty"));
+                }
+                *self = GameState::new(
+                    player_count,
+                    board_size,
+                    minigames.into_iter().map(|x| x.into()).collect::<Vec<_>>(),
+                    random_seed,
+                );
                 self.phase = GamePhase::Registration;
                 events.push(GameEvent::GameInitialized {
                     player_count,

@@ -45,6 +45,7 @@ pub struct MinigameInstance {
 #[derive(Default, Debug, Clone, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
 pub struct GameState {
     pub minigame: MinigameInstance,
+    pub board_contract: ContractName,
     pub backend_identity: Identity,
 }
 
@@ -184,6 +185,7 @@ impl ZkContract for GameState {
                 let mut serialized_data = borsh::to_vec(&self.minigame.active_bets).unwrap();
                 serialized_data.extend(borsh::to_vec(&self.minigame.players).unwrap());
                 serialized_data.extend_from_slice(self.backend_identity.0.as_bytes());
+                serialized_data.extend_from_slice(self.board_contract.0.as_bytes());
                 // Magic data
                 serialized_data.extend([0, 1, 2, 3]);
                 StateCommitment(serialized_data)
@@ -199,8 +201,9 @@ impl ZkContract for GameState {
 }
 
 impl GameState {
-    pub fn new(backend_identity: Identity) -> Self {
+    pub fn new(board_contract: ContractName, backend_identity: Identity) -> Self {
         Self {
+            board_contract,
             backend_identity,
             ..Default::default()
         }
@@ -386,7 +389,7 @@ impl GameState {
             blob.0,
             board_game::game::GameAction::EndMinigame {
                 result: MinigameResult {
-                    contract_name: ContractName("crash_game".into()),
+                    contract_name: exec_ctx.contract_name.clone(),
                     player_results: expected_final_results
                         .iter()
                         .map(|r| PlayerMinigameResult {
@@ -401,7 +404,7 @@ impl GameState {
 
         // When ending the minigame, verify that the board game is also being updated
         exec_ctx
-            .is_in_callee_blobs(&ContractName("board_game".into()), expected_board_blob)
+            .is_in_callee_blobs(&self.board_contract, expected_board_blob)
             .map_err(|_| anyhow!("Missing board game EndMinigame action in transaction"))?;
 
         self.minigame = GameState::default().minigame;
