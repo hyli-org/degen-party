@@ -1,4 +1,8 @@
 use anyhow::{bail, Result};
+use board_game::{
+    game::{MinigameResult, PlayerMinigameResult},
+    GameActionBlob,
+};
 use crash_game::{ChainAction, ChainActionBlob, ChainEvent, GameState, ServerAction, ServerEvent};
 use hyle_modules::bus::{BusClientSender, SharedMessageBus};
 use hyle_modules::modules::websocket::{WsBroadcastMessage, WsInMessage};
@@ -6,9 +10,9 @@ use hyle_modules::modules::Module;
 use hyle_modules::{module_bus_client, module_handle_messages};
 use rand;
 use sdk::verifiers::Secp256k1Blob;
-use sdk::{Blob, ZkContract};
-use sdk::{BlobIndex, ContractAction};
-use sdk::{BlobTransaction, ContractName, Identity, StructuredBlobData};
+use sdk::{
+    Blob, BlobIndex, BlobTransaction, ContractAction, ContractName, Identity, StructuredBlobData,
+};
 use serde::{Deserialize, Serialize};
 use std::{
     sync::Arc,
@@ -17,14 +21,10 @@ use std::{
 use tokio::time;
 use tracing::info;
 use uuid;
-use board_game::{
-    game::{MinigameResult, PlayerMinigameResult},
-    GameActionBlob,
-};
 
 use crate::{
-    fake_lane_manager::InboundTxMessage, game_state::GameStateCommand, AuthenticatedMessage,
-    InboundWebsocketMessage, OutboundWebsocketMessage,
+    game_state::GameStateCommand, AuthenticatedMessage, InboundWebsocketMessage,
+    OutboundWebsocketMessage,
 };
 
 // Message types
@@ -59,10 +59,10 @@ pub struct CrashGameBusClient {
     sender(CrashGameCommand),
     sender(GameStateCommand),
     sender(WsBroadcastMessage<OutboundWebsocketMessage>),
-    sender(InboundTxMessage),
+    sender(BlobTransaction),
     receiver(CrashGameCommand),
     receiver(WsInMessage<AuthenticatedMessage<InboundWebsocketMessage>>),
-    receiver(InboundTxMessage),
+    receiver(BlobTransaction),
 }
 }
 
@@ -107,7 +107,7 @@ impl CrashGameModule {
             .as_blob(),
         );
         let tx = BlobTransaction::new(identity, blobs);
-        self.bus.send(InboundTxMessage::NewTransaction(tx))?;
+        self.bus.send(tx)?;
         Ok(())
     }
 
@@ -219,17 +219,16 @@ impl CrashGameModule {
             bail!("Game not initialized");
         };
 
-        self.bus
-            .send(InboundTxMessage::NewTransaction(BlobTransaction::new(
-                "backend@crash_game",
-                vec![
-                    ChainActionBlob(uuid::Uuid::new_v4().as_u128(), ChainAction::Start).as_blob(
-                        "crash_game".into(),
-                        None,
-                        None,
-                    ),
-                ],
-            )))?;
+        self.bus.send(BlobTransaction::new(
+            "backend@crash_game",
+            vec![
+                ChainActionBlob(uuid::Uuid::new_v4().as_u128(), ChainAction::Start).as_blob(
+                    "crash_game".into(),
+                    None,
+                    None,
+                ),
+            ],
+        ))?;
         Ok(())
     }
 
@@ -267,10 +266,7 @@ impl CrashGameModule {
             )
             .as_blob("crash_game".into(), None, None)];
             self.bus
-                .send(InboundTxMessage::NewTransaction(BlobTransaction::new(
-                    "backend@crash_game",
-                    blobs,
-                )))?;
+                .send(BlobTransaction::new("backend@crash_game", blobs))?;
         }
 
         let state = state.clone();
@@ -365,11 +361,6 @@ impl Module for CrashGameModule {
     async fn run(&mut self) -> Result<()> {
         let mut update_interval = time::interval(self.update_interval);
 
-        self.bus.send(InboundTxMessage::RegisterContract((
-            ContractName::from("crash_game"),
-            GameState::new().commit(),
-        )))?;
-
         module_handle_messages! {
             on_bus self.bus,
             listen<WsInMessage<AuthenticatedMessage<InboundWebsocketMessage>>> msg => {
@@ -384,11 +375,9 @@ impl Module for CrashGameModule {
                     self.handle_player_message(event, signature, public_key, message_id, signed_data).await?;
                 }
             }
-            listen<InboundTxMessage> msg => {
-                if let InboundTxMessage::NewTransaction(tx) = msg {
-                    if let Err(e) = self.handle_tx(tx).await {
-                        tracing::warn!("Error handling tx: {:?}", e);
-                    }
+            listen<BlobTransaction> tx => {
+                if let Err(e) = self.handle_tx(tx).await {
+                    tracing::warn!("Error handling tx: {:?}", e);
                 }
             }
             _ = update_interval.tick() => {

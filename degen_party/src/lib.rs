@@ -3,8 +3,10 @@ use game_state::{GameStateCommand, GameStateEvent};
 use serde::{Deserialize, Serialize};
 
 pub mod crash_game;
+pub mod ensure_registration;
 pub mod fake_lane_manager;
 pub mod game_state;
+pub mod proving;
 
 pub struct Context {}
 

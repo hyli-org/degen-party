@@ -1,0 +1,151 @@
+use std::sync::Arc;
+
+use anyhow::Result;
+use client_sdk::rest_client::NodeApiHttpClient;
+use hyle_modules::{
+    bus::SharedMessageBus, module_bus_client, module_handle_messages, modules::Module,
+};
+use sdk::{api::APIRegisterContract, ContractName, StateCommitment, ZkContract};
+
+#[cfg(not(feature = "fake_proofs"))]
+use {
+    anyhow::bail,
+    sha2::{Digest, Sha256},
+    std::fs::File,
+    std::io::Write,
+};
+
+module_bus_client! {
+pub struct EnsureRegistrationBusClient {
+}
+}
+
+pub struct EnsureRegistration {
+    bus: EnsureRegistrationBusClient,
+    hyle_client: Arc<NodeApiHttpClient>,
+}
+
+impl Module for EnsureRegistration {
+    type Context = Arc<crate::Context>;
+
+    async fn build(bus: SharedMessageBus, _ctx: Self::Context) -> Result<Self> {
+        // Initialize Hylé client
+        let hyle_client = Arc::new(NodeApiHttpClient::new("http://localhost:4321".to_string())?);
+
+        let mut module = Self {
+            bus: EnsureRegistrationBusClient::new_from_bus(bus.new_handle()).await,
+            hyle_client,
+        };
+
+        module
+            .register_contract(
+                ContractName("board_game".to_string()),
+                board_game::game::GameState::default().commit(),
+            )
+            .await?;
+        module
+            .register_contract(
+                ContractName("crash_game".to_string()),
+                crash_game::GameState::default().commit(),
+            )
+            .await?;
+
+        Ok(module)
+    }
+
+    async fn run(&mut self) -> Result<()> {
+        module_handle_messages! {
+            on_bus self.bus,
+        };
+
+        Ok(())
+    }
+}
+
+impl EnsureRegistration {
+    async fn register_contract(
+        &mut self,
+        contract_name: ContractName,
+        state_commitment: StateCommitment,
+    ) -> Result<()> {
+        #[cfg(not(feature = "fake_proofs"))]
+        let vk = {
+            // Load the VK from local file
+            let vk_path = &format!("vk_and_hash_{}.bin", contract_name);
+            let vk = if std::path::Path::new(vk_path).exists() {
+                let vk_elf = std::fs::read(vk_path)?;
+                let vk: Vec<u8> = vk_elf[0..vk_elf.len() - 32].to_vec();
+                let elf_hash: Vec<u8> = vk_elf[vk_elf.len() - 32..].to_vec();
+                // Verify the hash of the ELF file
+                let mut hasher = Sha256::new();
+                let elf = match contract_name.0.as_str() {
+                    "board_game" => contracts::BOARD_GAME_ELF,
+                    "crash_game" => contracts::CRASH_GAME_ELF,
+                    _ => bail!("Unknown contract name: {}", contract_name),
+                };
+                hasher.update(elf);
+                let computed_hash = hasher.finalize().to_vec();
+                if computed_hash != elf_hash {
+                    None
+                } else {
+                    Some(vk)
+                }
+            } else {
+                None
+            };
+
+            let vk = match vk {
+                Some(vk) => vk,
+                None => {
+                    let client = sp1_sdk::ProverClient::from_env();
+                    let elf = match contract_name.0.as_str() {
+                        "board_game" => contracts::BOARD_GAME_ELF,
+                        "crash_game" => contracts::CRASH_GAME_ELF,
+                        _ => bail!("Unknown contract name: {}", contract_name),
+                    };
+                    let (_, vk) = client.setup(elf);
+                    let vk = serde_json::to_vec(&vk)?;
+                    // Save it locally along with hash of elf
+                    // Compute the hash of the ELF file
+                    let mut hasher = Sha256::new();
+                    hasher.update(elf);
+                    let elf_hash = hasher.finalize();
+
+                    // Save the vk and hash locally
+                    let mut file = File::create(vk_path)?;
+                    file.write_all(&vk)?;
+                    file.write_all(&elf_hash)?;
+                    vk
+                }
+            };
+            vk
+        };
+
+        // Send the transaction to register the contract
+        #[cfg(feature = "fake_proofs")]
+        let register_tx = APIRegisterContract {
+            verifier: "test".into(),
+            program_id: sdk::ProgramId(vec![0, 1, 2, 3]),
+            state_commitment,
+            contract_name: contract_name.clone(),
+            timeout_window: Some(100),
+        };
+        #[cfg(not(feature = "fake_proofs"))]
+        let register_tx = APIRegisterContract {
+            verifier: "sp1-4".into(),
+            program_id: sdk::ProgramId(vk),
+            state_commitment,
+            contract_name: contract_name.clone(),
+            timeout_window: Some(100),
+        };
+        let res = self.hyle_client.register_contract(&register_tx).await?;
+
+        tracing::warn!(
+            "✅ Register contract for {} tx sent. Tx hash: {}",
+            contract_name,
+            res
+        );
+
+        Ok(())
+    }
+}

@@ -3,6 +3,10 @@ use crate::{
     OutboundWebsocketMessage,
 };
 use anyhow::{bail, Context, Result};
+use board_game::{
+    game::{GameAction, GameEvent, GamePhase, GameState},
+    GameActionBlob,
+};
 use crash_game::ChainActionBlob;
 use hyle_modules::{
     bus::{command_response::Query, BusClientSender, SharedMessageBus},
@@ -12,18 +16,12 @@ use hyle_modules::{
         Module,
     },
 };
-use sdk::{verifiers::Secp256k1Blob, ZkContract};
+use sdk::verifiers::Secp256k1Blob;
 use sdk::{BlobTransaction, ContractName, Identity};
 use sdk::{ContractAction, StructuredBlobData};
 use serde::{Deserialize, Serialize};
 use std::{fmt::Debug, sync::Arc, time::Duration};
 use tokio::time::sleep;
-use board_game::{
-    game::{GameAction, GameEvent, GamePhase, GameState},
-    GameActionBlob,
-};
-
-use crate::fake_lane_manager::InboundTxMessage;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", content = "payload")]
@@ -52,11 +50,11 @@ module_bus_client! {
 pub struct GameStateBusClient {
     sender(GameStateCommand),
     sender(CrashGameCommand),
-    sender(InboundTxMessage),
+    sender(BlobTransaction),
     sender(WsBroadcastMessage<OutboundWebsocketMessage>),
     receiver(Query<QueryGameState, GameState>),
     receiver(GameStateCommand),
-    receiver(InboundTxMessage),
+    receiver(BlobTransaction),
     receiver(WsInMessage<AuthenticatedMessage<InboundWebsocketMessage>>),
 }
 }
@@ -75,11 +73,6 @@ impl Module for GameStateModule {
     }
 
     async fn run(&mut self) -> Result<()> {
-        self.bus.send(InboundTxMessage::RegisterContract((
-            ContractName::from("board_game"),
-            GameState::default().commit(),
-        )))?;
-
         // Wait for the contract to be registered.
         // TODO: fix this
         sleep(Duration::from_secs(1)).await;
@@ -107,10 +100,8 @@ impl Module for GameStateModule {
                     }
                 }
             }
-            listen<InboundTxMessage> msg => {
-                if let InboundTxMessage::NewTransaction(tx) = msg {
-                    self.handle_tx(tx).await?;
-                }
+            listen<BlobTransaction> tx => {
+                self.handle_tx(tx).await?;
             }
         };
 
@@ -207,7 +198,7 @@ impl GameStateModule {
             .as_blob(),
         );
         let tx = BlobTransaction::new(identity, blobs);
-        self.bus.send(InboundTxMessage::NewTransaction(tx))?;
+        self.bus.send(tx)?;
 
         // The state will be updated when we receive the transaction confirmation
         // through the InboundTxMessage receiver
