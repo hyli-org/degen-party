@@ -26,6 +26,7 @@ serde = { version = "1.0", features = ["derive"] }
 tower-http = { version = "0.6.2", features = ["cors"] }
 anyhow = "1.0.93"
 hex = "0.4.3"
+secp256k1 = { version = "0.31.0" }
 
 sp1-sdk = { version = "4.0.0", default-features = false }
 

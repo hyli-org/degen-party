@@ -15,7 +15,8 @@ use hyle_modules::{
     },
     utils::{conf, logger::setup_tracing},
 };
-use std::sync::Arc;
+use secp256k1::{PublicKey, Secp256k1, SecretKey};
+use std::{env, sync::Arc};
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -40,9 +41,31 @@ async fn main() -> Result<()> {
     let config = Arc::new(config);
 
     let bus = SharedMessageBus::new(BusMetrics::global("rollup".to_string()));
-    let ctx = Arc::new(degen_party::Context {});
 
     let client = Arc::new(NodeApiHttpClient::new("http://localhost:4321".to_string())?);
+
+    let secp = Secp256k1::new();
+    let secret_key =
+        hex::decode(env::var("DEGEN_PARTY_BACKEND_PKEY").unwrap_or(
+            "0000000000000001000000000000000100000000000000010000000000000001".to_string(),
+        ))
+        .expect("DEGEN_PARTY_BACKEND_PKEY must be a hex string");
+    let secret_key = SecretKey::from_slice(&secret_key).expect("32 bytes, within curve order");
+    let public_key = PublicKey::from_secret_key(&secp, &secret_key);
+
+    //let sig = secp.sign_ecdsa(message, &secret_key);
+    //assert!(secp.verify_ecdsa(message, &sig, &public_key).is_ok());
+
+    let ctx = Arc::new(degen_party::Context {
+        client,
+        crypto: degen_party::CryptoContext {
+            secp: secp.clone(),
+            secret_key,
+            public_key,
+        }
+        .into(),
+        data_directory: config.data_directory.clone(),
+    });
 
     tracing::info!("Setting up modules");
 
@@ -70,12 +93,7 @@ async fn main() -> Result<()> {
         })
         .await?;
 
-    degen_party::proving::setup_auto_provers(
-        config.data_directory.clone(),
-        client.clone(),
-        &mut handler,
-    )
-    .await?;
+    degen_party::proving::setup_auto_provers(ctx.clone(), &mut handler).await?;
 
     tracing::info!("Starting modules");
 

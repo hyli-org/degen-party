@@ -1383,6 +1383,7 @@ dependencies = [
  "sp1-zkvm",
  "tokio",
  "tracing-subscriber",
+ "uuid",
 ]
 
 [[package]]
@@ -1621,6 +1622,7 @@ dependencies = [
  "opentelemetry_sdk",
  "prometheus",
  "rand 0.9.1",
+ "secp256k1",
  "serde",
  "serde_json",
  "sha2",

@@ -13,7 +13,6 @@ export abstract class BaseWebSocketService {
         return sharedWebSocket.connect();
     }
 
-    protected abstract onOpen(): void;
     protected abstract onMessage(data: any): void;
 
     async send(message: any, signed_data: string) {
@@ -23,9 +22,5 @@ export abstract class BaseWebSocketService {
             console.error("Failed to send message:", error);
             throw error;
         }
-    }
-
-    disconnect() {
-        // Individual services don't disconnect the shared WebSocket
     }
 }

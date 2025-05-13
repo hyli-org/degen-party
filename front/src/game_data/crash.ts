@@ -53,10 +53,6 @@ export const crashGameState = reactive({
 });
 
 class CrashGameService extends BaseWebSocketService {
-    protected override onOpen(): void {
-        // No initial action needed
-    }
-
     protected override onMessage(data: any) {
         console.log("Crash game service received data", data);
         if (data.type === "CrashGame") {
@@ -82,28 +78,34 @@ class CrashGameService extends BaseWebSocketService {
     }
 
     placeBet(amount: number) {
-        this.send({
-            type: "CrashGame",
-            payload: {
-                type: "PlaceBet",
+        this.send(
+            {
+                type: "CrashGame",
                 payload: {
-                    player_id: getLocalPlayerId(),
-                    amount,
+                    type: "PlaceBet",
+                    payload: {
+                        player_id: getLocalPlayerId(),
+                        amount,
+                    },
                 },
             },
-        });
+            "PlaceBet",
+        );
     }
 
     cashOut() {
-        this.send({
-            type: "CrashGame",
-            payload: {
-                type: "CashOut",
+        this.send(
+            {
+                type: "CrashGame",
                 payload: {
-                    player_id: getLocalPlayerId(),
+                    type: "CashOut",
+                    payload: {
+                        player_id: getLocalPlayerId(),
+                    },
                 },
             },
-        });
+            "CashOut",
+        );
     }
 
     returnToBoard() {

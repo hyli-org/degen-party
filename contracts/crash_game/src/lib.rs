@@ -5,8 +5,8 @@ use borsh::{BorshDeserialize, BorshSerialize};
 use sdk::caller::ExecutionContext;
 use sdk::utils::parse_calldata;
 use sdk::{
-    info, Blob, BlobData, BlobIndex, Calldata, ContractAction, ContractName, Identity, RunResult,
-    StateCommitment, StructuredBlobData, ZkContract,
+    secp256k1, Blob, BlobData, BlobIndex, Calldata, ContractAction, ContractName, Identity,
+    RunResult, StateCommitment, StructuredBlobData, ZkContract,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -45,6 +45,7 @@ pub struct MinigameInstance {
 #[derive(Default, Debug, Clone, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
 pub struct GameState {
     pub minigame: MinigameInstance,
+    pub backend_identity: Identity,
 }
 
 // Actions that can be performed on-chain
@@ -146,16 +147,28 @@ impl ZkContract for GameState {
     fn execute(&mut self, contract_input: &Calldata) -> RunResult {
         let (action, mut exec_ctx) =
             parse_calldata::<ChainActionBlob>(contract_input).map_err(|e| e.to_string())?;
-        info!("Self Pre: {:?}", self);
-        info!("Action: {:?}", action);
+
+        let expected_data = uuid::Uuid::from_u128(action.0).to_string();
+        let expected_action_data = match &action.1 {
+            ChainAction::InitMinigame { .. } => "StartMinigame",
+            ChainAction::PlaceBet { .. } => "PlaceBet",
+            ChainAction::Start => "Start",
+            ChainAction::CashOut { .. } => "CashOut",
+            ChainAction::Crash { .. } => "Crash",
+            ChainAction::Done => "EndMinigame",
+        };
+        secp256k1::CheckSecp256k1::new(
+            contract_input,
+            format!("{}:{}", expected_data, expected_action_data).as_bytes(),
+        )
+        .expect()?;
+
         let events = if let ChainAction::Done = &action.1 {
             self.process_done(&action, &mut exec_ctx)
         } else {
-            self.process_chain_action(action.1)
+            self.process_chain_action(&contract_input.identity, action.1)
         }
         .map_err(|e| e.to_string())?;
-
-        info!("Self Post: {:?}, {:?}", self, self.commit());
 
         let chain_events = events
             .iter()
@@ -170,6 +183,7 @@ impl ZkContract for GameState {
                 // While the game is running, don't commit things that are changing quickly.
                 let mut serialized_data = borsh::to_vec(&self.minigame.active_bets).unwrap();
                 serialized_data.extend(borsh::to_vec(&self.minigame.players).unwrap());
+                serialized_data.extend_from_slice(self.backend_identity.0.as_bytes());
                 // Magic data
                 serialized_data.extend([0, 1, 2, 3]);
                 StateCommitment(serialized_data)
@@ -185,8 +199,11 @@ impl ZkContract for GameState {
 }
 
 impl GameState {
-    pub fn new() -> Self {
-        Self::default()
+    pub fn new(backend_identity: Identity) -> Self {
+        Self {
+            backend_identity,
+            ..Default::default()
+        }
     }
 
     fn calculate_multiplier(elapsed_millis: u64) -> f64 {
@@ -200,7 +217,11 @@ impl GameState {
     }
 
     // Process on-chain actions that need to be recorded
-    pub fn process_chain_action(&mut self, action: ChainAction) -> Result<Vec<ChainEvent>> {
+    pub fn process_chain_action(
+        &mut self,
+        identity: &Identity,
+        action: ChainAction,
+    ) -> Result<Vec<ChainEvent>> {
         let mut events = Vec::new();
 
         match action {
@@ -234,6 +255,9 @@ impl GameState {
                 if !self.minigame.waiting_for_start {
                     return Err(anyhow!("Cannot place bet while game is in progress"));
                 }
+                if identity != &player_id {
+                    return Err(anyhow!("Player ID does not match the action sender"));
+                }
 
                 let player = self
                     .minigame
@@ -258,6 +282,14 @@ impl GameState {
             }
 
             ChainAction::Start => {
+                if identity != &self.backend_identity {
+                    return Err(anyhow!(
+                        "Only the backend can start the game: {} vs {}",
+                        identity,
+                        self.backend_identity
+                    ));
+                }
+
                 if !self.minigame.waiting_for_start {
                     return Err(anyhow!("Game is already in progress"));
                 }
@@ -284,6 +316,10 @@ impl GameState {
             } => {
                 if !self.minigame.is_running {
                     return Err(anyhow!("Game is not running"));
+                }
+
+                if identity != &player_id {
+                    return Err(anyhow!("Player ID does not match the action sender"));
                 }
 
                 let bet = self
@@ -315,6 +351,14 @@ impl GameState {
             }
 
             ChainAction::Crash { final_multiplier } => {
+                if identity != &self.backend_identity {
+                    return Err(anyhow!(
+                        "Only the backend can start the game: {} vs {}",
+                        identity,
+                        self.backend_identity
+                    ));
+                }
+
                 self.minigame.is_running = false;
                 self.minigame.current_multiplier = final_multiplier;
 
@@ -360,7 +404,7 @@ impl GameState {
             .is_in_callee_blobs(&ContractName("board_game".into()), expected_board_blob)
             .map_err(|_| anyhow!("Missing board game EndMinigame action in transaction"))?;
 
-        self.minigame = GameState::new().minigame;
+        self.minigame = GameState::default().minigame;
         Ok(vec![ChainEvent::MinigameEnded {
             final_results: expected_final_results,
         }])

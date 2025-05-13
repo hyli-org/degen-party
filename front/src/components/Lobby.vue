@@ -70,7 +70,7 @@ const startGame = async () => {
 <template>
     <div class="flex flex-col items-center justify-center min-h-screen bg-[#1A0C3B] text-white p-8">
         <div class="w-full max-w-md bg-[#2A1C4B] rounded-xl p-8 border-6 border-[#FFC636] shadow-2xl">
-            <div v-if="!gameState.game" class="space-y-6">
+            <div v-if="!gameState.game || gameState.game.phase === 'GameOver'" class="space-y-6">
                 <div class="space-y-2">
                     <label class="block text-[#FFC636]">Your Name</label>
                     <input

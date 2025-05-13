@@ -20,8 +20,7 @@ use sdk::verifiers::Secp256k1Blob;
 use sdk::{BlobTransaction, ContractName, Identity};
 use sdk::{ContractAction, StructuredBlobData};
 use serde::{Deserialize, Serialize};
-use std::{fmt::Debug, sync::Arc, time::Duration};
-use tokio::time::sleep;
+use std::{fmt::Debug, sync::Arc};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", content = "payload")]
@@ -67,17 +66,18 @@ pub struct GameStateModule {
 impl Module for GameStateModule {
     type Context = Arc<crate::Context>;
 
-    async fn build(bus: SharedMessageBus, _ctx: Self::Context) -> Result<Self> {
+    async fn build(bus: SharedMessageBus, ctx: Self::Context) -> Result<Self> {
         let bus = GameStateBusClient::new_from_bus(bus.new_handle()).await;
-        Ok(Self { bus, state: None })
+
+        Ok(Self {
+            bus,
+            state: Some(borsh::from_slice(
+                &ctx.client.get_contract(&"board_game".into()).await?.state.0,
+            )?),
+        })
     }
 
     async fn run(&mut self) -> Result<()> {
-        // Wait for the contract to be registered.
-        // TODO: fix this
-        sleep(Duration::from_secs(1)).await;
-        self.state = Some(GameState::default());
-
         module_handle_messages! {
             on_bus self.bus,
             command_response<QueryGameState, GameState> _ => {

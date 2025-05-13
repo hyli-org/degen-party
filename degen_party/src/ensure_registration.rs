@@ -5,7 +5,7 @@ use client_sdk::rest_client::NodeApiHttpClient;
 use hyle_modules::{
     bus::SharedMessageBus, module_bus_client, module_handle_messages, modules::Module,
 };
-use sdk::{api::APIRegisterContract, ContractName, StateCommitment, ZkContract};
+use sdk::{api::APIRegisterContract, ContractName, Identity, StateCommitment, TxHash, ZkContract};
 
 #[cfg(not(feature = "fake_proofs"))]
 use {
@@ -28,7 +28,7 @@ pub struct EnsureRegistration {
 impl Module for EnsureRegistration {
     type Context = Arc<crate::Context>;
 
-    async fn build(bus: SharedMessageBus, _ctx: Self::Context) -> Result<Self> {
+    async fn build(bus: SharedMessageBus, ctx: Self::Context) -> Result<Self> {
         // Initialize Hylé client
         let hyle_client = Arc::new(NodeApiHttpClient::new("http://localhost:4321".to_string())?);
 
@@ -36,6 +36,14 @@ impl Module for EnsureRegistration {
             bus: EnsureRegistrationBusClient::new_from_bus(bus.new_handle()).await,
             hyle_client,
         };
+
+        let a = ctx.client.get_contract(&"board_game".into()).await;
+        let b = ctx.client.get_contract(&"crash_game".into()).await;
+
+        if let (Ok(_), Ok(_)) = (a, b) {
+            tracing::info!("Contracts already registered");
+            return Ok(module);
+        }
 
         module
             .register_contract(
@@ -46,9 +54,26 @@ impl Module for EnsureRegistration {
         module
             .register_contract(
                 ContractName("crash_game".to_string()),
-                crash_game::GameState::default().commit(),
+                crash_game::GameState::new(Identity::new(format!(
+                    "{}@secp256k1",
+                    ctx.crypto.public_key,
+                )))
+                .commit(),
             )
             .await?;
+
+        tokio::time::timeout(std::time::Duration::from_secs(60), async {
+            loop {
+                let a = ctx.client.get_contract(&"board_game".into()).await;
+                let b = ctx.client.get_contract(&"crash_game".into()).await;
+                if let (Ok(_), Ok(_)) = (a, b) {
+                    break;
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(250)).await;
+            }
+        })
+        .await
+        .map_err(|_| anyhow::anyhow!("Timeout waiting for contracts to be registered"))?;
 
         Ok(module)
     }
@@ -67,7 +92,7 @@ impl EnsureRegistration {
         &mut self,
         contract_name: ContractName,
         state_commitment: StateCommitment,
-    ) -> Result<()> {
+    ) -> Result<TxHash> {
         #[cfg(not(feature = "fake_proofs"))]
         let vk = {
             // Load the VK from local file
@@ -146,6 +171,6 @@ impl EnsureRegistration {
             res
         );
 
-        Ok(())
+        Ok(res)
     }
 }

@@ -1,8 +1,8 @@
-use std::{path::PathBuf, sync::Arc};
+use std::sync::Arc;
 
 use anyhow::Result;
 use borsh::{BorshDeserialize, BorshSerialize};
-use client_sdk::{rest_client::NodeApiHttpClient, transaction_builder::TxExecutorHandler};
+use client_sdk::transaction_builder::TxExecutorHandler;
 use hyle_modules::modules::{
     prover::{AutoProver, AutoProverCtx},
     ModulesHandler,
@@ -27,7 +27,7 @@ impl TxExecutorHandler for BoardGameExecutor {
     }
 
     fn build_commitment_metadata(&self, _blob: &sdk::Blob) -> Result<Vec<u8>, String> {
-        borsh::to_vec(&self.state).map_err(|e| e.to_string())
+        Ok(self.state.commit().0)
     }
 }
 
@@ -49,13 +49,12 @@ impl TxExecutorHandler for CrashGameExecutor {
     }
 
     fn build_commitment_metadata(&self, _blob: &sdk::Blob) -> Result<Vec<u8>, String> {
-        borsh::to_vec(&self.state).map_err(|e| e.to_string())
+        Ok(self.state.commit().0)
     }
 }
 
 pub async fn setup_auto_provers(
-    data_directory: PathBuf,
-    client: Arc<NodeApiHttpClient>,
+    ctx: Arc<crate::Context>,
     handler: &mut ModulesHandler,
 ) -> Result<()> {
     #[cfg(not(feature = "fake_proofs"))]
@@ -70,11 +69,11 @@ pub async fn setup_auto_provers(
     handler
         .build_module::<AutoProver<BoardGameExecutor>>(
             AutoProverCtx {
-                data_directory: data_directory.clone(),
+                data_directory: ctx.data_directory.clone(),
                 start_height: BlockHeight(0),
                 prover: board_game_prover,
                 contract_name: "board_game".into(),
-                node: client.clone(),
+                node: ctx.client.clone(),
             }
             .into(),
         )
@@ -86,17 +85,28 @@ pub async fn setup_auto_provers(
     ));
     #[cfg(feature = "fake_proofs")]
     let crash_game_prover = Arc::new(client_sdk::helpers::test::TxExecutorTestProver::new(
-        CrashGameExecutor::default(),
+        CrashGameExecutor {
+            state: borsh::from_slice(&{
+                // We expect the game to not be running, so we go through the default init path
+                // Skip the last 4 bytes
+                let mut state = ctx.client.get_contract(&"crash_game".into()).await?.state.0;
+                state.pop();
+                state.pop();
+                state.pop();
+                state.pop();
+                state
+            })?,
+        },
     ));
 
     handler
         .build_module::<AutoProver<CrashGameExecutor>>(
             AutoProverCtx {
-                data_directory: data_directory.clone(),
+                data_directory: ctx.data_directory.clone(),
                 start_height: BlockHeight(0),
                 prover: crash_game_prover,
                 contract_name: "crash_game".into(),
-                node: client,
+                node: ctx.client.clone(),
             }
             .into(),
         )

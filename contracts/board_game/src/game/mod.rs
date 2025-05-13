@@ -278,8 +278,7 @@ impl GameState {
                     random_seed,
                 },
             ) => {
-                self.max_players = player_count;
-                self.board = Board::new(board_size, random_seed);
+                *self = GameState::new(player_count, board_size, random_seed);
                 self.phase = GamePhase::Registration;
                 events.push(GameEvent::GameInitialized {
                     player_count,

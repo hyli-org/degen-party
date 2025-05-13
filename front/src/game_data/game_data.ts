@@ -121,14 +121,32 @@ export const gameState = reactive({
 class BoardGameService extends BaseWebSocketService {
     onStateUpdated: ((state: { state: GameState | null; events: GameEvent[] }) => void) | null = null;
 
-    protected override onOpen(): void {}
+    constructor() {
+        super();
+        this.send(
+            {
+                type: "GameState",
+                payload: {
+                    type: "SendState",
+                    payload: null,
+                },
+            },
+            "SendState",
+        );
+    }
 
     protected override onMessage(data: any) {
         if (data.type === "GameStateEvent") {
             const event = data.payload;
             if (event.type === "StateUpdated") {
                 gameState.game = event.payload.state;
-                gameState.isInLobby = !gameState.game || gameState.game.phase === "Registration";
+                if (gameState.game?.players.length === 0) gameState.isInLobby = true;
+                else if (
+                    gameState.isInLobby &&
+                    gameState.game?.phase !== "Registration" &&
+                    gameState.game?.phase !== "GameOver"
+                )
+                    gameState.isInLobby = false;
                 if (this.onStateUpdated) {
                     this.onStateUpdated(event.payload);
                 }
