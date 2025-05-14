@@ -149,6 +149,15 @@ impl ZkContract for GameState {
         let (action, mut exec_ctx) =
             parse_calldata::<ChainActionBlob>(contract_input).map_err(|e| e.to_string())?;
 
+        // Not an identity provider
+        if contract_input
+            .identity
+            .0
+            .ends_with(&exec_ctx.contract_name.0)
+        {
+            return Err("Invalid identity provider".to_string());
+        }
+
         let expected_data = uuid::Uuid::from_u128(action.0).to_string();
         let expected_action_data = match &action.1 {
             ChainAction::InitMinigame { .. } => "StartMinigame",

@@ -12,7 +12,6 @@ RUN bun install
 
 # Copier le reste des fichiers de l'application
 COPY front .
-COPY front/.env.production .env
 
 # Construire l'application
 RUN bun run build

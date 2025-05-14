@@ -76,11 +76,26 @@ pub async fn setup_auto_provers(
                 prover: board_game_prover,
                 contract_name: ctx.board_game.clone(),
                 node: ctx.client.clone(),
+                default_state: BoardGameExecutor {
+                    state: borsh::from_slice(
+                        &ctx.client.get_contract(&ctx.board_game).await?.state.0,
+                    )?,
+                },
             }
             .into(),
         )
         .await?;
 
+    let crash_game_state: crash_game::GameState = borsh::from_slice(&{
+        // We expect the game to not be running, so we go through the default init path
+        // Skip the last 4 bytes
+        let mut state = ctx.client.get_contract(&ctx.crash_game).await?.state.0;
+        state.pop();
+        state.pop();
+        state.pop();
+        state.pop();
+        state
+    })?;
     #[cfg(not(feature = "fake_proofs"))]
     let crash_game_prover = Arc::new(client_sdk::helpers::sp1::SP1Prover::new(
         contracts::CRASH_GAME_ELF,
@@ -88,30 +103,21 @@ pub async fn setup_auto_provers(
     #[cfg(feature = "fake_proofs")]
     let crash_game_prover = Arc::new(client_sdk::helpers::test::TxExecutorTestProver::new(
         CrashGameExecutor {
-            state: borsh::from_slice(&{
-                // We expect the game to not be running, so we go through the default init path
-                // Skip the last 4 bytes
-                let mut state = ctx.client.get_contract(&ctx.crash_game).await?.state.0;
-                state.pop();
-                state.pop();
-                state.pop();
-                state.pop();
-                state
-            })?,
+            state: crash_game_state.clone(),
         },
     ));
 
     handler
-        .build_module::<AutoProver<CrashGameExecutor>>(
-            AutoProverCtx {
-                data_directory: ctx.data_directory.clone(),
-                start_height: BlockHeight(0),
-                prover: crash_game_prover,
-                contract_name: ctx.crash_game.clone(),
-                node: ctx.client.clone(),
-            }
-            .into(),
-        )
+        .build_module::<AutoProver<CrashGameExecutor>>(Arc::new(AutoProverCtx {
+            data_directory: ctx.data_directory.clone(),
+            start_height: BlockHeight(0),
+            prover: crash_game_prover,
+            contract_name: ctx.crash_game.clone(),
+            node: ctx.client.clone(),
+            default_state: CrashGameExecutor {
+                state: crash_game_state,
+            },
+        }))
         .await?;
 
     Ok(())

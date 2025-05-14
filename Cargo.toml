@@ -8,11 +8,11 @@ members = [
 ]
 
 [workspace.dependencies]
-sdk = { git = "https://github.com/Hyle-org/hyle.git", branch = "fix/da_listener_ordering", package = "hyle-contract-sdk" }
-client-sdk = { git = "https://github.com/Hyle-org/hyle.git", branch = "fix/da_listener_ordering", default-features = false, package = "hyle-client-sdk" }
-hyle-modules = { git = "https://github.com/Hyle-org/hyle.git", branch = "fix/da_listener_ordering", package = "hyle-modules" }
-hyle-hyllar = { git = "https://github.com/Hyle-org/hyle.git", branch = "fix/da_listener_ordering", default-features = false, package = "hyle-hyllar" }
-hyle-hydentity = { git = "https://github.com/Hyle-org/hyle.git", branch = "fix/da_listener_ordering", package = "hyle-hydentity" }
+sdk = { git = "https://github.com/Hyle-org/hyle.git", branch = "main", package = "hyle-contract-sdk" }
+client-sdk = { git = "https://github.com/Hyle-org/hyle.git", branch = "main", default-features = false, package = "hyle-client-sdk" }
+hyle-modules = { git = "https://github.com/Hyle-org/hyle.git", branch = "main", package = "hyle-modules" }
+hyle-hyllar = { git = "https://github.com/Hyle-org/hyle.git", branch = "main", default-features = false, package = "hyle-hyllar" }
+hyle-hydentity = { git = "https://github.com/Hyle-org/hyle.git", branch = "main", package = "hyle-hydentity" }
 
 contracts = { path = "contracts", default-features = false, package = "contracts" }
 board_game = { path = "contracts/board_game", package = "board_game" }
