@@ -20,7 +20,6 @@ const isGameOver = ref(false);
 
 const returnToLobby = () => {
     gameState.isInLobby = true;
-    boardGameService.reset();
 };
 
 const connectionStatusColor = computed(() => {

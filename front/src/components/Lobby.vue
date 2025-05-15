@@ -66,6 +66,10 @@ const joinGame = async () => {
 const startGame = async () => {
     await boardGameService.startGame();
 };
+
+const reset = async () => {
+    await boardGameService.reset();
+};
 </script>
 
 <template>
@@ -132,6 +136,13 @@ const startGame = async () => {
                         class="w-full py-3 rounded-lg bg-[#FFC636] text-[#1A0C3B] font-bold hover:bg-[#FFD666] transition-colors disabled:opacity-50"
                     >
                         Join Game
+                    </button>
+                    <button
+                        @click="reset"
+                        :disabled="!playerName"
+                        class="w-full py-3 rounded-lg bg-[#36C6FF] text-[#1A0C3B] font-bold hover:bg-[#D666FF] transition-colors disabled:opacity-50"
+                    >
+                        Start a new game
                     </button>
                 </div>
 

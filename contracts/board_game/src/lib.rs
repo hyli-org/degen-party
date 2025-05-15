@@ -64,6 +64,7 @@ impl ZkContract for GameState {
         let expected_data = uuid::Uuid::from_u128(action.0).to_string();
 
         let expected_action_data = match &action.1 {
+            GameAction::EndGame => "EndGame",
             GameAction::Initialize { .. } => "Initialize",
             GameAction::StartGame => "StartGame",
             GameAction::RegisterPlayer { .. } => "RegisterPlayer",

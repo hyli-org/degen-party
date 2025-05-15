@@ -71,6 +71,7 @@ pub enum GamePhase {
 
 #[derive(Debug, Clone, Serialize, Deserialize, BorshSerialize, BorshDeserialize, PartialEq)]
 pub enum GameAction {
+    EndGame,
     Initialize {
         player_count: usize,
         board_size: usize,
@@ -275,7 +276,9 @@ impl GameState {
         }
 
         match (self.phase.clone(), action) {
-            // Setup
+            (_, GameAction::EndGame) => {
+                *self = GameState::new(4, 30, self.minigames.clone(), 12);
+            }
             (
                 GamePhase::GameOver,
                 GameAction::Initialize {

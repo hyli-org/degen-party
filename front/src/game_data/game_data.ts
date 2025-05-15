@@ -54,6 +54,7 @@ export type GameAction =
       }
     | { RegisterPlayer: { name: string; identity: string } }
     | { StartGame: null }
+    | { EndGame: null }
     | { RollDice: null }
     | { MovePlayer: { player_id: string; spaces: number } }
     | { StartMinigame }
@@ -247,6 +248,21 @@ class BoardGameService extends BaseWebSocketService {
                 },
             },
             "StartGame",
+        );
+    }
+
+    async reset() {
+        await this.send(
+            {
+                type: "GameState",
+                payload: {
+                    type: "SubmitAction",
+                    payload: {
+                        action: { EndGame: null },
+                    },
+                },
+            },
+            "EndGame",
         );
     }
 
