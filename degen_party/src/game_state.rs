@@ -105,7 +105,9 @@ impl Module for GameStateModule {
                 }
             }
             listen<BlobTransaction> tx => {
-                self.handle_tx(tx).await?;
+                if let Err(err) = self.handle_tx(tx).await {
+                    tracing::info!("Error handling transaction: {:?}", err);
+                }
             }
         };
 

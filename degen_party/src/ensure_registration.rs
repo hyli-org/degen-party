@@ -23,6 +23,8 @@ pub struct EnsureRegistrationBusClient {
 pub struct EnsureRegistration {
     bus: EnsureRegistrationBusClient,
     hyle_client: Arc<NodeApiHttpClient>,
+    board_game: ContractName,
+    crash_game: ContractName,
 }
 
 impl Module for EnsureRegistration {
@@ -35,6 +37,8 @@ impl Module for EnsureRegistration {
         let mut module = Self {
             bus: EnsureRegistrationBusClient::new_from_bus(bus.new_handle()).await,
             hyle_client,
+            board_game: ctx.board_game.clone(),
+            crash_game: ctx.crash_game.clone(),
         };
 
         let a = ctx.client.get_contract(&ctx.board_game).await;
@@ -104,9 +108,9 @@ impl EnsureRegistration {
                 // Verify the hash of the ELF file
                 let mut hasher = Sha256::new();
                 let elf = {
-                    if contract_name == &ctx.board_game {
+                    if contract_name == self.board_game {
                         contracts::BOARD_GAME_ELF
-                    } else if contract_name == &ctx.crash_game {
+                    } else if contract_name == self.crash_game {
                         contracts::CRASH_GAME_ELF
                     } else {
                         bail!("Unknown contract name: {}", contract_name)
@@ -128,9 +132,9 @@ impl EnsureRegistration {
                 None => {
                     let client = sp1_sdk::ProverClient::from_env();
                     let elf = {
-                        if contract_name == &ctx.board_game {
+                        if contract_name == self.board_game {
                             contracts::BOARD_GAME_ELF
-                        } else if contract_name == &ctx.crash_game {
+                        } else if contract_name == self.crash_game {
                             contracts::CRASH_GAME_ELF
                         } else {
                             bail!("Unknown contract name: {}", contract_name)
