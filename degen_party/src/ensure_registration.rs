@@ -127,7 +127,7 @@ impl EnsureRegistration {
                 None
             };
 
-            let vk = match vk {
+            match vk {
                 Some(vk) => vk,
                 None => {
                     let client = sp1_sdk::ProverClient::from_env();
@@ -154,8 +154,7 @@ impl EnsureRegistration {
                     file.write_all(&elf_hash)?;
                     vk
                 }
-            };
-            vk
+            }
         };
 
         // Send the transaction to register the contract

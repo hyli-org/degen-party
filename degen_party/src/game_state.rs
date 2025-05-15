@@ -200,7 +200,7 @@ impl GameStateModule {
                             player_count: *player_count,
                             board_size: *board_size,
                             minigames: vec![self.crash_game.clone().0],
-                            random_seed: 7,
+                            random_seed: uuid_128 as u64,
                         },
                     )
                     .as_blob(self.board_game.clone(), None, None),

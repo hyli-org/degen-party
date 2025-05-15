@@ -88,13 +88,7 @@ pub async fn setup_auto_provers(
 
     let crash_game_state: crash_game::GameState = borsh::from_slice(&{
         // We expect the game to not be running, so we go through the default init path
-        // Skip the last 4 bytes
-        let mut state = ctx.client.get_contract(&ctx.crash_game).await?.state.0;
-        state.pop();
-        state.pop();
-        state.pop();
-        state.pop();
-        state
+        ctx.client.get_contract(&ctx.crash_game).await?.state.0
     })?;
     #[cfg(not(feature = "fake_proofs"))]
     let crash_game_prover = Arc::new(client_sdk::helpers::sp1::SP1Prover::new(

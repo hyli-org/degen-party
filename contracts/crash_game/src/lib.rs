@@ -191,20 +191,18 @@ impl ZkContract for GameState {
         match self.minigame.is_running {
             true => {
                 // While the game is running, don't commit things that are changing quickly.
-                let mut serialized_data = borsh::to_vec(&self.minigame.active_bets).unwrap();
-                serialized_data.extend(borsh::to_vec(&self.minigame.players).unwrap());
-                serialized_data.extend_from_slice(self.backend_identity.0.as_bytes());
-                serialized_data.extend_from_slice(self.board_contract.0.as_bytes());
-                // Magic data
-                serialized_data.extend([0, 1, 2, 3]);
-                StateCommitment(serialized_data)
+                let c = Self {
+                    minigame: MinigameInstance {
+                        players: self.minigame.players.clone(),
+                        active_bets: self.minigame.active_bets.clone(),
+                        ..Default::default()
+                    },
+                    backend_identity: self.backend_identity.clone(),
+                    board_contract: self.board_contract.clone(),
+                };
+                StateCommitment(borsh::to_vec(&c).unwrap())
             }
-            false => {
-                let mut serialized_data = borsh::to_vec(&self).unwrap();
-                // Magic data
-                serialized_data.extend([3, 2, 1, 0]);
-                StateCommitment(serialized_data)
-            }
+            false => StateCommitment(borsh::to_vec(&self).unwrap()),
         }
     }
 }
