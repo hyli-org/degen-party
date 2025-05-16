@@ -1,9 +1,20 @@
 <script setup lang="ts">
-import { isCurrentPlayer, gameState, DEFAULT_PLAYERS, playerColor, playerAvatar } from "./game_data/game_data";
+import {
+    isCurrentPlayer,
+    gameState,
+    DEFAULT_PLAYERS,
+    playerColor,
+    playerAvatar,
+    getLocalPlayerId,
+} from "./game_data/game_data";
 import { ref, computed } from "vue";
 import Lobby from "./components/Lobby.vue";
 import { boardGameService } from "./game_data/game_data";
 import { wsState } from "./utils/shared-websocket";
+
+import { TestnetChatElement } from "hyle-testnet-chat";
+import { addIdentityToMessage } from "./game_data/auth";
+customElements.define("testnet-chat", TestnetChatElement);
 
 const players = computed(() => {
     if (!gameState?.game?.players?.length) return DEFAULT_PLAYERS;
@@ -83,6 +94,12 @@ const connectionStatusColor = computed(() => {
                 </template>
             </div>
         </header>
+
+        <testnet-chat
+            class="fixed top-0 right-0"
+            :nickname="getLocalPlayerId()"
+            :processBlobTx="addIdentityToMessage"
+        ></testnet-chat>
 
         <Lobby v-if="gameState.isInLobby" />
         <main v-else class="relative z-1 mx-auto flex w-full max-w-[1400px] flex-1 flex-col overflow-y-auto p-4">
