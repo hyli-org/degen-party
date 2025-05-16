@@ -1,5 +1,8 @@
 import { ec } from "elliptic";
 import { SHA256 } from "crypto-js";
+import { any } from "three/tsl";
+import { BorshSchema, borshSerialize } from "borsher";
+import { identity } from "@vueuse/core";
 
 const SESSION_KEY_STORAGE_KEY = "blackjack_session_key";
 const PUBLIC_KEY_STORAGE_KEY = "blackjack_public_key";
@@ -43,21 +46,6 @@ class AuthService {
         return this.publicKey; // On retourne la clé publique pour l'authentification
     }
 
-    signRequest(payload: any): Uint8Array {
-        if (!this.sessionKey) {
-            throw new Error("No session key available");
-        }
-
-        // Convertit le payload en string
-        const payloadString = JSON.stringify(payload);
-        // Crée un hash SHA256 du payload
-        const hash = SHA256(payloadString);
-        // Signe le hash avec ECDSA
-        const keyPair = this.ec.keyFromPrivate(this.sessionKey);
-        const signature = keyPair.sign(hash.toString());
-        return this.toCompact(signature);
-    }
-
     signMessage(message: string): string {
         if (!this.sessionKey) {
             throw new Error("No session key available");
@@ -77,6 +65,37 @@ class AuthService {
         return signature.toDER("hex");
     }
 
+    getBlobData(message: string) {
+        if (!this.sessionKey) {
+            throw new Error("No session key available");
+        }
+
+        const hash = SHA256(message);
+        const keyPair = this.ec.keyFromPrivate(this.sessionKey);
+        const signature = keyPair.sign(hash.toString());
+
+        // Normaliser s en utilisant min(s, n-s)
+        const n = this.ec.curve.n;
+        const s = signature.s;
+        if (s.gt(n.shrn(1))) {
+            signature.s = n.sub(s);
+        }
+
+        const toBytes = (hex: string): number[] => {
+            const bytes: number[] = [];
+            for (let i = 0; i < hex.length; i += 2) {
+                bytes.push(parseInt(hex.substring(i, i + 2), 16));
+            }
+            return bytes;
+        };
+
+        return {
+            data: toBytes(hash.toString()),
+            public_key: toBytes(this.publicKey!),
+            signature: this.toCompact(signature),
+        };
+    }
+
     clearSession() {
         this.sessionKey = null;
         this.publicKey = null;
@@ -84,17 +103,32 @@ class AuthService {
         localStorage.removeItem(PUBLIC_KEY_STORAGE_KEY);
     }
 
-    toCompact(signature: ec.Signature): Uint8Array {
-        const n = signature.r.toArray("le", 32);
-        const s = signature.s.toArray("le", 32);
-
-        const recoveryParam = signature.recoveryParam;
-        const compactSignature = new Uint8Array(64);
-        compactSignature.set(n);
-        compactSignature.set(s, 32);
-        compactSignature[63] = recoveryParam || 0;
-        return compactSignature;
+    toCompact(signature: ec.Signature): number[] {
+        return signature.r.toArray("be", 32).concat(signature.s.toArray("be", 32));
     }
 }
 
 export const authService = new AuthService();
+
+const Secp256k1BlobSchema = BorshSchema.Struct({
+    identity: BorshSchema.Struct({
+        0: BorshSchema.String,
+    }),
+    data: BorshSchema.Array(BorshSchema.u8, 32),
+    public_key: BorshSchema.Array(BorshSchema.u8, 33),
+    signature: BorshSchema.Array(BorshSchema.u8, 64),
+});
+
+export async function addIdentityToMessage(blob_tx: any) {
+    const message = "toto";
+    blob_tx.blobs.push({
+        contract_name: "secp256k1",
+        data: Array.from(
+            borshSerialize(Secp256k1BlobSchema, {
+                identity: { 0: blob_tx.identity },
+                ...authService.getBlobData(message),
+            }),
+        ),
+    });
+    return blob_tx;
+}
