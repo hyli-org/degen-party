@@ -14,6 +14,7 @@
             <div v-else-if="!gameStarted" class="game-waiting">
                 <div class="waiting-text">GAME STARTING SOON!</div>
                 <div class="players-bet">Players Ready: {{ playersWhoBet }}</div>
+                <div>{{ Math.round(timeLeftForBets / 100) / 10 }} seconds left to place your bet!</div>
             </div>
 
             <div v-else-if="gameStarted" class="current-multiplier">
@@ -138,7 +139,13 @@ const introAnimationActive = ref(false);
 const introProgress = ref(0);
 const rocketAnimationOffset = ref(0);
 
-const calculateGameTime = computed(() => Date.now() / 1000 - gameStartTime.value);
+const calculateGameTime = computed(
+    () =>
+        ((crashGameState.minigame_backend?.current_time || 0) -
+            (crashGameState.minigame_backend?.game_start_time || 0)) /
+        1000.0,
+);
+
 const handleActionButton = () => {
     if (!gameStarted.value) {
         crashGameService.placeBet(betAmount.value);
@@ -162,18 +169,16 @@ crashGameState.minigame = {
 };
 */
 
-const gameStartTime = ref(0);
-watchEffect(() => {
-    if (!gameStartTime.value && crashGameState.minigame?.is_running) gameStartTime.value = Date.now() / 1000;
-});
+// Updated in gameloop();
+const timeLeftForBets = ref(0);
 
-const gameStarted = computed(() => !crashGameState.minigame?.waiting_for_start);
-const gameEnded = computed(() => gameStarted.value && !crashGameState.minigame?.is_running);
-const currentMultiplier = computed(() => crashGameState.minigame?.current_multiplier ?? 1);
+const gameStarted = computed(() => crashGameState.minigame_verifiable?.state != "PlacingBets");
+const gameEnded = computed(() => gameStarted.value && crashGameState.minigame_verifiable?.state == "Crashed");
+const currentMultiplier = computed(() => crashGameState.minigame_backend?.current_multiplier ?? 1);
 
 // Update computed property to show ratio of players who bet
 const playersWhoBet = computed(() => {
-    const activeBets = Object.keys(crashGameState.minigame?.active_bets || {}).length;
+    const activeBets = Object.keys(crashGameState.minigame_verifiable?.active_bets || {}).length;
     const totalPlayers = gameState.game?.players.length || 0;
     return `${activeBets}/${totalPlayers}`;
 });
@@ -181,16 +186,16 @@ const playersWhoBet = computed(() => {
 const canPlaceBet = computed(() => !gameStarted.value);
 
 const hasPlayerCashedOut = computed(() => {
-    return !!crashGameState.minigame?.active_bets?.[getLocalPlayerId()]?.cashed_out_at;
+    return !!crashGameState.minigame_verifiable?.active_bets?.[getLocalPlayerId()]?.cashed_out_at;
 });
 const playerCashedOutAt = computed(() => {
-    return crashGameState.minigame?.active_bets?.[getLocalPlayerId()]?.cashed_out_at ?? 0;
+    return crashGameState.minigame_verifiable?.active_bets?.[getLocalPlayerId()]?.cashed_out_at ?? 0;
 });
 
 const cashouts = computed(() => {
     const cashoutList: Cashout[] = [];
-    if (crashGameState.minigame?.active_bets) {
-        for (const [playerId, bet] of Object.entries(crashGameState.minigame.active_bets)) {
+    if (crashGameState.minigame_verifiable?.active_bets) {
+        for (const [playerId, bet] of Object.entries(crashGameState.minigame_verifiable.active_bets)) {
             if (bet.cashed_out_at) {
                 const player = gameState.game?.players.find((p) => p.id.toString() === playerId);
                 cashoutList.push({
@@ -267,6 +272,9 @@ function gameLoop(timestamp: number) {
         }
     }
 
+    const timeLeft = Date.now() - (crashGameState.minigame_backend?.game_setup_time || 0);
+    timeLeftForBets.value = 30000 - Math.max(0, timeLeft);
+
     // Update rocket animation
     rocketAnimationOffset.value = Math.sin(Date.now() / 200) * 1.5;
 
@@ -318,8 +326,8 @@ watch(gameEnded, (newValue) => {
             // Calculate final results for each player
             const results: FinalResult[] = [];
 
-            if (crashGameState.minigame?.active_bets) {
-                for (const [playerId, bet] of Object.entries(crashGameState.minigame.active_bets)) {
+            if (crashGameState.minigame_verifiable?.active_bets) {
+                for (const [playerId, bet] of Object.entries(crashGameState.minigame_verifiable.active_bets)) {
                     const player = gameState.game?.players.find((p) => p.id.toString() === playerId);
                     if (!player) continue;
 

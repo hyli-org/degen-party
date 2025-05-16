@@ -1,6 +1,6 @@
 use anyhow::{anyhow, bail, Result};
 use borsh::{BorshDeserialize, BorshSerialize};
-use sdk::{ContractName, Identity, StateCommitment};
+use sdk::{ContractName, Identity, LaneId, StateCommitment};
 use serde::{Deserialize, Serialize};
 
 pub mod board;
@@ -17,6 +17,11 @@ pub struct GameState {
     pub max_players: usize,
     pub minigames: Vec<ContractName>,
     pub dice: dice::Dice,
+
+    // Metadata to ensure the game runs smoothly
+    pub backend_identity: Identity,
+    pub last_interaction_time: u128,
+    pub lane_id: LaneId,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
@@ -144,20 +149,34 @@ impl From<StateCommitment> for GameState {
     }
 }
 
-impl Default for GameState {
-    fn default() -> Self {
-        GameState::new(4, 30, vec!["crash_game".into()], 4)
-    }
-}
-
 impl GameState {
-    pub fn new(
+    pub fn new(backend_identity: Identity) -> Self {
+        Self {
+            players: Vec::new(),
+            current_turn: 0,
+            board: Board {
+                spaces: Vec::new(),
+                size: 0,
+            },
+            phase: GamePhase::GameOver,
+            max_players: 4,
+            minigames: Vec::new(),
+            dice: dice::Dice::new(1, 10, 0),
+
+            backend_identity,
+            last_interaction_time: 0,
+            lane_id: LaneId::default(),
+        }
+    }
+
+    pub fn reset(
+        &mut self,
         player_count: usize,
         board_size: usize,
         minigames: Vec<ContractName>,
         random_seed: u64,
-    ) -> Self {
-        Self {
+    ) {
+        *self = Self {
             players: Vec::with_capacity(player_count),
             current_turn: 0,
             board: Board::new(board_size, random_seed),
@@ -165,6 +184,10 @@ impl GameState {
             max_players: player_count,
             minigames,
             dice: dice::Dice::new(1, 10, random_seed),
+
+            backend_identity: self.backend_identity.clone(),
+            last_interaction_time: self.last_interaction_time,
+            lane_id: self.lane_id.clone(),
         }
     }
 
@@ -265,6 +288,7 @@ impl GameState {
         caller: &Identity,
         uuid: u128,
         action: GameAction,
+        timestamp: u128,
     ) -> Result<Vec<GameEvent>> {
         let mut events = Vec::new();
 
@@ -277,7 +301,18 @@ impl GameState {
 
         match (self.phase.clone(), action) {
             (_, GameAction::EndGame) => {
-                *self = GameState::new(4, 30, self.minigames.clone(), 12);
+                let is_backend = self.backend_identity == *caller;
+                let game_timed_out = timestamp - self.last_interaction_time > 10 * 60 * 1000;
+                if is_backend || game_timed_out {
+                    events.push(GameEvent::GameEnded {
+                        winner_id: Identity::default(),
+                        final_stars: 0,
+                        final_coins: 0,
+                    });
+                    self.reset(4, 30, self.minigames.clone(), self.dice.seed);
+                } else {
+                    return Err(anyhow!("Only the backend can end the game"));
+                }
             }
             (
                 GamePhase::GameOver,
@@ -291,7 +326,7 @@ impl GameState {
                 if minigames.is_empty() {
                     return Err(anyhow!("Minigames cannot be empty"));
                 }
-                *self = GameState::new(
+                self.reset(
                     player_count,
                     board_size,
                     minigames.into_iter().map(|x| x.into()).collect::<Vec<_>>(),
@@ -306,6 +341,10 @@ impl GameState {
             }
             // Registration Phase
             (GamePhase::Registration, GameAction::RegisterPlayer { name, identity }) => {
+                if identity != *caller {
+                    return Err(anyhow!("Invalid player for RegisterPlayer action"));
+                }
+
                 if self.players.len() >= self.max_players {
                     return Err(anyhow!("Game is full"));
                 }
@@ -339,9 +378,15 @@ impl GameState {
 
             // Start Game Action
             (GamePhase::Registration, GameAction::StartGame) => {
-                //if self.players.len() < 2 {
-                //    return Err(anyhow!("Need at least 2 players to start the game"));
-                //}
+                let is_full = self.players.len() == self.max_players;
+                let registration_period_done =
+                    self.last_interaction_time.saturating_add(2 * 60 * 1000) < timestamp;
+                if !is_full && !registration_period_done {
+                    return Err(anyhow!(
+                        "Game is not full and registration period is not over"
+                    ));
+                }
+
                 self.phase = GamePhase::Rolling;
                 events.push(GameEvent::GameStarted);
             }
@@ -349,6 +394,13 @@ impl GameState {
             // Rolling Phase
             (GamePhase::Rolling, GameAction::RollDice) => {
                 let current_player = self.get_current_player()?.clone();
+
+                // 10 seconds to roll the dice or anyone can.
+                let is_timed_out = timestamp - self.last_interaction_time > 10 * 1000;
+                if current_player.id != *caller && !is_timed_out {
+                    return Err(anyhow!("Invalid player for RegisterPlayer action"));
+                }
+
                 let roll_value = self.dice.roll();
 
                 events.push(GameEvent::DiceRolled {

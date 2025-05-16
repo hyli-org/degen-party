@@ -1,6 +1,6 @@
 use crate::{
-    crash_game::CrashGameCommand, AuthenticatedMessage, InboundWebsocketMessage,
-    OutboundWebsocketMessage,
+    crash_game::CrashGameCommand, fake_lane_manager::ConfirmedBlobTransaction,
+    AuthenticatedMessage, CryptoContext, InboundWebsocketMessage, OutboundWebsocketMessage,
 };
 use anyhow::{bail, Context, Result};
 use board_game::{
@@ -19,8 +19,14 @@ use hyle_modules::{
 use sdk::verifiers::Secp256k1Blob;
 use sdk::{BlobTransaction, ContractName, Identity};
 use sdk::{ContractAction, StructuredBlobData};
+use secp256k1::Message;
 use serde::{Deserialize, Serialize};
-use std::{fmt::Debug, sync::Arc};
+use sha2::{Digest, Sha256};
+use std::{
+    fmt::Debug,
+    sync::Arc,
+    time::{SystemTime, UNIX_EPOCH},
+};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", content = "payload")]
@@ -53,13 +59,14 @@ pub struct GameStateBusClient {
     sender(WsBroadcastMessage<OutboundWebsocketMessage>),
     receiver(Query<QueryGameState, GameState>),
     receiver(GameStateCommand),
-    receiver(BlobTransaction),
+    receiver(ConfirmedBlobTransaction),
     receiver(WsInMessage<AuthenticatedMessage<InboundWebsocketMessage>>),
 }
 }
 
 pub struct GameStateModule {
     bus: GameStateBusClient,
+    crypto: Arc<CryptoContext>,
     board_game: ContractName,
     crash_game: ContractName,
     state: Option<GameState>,
@@ -73,6 +80,7 @@ impl Module for GameStateModule {
 
         Ok(Self {
             bus,
+            crypto: ctx.crypto.clone(),
             board_game: ctx.board_game.clone(),
             crash_game: ctx.crash_game.clone(),
             state: Some(borsh::from_slice(
@@ -82,6 +90,7 @@ impl Module for GameStateModule {
     }
 
     async fn run(&mut self) -> Result<()> {
+        let mut tick = tokio::time::interval(std::time::Duration::from_secs(1));
         module_handle_messages! {
             on_bus self.bus,
             command_response<QueryGameState, GameState> _ => {
@@ -104,10 +113,13 @@ impl Module for GameStateModule {
                     }
                 }
             }
-            listen<BlobTransaction> tx => {
-                if let Err(err) = self.handle_tx(tx).await {
+            listen<ConfirmedBlobTransaction> tx => {
+                if let Err(err) = self.handle_tx(tx.0).await {
                     tracing::info!("Error handling transaction: {:?}", err);
                 }
+            }
+            _ = tick.tick() => {
+                self.on_tick().await?;
             }
         };
 
@@ -187,6 +199,12 @@ impl GameStateModule {
                 }
             }
             GameAction::EndMinigame { result: _ } => {}
+            GameAction::EndGame => {
+                // Redo the action as the backend for now.
+                let tx = self.create_backend_tx(action.clone())?;
+                self.bus.send(tx)?;
+                return Ok(());
+            }
             GameAction::Initialize {
                 player_count,
                 board_size,
@@ -237,6 +255,56 @@ impl GameStateModule {
         Ok(())
     }
 
+    fn create_backend_tx(&self, action: GameAction) -> Result<BlobTransaction> {
+        let identity = Identity::new(format!("{}@secp256k1", self.crypto.public_key));
+        let uuid = uuid::Uuid::new_v4();
+        let data = format!(
+            "{}:{}",
+            uuid,
+            match action {
+                GameAction::EndGame => "EndGame",
+                GameAction::RollDice => "RollDice",
+                _ => unreachable!(),
+            }
+        )
+        .as_bytes()
+        .to_vec();
+        let mut hasher = Sha256::new();
+        hasher.update(data.clone());
+        let message_hash: [u8; 32] = hasher.finalize().into();
+        let signature = self
+            .crypto
+            .secp
+            .sign_ecdsa(Message::from_digest(message_hash), &self.crypto.secret_key);
+        Ok(BlobTransaction::new(
+            identity.clone(),
+            vec![
+                Secp256k1Blob::new(
+                    identity,
+                    &data,
+                    &self.crypto.public_key.to_string(),
+                    &signature.to_string(),
+                )?
+                .as_blob(),
+                GameActionBlob(uuid.as_u128(), action).as_blob(self.board_game.clone(), None, None),
+            ],
+        ))
+    }
+
+    async fn on_tick(&mut self) -> Result<()> {
+        if let Some(state) = &self.state {
+            if state.phase == GamePhase::Rolling {
+                let likely_timed_out = SystemTime::now().duration_since(UNIX_EPOCH)?.as_millis()
+                    > state.last_interaction_time + 15 * 1000;
+                if likely_timed_out {
+                    let tx = self.create_backend_tx(GameAction::RollDice)?;
+                    self.bus.send(tx)?;
+                }
+            }
+        }
+        Ok(())
+    }
+
     async fn handle_send_state(&mut self) -> Result<()> {
         if let Some(state) = &self.state {
             self.bus.send(WsBroadcastMessage {
@@ -281,10 +349,14 @@ impl GameStateModule {
         caller: &Identity,
         blob: &GameActionBlob,
     ) -> Result<Vec<GameEvent>> {
-        // Apply action optimistically to local state
+        // Apply action optimistically to local state.
+        // For the most part this is very safe as we are operating in rollup mode,
+        // but the timestamp is very optimistic.
         match &mut self.state {
             Some(state) => {
-                let events = state.process_action(caller, blob.0, blob.1.clone())?;
+                let time = SystemTime::now().duration_since(UNIX_EPOCH)?.as_millis();
+                let events = state.process_action(caller, blob.0, blob.1.clone(), time)?;
+                state.last_interaction_time = time;
                 tracing::debug!("Applied action {:?}, got events: {:?}", blob.1, events);
                 Ok(events)
             }

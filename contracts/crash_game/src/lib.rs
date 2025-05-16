@@ -5,7 +5,7 @@ use borsh::{BorshDeserialize, BorshSerialize};
 use sdk::caller::ExecutionContext;
 use sdk::utils::parse_calldata;
 use sdk::{
-    secp256k1, Blob, BlobData, BlobIndex, Calldata, ContractAction, ContractName, Identity,
+    secp256k1, Blob, BlobData, BlobIndex, Calldata, ContractAction, ContractName, Identity, LaneId,
     RunResult, StateCommitment, StructuredBlobData, ZkContract,
 };
 use serde::{Deserialize, Serialize};
@@ -33,20 +33,39 @@ pub struct ActiveBet {
     pub cashed_out_at: Option<f64>,
 }
 
+#[derive(
+    Default, Debug, Clone, Serialize, Deserialize, BorshSerialize, BorshDeserialize, PartialEq, Eq,
+)]
+pub enum MinigameState {
+    #[default]
+    PlacingBets,
+    Running,
+    Crashed,
+}
+
 #[derive(Default, Debug, Clone, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
-pub struct MinigameInstance {
-    pub is_running: bool,
-    pub current_multiplier: f64,
-    pub waiting_for_start: bool,
+pub struct MinigameInstanceVerifiable {
+    pub state: MinigameState,
     pub active_bets: HashMap<Identity, ActiveBet>,
     pub players: HashMap<Identity, Player>,
 }
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
+pub struct MinigameInstanceBackend {
+    pub current_multiplier: f64,
+    pub game_setup_time: Option<u128>,
+    pub game_start_time: Option<u128>,
+    pub current_time: Option<u128>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
 pub struct GameState {
-    pub minigame: MinigameInstance,
+    pub minigame_verifiable: MinigameInstanceVerifiable,
+    pub minigame_backend: MinigameInstanceBackend,
     pub board_contract: ContractName,
     pub backend_identity: Identity,
+    pub last_interaction_time: u128,
+    pub lane_id: LaneId,
 }
 
 // Actions that can be performed on-chain
@@ -158,6 +177,18 @@ impl ZkContract for GameState {
             return Err("Invalid identity provider".to_string());
         }
 
+        let Some(ref ctx) = contract_input.tx_ctx else {
+            return Err("Missing transaction context".into());
+        };
+
+        // Rollup mode, ensure everything is sent to the same lane ID or we are well past interaction timeout
+        let interaction_timeout = ctx.timestamp.0.saturating_add(60 * 60 * 24 * 1000); // 24 hours
+        if self.lane_id == LaneId::default() || ctx.timestamp.0 > interaction_timeout {
+            self.lane_id = ctx.lane_id.clone();
+        } else if self.lane_id != ctx.lane_id {
+            return Err("Invalid lane ID".into());
+        }
+
         let expected_data = uuid::Uuid::from_u128(action.0).to_string();
         let expected_action_data = match &action.1 {
             ChainAction::InitMinigame { .. } => "StartMinigame",
@@ -176,9 +207,11 @@ impl ZkContract for GameState {
         let events = if let ChainAction::Done = &action.1 {
             self.process_done(&action, &mut exec_ctx)
         } else {
-            self.process_chain_action(&contract_input.identity, action.1)
+            self.process_chain_action(&contract_input.identity, action.1, ctx.timestamp.0)
         }
         .map_err(|e| e.to_string())?;
+
+        self.last_interaction_time = ctx.timestamp.0;
 
         let chain_events = events
             .iter()
@@ -188,31 +221,21 @@ impl ZkContract for GameState {
     }
 
     fn commit(&self) -> StateCommitment {
-        match self.minigame.is_running {
-            true => {
-                // While the game is running, don't commit things that are changing quickly.
-                let c = Self {
-                    minigame: MinigameInstance {
-                        players: self.minigame.players.clone(),
-                        active_bets: self.minigame.active_bets.clone(),
-                        ..Default::default()
-                    },
-                    backend_identity: self.backend_identity.clone(),
-                    board_contract: self.board_contract.clone(),
-                };
-                StateCommitment(borsh::to_vec(&c).unwrap())
-            }
-            false => StateCommitment(borsh::to_vec(&self).unwrap()),
-        }
+        let mut commitment = self.clone();
+        commitment.minigame_backend = MinigameInstanceBackend::default();
+        StateCommitment(borsh::to_vec(&commitment).unwrap())
     }
 }
 
 impl GameState {
     pub fn new(board_contract: ContractName, backend_identity: Identity) -> Self {
         Self {
+            minigame_verifiable: MinigameInstanceVerifiable::default(),
+            minigame_backend: MinigameInstanceBackend::default(),
             board_contract,
             backend_identity,
-            ..Default::default()
+            last_interaction_time: 0,
+            lane_id: LaneId::default(),
         }
     }
 
@@ -231,20 +254,21 @@ impl GameState {
         &mut self,
         identity: &Identity,
         action: ChainAction,
+        _timestamp: u128, // TODO use
     ) -> Result<Vec<ChainEvent>> {
         let mut events = Vec::new();
 
         match action {
             ChainAction::InitMinigame { players } => {
-                if self.minigame.is_running {
-                    return Err(anyhow!("A minigame is already in progress"));
+                if self.minigame_verifiable.state == MinigameState::Running {
+                    return Err(anyhow!("Game is already in progress"));
                 }
 
                 let player_count = players.len();
 
                 // Initialize or update player states
                 for (id, name, coins) in players {
-                    self.minigame.players.insert(
+                    self.minigame_verifiable.players.insert(
                         id.clone(),
                         Player {
                             id: id.clone(),
@@ -254,15 +278,14 @@ impl GameState {
                     );
                 }
 
-                self.minigame.is_running = false;
-                self.minigame.waiting_for_start = true;
-                self.minigame.current_multiplier = 1.0;
+                self.minigame_verifiable.state = MinigameState::PlacingBets;
+                self.minigame_backend.current_multiplier = 1.0;
 
                 events.push(ChainEvent::MinigameInitialized { player_count });
             }
 
             ChainAction::PlaceBet { player_id, amount } => {
-                if !self.minigame.waiting_for_start {
+                if self.minigame_verifiable.state != MinigameState::PlacingBets {
                     return Err(anyhow!("Cannot place bet while game is in progress"));
                 }
                 if identity != &player_id {
@@ -270,7 +293,7 @@ impl GameState {
                 }
 
                 let player = self
-                    .minigame
+                    .minigame_verifiable
                     .players
                     .get_mut(&player_id)
                     .ok_or_else(|| anyhow!("Player not found"))?;
@@ -280,7 +303,7 @@ impl GameState {
                 }
 
                 player.coins -= amount;
-                self.minigame.active_bets.insert(
+                self.minigame_verifiable.active_bets.insert(
                     player_id.clone(),
                     ActiveBet {
                         amount,
@@ -300,22 +323,26 @@ impl GameState {
                     ));
                 }
 
-                if !self.minigame.waiting_for_start {
+                if self.minigame_verifiable.state != MinigameState::PlacingBets {
                     return Err(anyhow!("Game is already in progress"));
                 }
 
-                if self.minigame.active_bets.is_empty() {
+                /*
+                // TODO: skipped, should be in TxExecutorHandler only
+                if self.minigame_verifiable.active_bets.is_empty() {
                     return Err(anyhow!("No bets placed"));
                 }
 
                 // Check if all players have placed their bets
-                if self.minigame.active_bets.len() != self.minigame.players.len() {
+                if self.minigame_verifiable.active_bets.len()
+                    != self.minigame_verifiable.players.len()
+                {
                     return Err(anyhow!("Waiting for all players to place their bets"));
                 }
+                */
 
-                self.minigame.is_running = true;
-                self.minigame.waiting_for_start = false;
-                self.minigame.current_multiplier = 1.0;
+                self.minigame_verifiable.state = MinigameState::Running;
+                self.minigame_backend.current_multiplier = 1.0;
 
                 events.push(ChainEvent::GameStarted);
             }
@@ -324,7 +351,7 @@ impl GameState {
                 player_id,
                 multiplier,
             } => {
-                if !self.minigame.is_running {
+                if self.minigame_verifiable.state != MinigameState::Running {
                     return Err(anyhow!("Game is not running"));
                 }
 
@@ -333,7 +360,7 @@ impl GameState {
                 }
 
                 let bet = self
-                    .minigame
+                    .minigame_verifiable
                     .active_bets
                     .get_mut(&player_id)
                     .ok_or_else(|| anyhow!("Bet not found"))?;
@@ -347,7 +374,7 @@ impl GameState {
                 let winnings = Self::calculate_winnings(bet.amount, multiplier);
 
                 let player = self
-                    .minigame
+                    .minigame_verifiable
                     .players
                     .get_mut(&player_id)
                     .ok_or_else(|| anyhow!("Player not found"))?;
@@ -369,8 +396,12 @@ impl GameState {
                     ));
                 }
 
-                self.minigame.is_running = false;
-                self.minigame.current_multiplier = final_multiplier;
+                if self.minigame_verifiable.state != MinigameState::Running {
+                    return Err(anyhow!("Game is not running"));
+                }
+
+                self.minigame_verifiable.state = MinigameState::Crashed;
+                self.minigame_backend.current_multiplier = final_multiplier;
 
                 events.push(ChainEvent::GameCrashed { final_multiplier });
             }
@@ -386,7 +417,7 @@ impl GameState {
         blob: &ChainActionBlob,
         exec_ctx: &mut ExecutionContext,
     ) -> Result<Vec<ChainEvent>> {
-        if self.minigame.is_running {
+        if self.minigame_verifiable.state != MinigameState::Crashed {
             return Err(anyhow!("Cannot end minigame while it is still running"));
         }
 
@@ -414,7 +445,7 @@ impl GameState {
             .is_in_callee_blobs(&self.board_contract, expected_board_blob)
             .map_err(|_| anyhow!("Missing board game EndMinigame action in transaction"))?;
 
-        self.minigame = GameState::default().minigame;
+        self.minigame_verifiable = MinigameInstanceVerifiable::default();
         Ok(vec![ChainEvent::MinigameEnded {
             final_results: expected_final_results,
         }])
@@ -426,12 +457,12 @@ impl GameState {
 
         match action {
             ServerAction::Update { current_time } => {
-                if !self.minigame.is_running {
+                if self.minigame_verifiable.state != MinigameState::Running {
                     return Ok(events);
                 }
 
                 let new_multiplier = Self::calculate_multiplier(current_time);
-                self.minigame.current_multiplier = new_multiplier;
+                self.minigame_backend.current_multiplier = new_multiplier;
 
                 events.push(ServerEvent::MultiplierUpdated {
                     multiplier: new_multiplier,
@@ -439,7 +470,7 @@ impl GameState {
             }
 
             ServerAction::GetEndResults => {
-                if self.minigame.is_running {
+                if self.minigame_verifiable.state != MinigameState::Crashed {
                     return Err(anyhow!("Game is still running"));
                 }
                 let final_results = self.final_results();
@@ -451,8 +482,8 @@ impl GameState {
     }
 
     pub fn ready_to_start(&self) -> bool {
-        if self.minigame.waiting_for_start
-            && self.minigame.active_bets.len() == self.minigame.players.len()
+        if self.minigame_verifiable.state == MinigameState::PlacingBets
+            && self.minigame_verifiable.active_bets.len() == self.minigame_verifiable.players.len()
         {
             return true;
         }
@@ -469,7 +500,7 @@ impl GameState {
             });
         }
 
-        if let Some(player) = self.minigame.players.get(&player_id) {
+        if let Some(player) = self.minigame_verifiable.players.get(&player_id) {
             if player.coins < amount {
                 return Err(ServerEvent::InsufficientFunds {
                     player_id,
@@ -483,7 +514,7 @@ impl GameState {
     }
 
     pub fn final_results(&self) -> Vec<(Identity, i32)> {
-        self.minigame
+        self.minigame_verifiable
             .active_bets
             .iter()
             .map(|(id, bet)| {

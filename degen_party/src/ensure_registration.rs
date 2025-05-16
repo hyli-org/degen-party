@@ -52,7 +52,11 @@ impl Module for EnsureRegistration {
         module
             .register_contract(
                 ctx.board_game.clone(),
-                board_game::game::GameState::default().commit(),
+                board_game::game::GameState::new(Identity::new(format!(
+                    "{}@secp256k1",
+                    ctx.crypto.public_key
+                )))
+                .commit(),
             )
             .await?;
         module

@@ -3,7 +3,9 @@ use board_game::{
     game::{MinigameResult, PlayerMinigameResult},
     GameActionBlob,
 };
-use crash_game::{ChainAction, ChainActionBlob, ChainEvent, GameState, ServerAction, ServerEvent};
+use crash_game::{
+    ChainAction, ChainActionBlob, ChainEvent, GameState, MinigameState, ServerAction, ServerEvent,
+};
 use hyle_modules::bus::{BusClientSender, SharedMessageBus};
 use hyle_modules::modules::websocket::{WsBroadcastMessage, WsInMessage};
 use hyle_modules::modules::Module;
@@ -18,7 +20,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
     sync::Arc,
-    time::{Duration, Instant},
+    time::{Duration, SystemTime, UNIX_EPOCH},
 };
 use tokio::time;
 use tracing::info;
@@ -70,13 +72,12 @@ pub struct CrashGameBusClient {
 
 pub struct CrashGameModule {
     bus: CrashGameBusClient,
-    state: Option<GameState>,
     crypto: Arc<CryptoContext>,
     board_game: ContractName,
     crash_game: ContractName,
-
     update_interval: Duration,
-    game_start_time: Option<Instant>,
+
+    state: Option<GameState>,
 }
 
 impl CrashGameModule {
@@ -157,7 +158,7 @@ impl CrashGameModule {
         let current_multiplier = self
             .state
             .as_ref()
-            .map(|state| state.minigame.current_multiplier);
+            .map(|state| state.minigame_backend.current_multiplier);
 
         let Some(multiplier) = current_multiplier else {
             bail!("Game not initialized");
@@ -176,7 +177,7 @@ impl CrashGameModule {
         // Pre-chain validation
         match &self.state {
             Some(state) => {
-                if state.minigame.is_running {
+                if state.minigame_verifiable.state != MinigameState::Crashed {
                     bail!("Game is still running");
                 }
             }
@@ -219,21 +220,9 @@ impl CrashGameModule {
         ])
     }
 
-    // Server-side state management
-    fn create_backend_tx(&self, action: ChainAction) -> Result<BlobTransaction> {
+    fn create_backend_identity_blob(&self, uuid: uuid::Uuid, data_to_sign: &str) -> Result<Blob> {
         let identity = Identity::new(format!("{}@secp256k1", self.crypto.public_key));
-        let uuid = uuid::Uuid::new_v4();
-        let data = format!(
-            "{}:{}",
-            uuid,
-            match action {
-                ChainAction::Start => "Start",
-                ChainAction::Crash { .. } => "Crash",
-                _ => unreachable!(),
-            }
-        )
-        .as_bytes()
-        .to_vec();
+        let data = format!("{}:{}", uuid, data_to_sign).as_bytes().to_vec();
         let mut hasher = Sha256::new();
         hasher.update(data.clone());
         let message_hash: [u8; 32] = hasher.finalize().into();
@@ -241,16 +230,31 @@ impl CrashGameModule {
             .crypto
             .secp
             .sign_ecdsa(Message::from_digest(message_hash), &self.crypto.secret_key);
+        Ok(Secp256k1Blob::new(
+            identity,
+            &data,
+            &self.crypto.public_key.to_string(),
+            &signature.to_string(),
+        )?
+        .as_blob())
+    }
+
+    // Server-side state management
+    fn create_backend_tx(&self, action: ChainAction) -> Result<BlobTransaction> {
+        let uuid = uuid::Uuid::new_v4();
+        let identity = Identity::new(format!("{}@secp256k1", self.crypto.public_key));
+        let identity_blob = self.create_backend_identity_blob(
+            uuid,
+            match action {
+                ChainAction::Start => "Start",
+                ChainAction::Crash { .. } => "Crash",
+                _ => unreachable!(),
+            },
+        )?;
         Ok(BlobTransaction::new(
             identity.clone(),
             vec![
-                Secp256k1Blob::new(
-                    identity,
-                    &data,
-                    &self.crypto.public_key.to_string(),
-                    &signature.to_string(),
-                )?
-                .as_blob(),
+                identity_blob,
                 ChainActionBlob(uuid.as_u128(), action).as_blob(
                     self.crash_game.clone(),
                     None,
@@ -260,44 +264,59 @@ impl CrashGameModule {
         ))
     }
 
-    async fn handle_start(&mut self) -> Result<()> {
-        let Some(_) = &mut self.state else {
-            bail!("Game not initialized");
-        };
-
-        self.bus.send(self.create_backend_tx(ChainAction::Start)?)?;
-        Ok(())
-    }
-
     async fn handle_update(&mut self) -> Result<()> {
         let Some(state) = &mut self.state else {
             return Ok(());
         };
 
-        if !state.minigame.is_running {
+        if state.minigame_verifiable.state == MinigameState::PlacingBets {
+            // After a while start anyways
+            let now = SystemTime::now().duration_since(UNIX_EPOCH)?.as_millis();
+            if now.saturating_sub(state.minigame_backend.game_setup_time.unwrap()) > 30_000 {
+                self.bus.send(self.create_backend_tx(ChainAction::Start)?)?;
+                return Ok(());
+            }
+        } else if state.minigame_verifiable.state == MinigameState::Crashed {
+            // Auto-end the game after a while to unstuck players
+            let now = SystemTime::now().duration_since(UNIX_EPOCH)?.as_millis();
+            if now.saturating_sub(state.minigame_backend.game_start_time.unwrap()) > 60_000 {
+                let uuid = uuid::Uuid::new_v4();
+                let identity = Identity::new(format!("{}@secp256k1", self.crypto.public_key));
+                let mut blobs = self.handle_end(uuid.as_u128()).await?;
+                blobs.push(self.create_backend_identity_blob(uuid, "EndMinigame")?);
+                self.bus.send(BlobTransaction::new(identity, blobs))?;
+                return Ok(());
+            }
             return Ok(());
         }
 
-        let elapsed = self.game_start_time.unwrap().elapsed();
-        let current_time = elapsed.as_millis() as u64;
+        if state.minigame_verifiable.state != MinigameState::Running {
+            return Ok(());
+        }
+
+        let now = SystemTime::now().duration_since(UNIX_EPOCH)?.as_millis();
+        state.minigame_backend.current_time = Some(now);
+        let elapsed_ms = now.saturating_sub(state.minigame_backend.game_start_time.unwrap());
 
         // We don't actually send server events for now.
-        let _events = state.process_server_action(ServerAction::Update { current_time })?;
+        let _events = state.process_server_action(ServerAction::Update {
+            current_time: elapsed_ms as u64,
+        })?;
 
         // Crash probability calculation
-        let elapsed_secs = current_time as f64 / 1000.0;
+        let elapsed_secs = elapsed_ms as f64 / 1000.0;
         let crash_probability = (elapsed_secs * 0.01).min(0.95);
 
         info!(
             "Updating game state - {}, {}",
-            current_time, crash_probability
+            elapsed_ms, crash_probability
         );
 
         let state = state.clone();
 
         if rand::random::<f64>() < crash_probability && elapsed_secs > 2.0 {
             self.bus.send(self.create_backend_tx(ChainAction::Crash {
-                final_multiplier: state.minigame.current_multiplier,
+                final_multiplier: state.minigame_backend.current_multiplier,
             })?)?;
         }
 
@@ -334,14 +353,20 @@ impl CrashGameModule {
     ) -> Result<Vec<ChainEvent>> {
         match action {
             ChainAction::InitMinigame { .. } => {
-                self.state = Some(GameState::new(
+                let mut state = GameState::new(
                     self.board_game.clone(),
                     Identity::new(format!("{}@secp256k1", self.crypto.public_key)),
-                ));
+                );
+                state.minigame_backend.game_setup_time =
+                    Some(SystemTime::now().duration_since(UNIX_EPOCH)?.as_millis());
+                state.minigame_backend.current_time = state.minigame_backend.game_setup_time;
+                self.state = Some(state);
             }
             ChainAction::Start => {
-                if self.state.is_some() {
-                    self.game_start_time = Some(Instant::now());
+                if let Some(state) = &mut self.state {
+                    state.minigame_backend.game_start_time =
+                        Some(SystemTime::now().duration_since(UNIX_EPOCH)?.as_millis());
+                    state.minigame_backend.current_time = state.minigame_backend.game_start_time;
                 }
             }
             ChainAction::Done => {
@@ -356,12 +381,14 @@ impl CrashGameModule {
         // Apply action to state and handle side effects
         match &mut self.state {
             Some(state) => {
-                let events = state.process_chain_action(identity, action.clone())?;
+                let time = SystemTime::now().duration_since(UNIX_EPOCH)?.as_millis();
+                let events = state.process_chain_action(identity, action.clone(), time)?;
+                state.last_interaction_time = time;
                 tracing::debug!("Applied action {:?}, got events: {:?}", action, events);
 
                 if let ChainAction::PlaceBet { .. } = action {
                     if state.ready_to_start() {
-                        self.handle_start().await?;
+                        self.bus.send(self.create_backend_tx(ChainAction::Start)?)?;
                     }
                 }
                 Ok(events)
@@ -392,7 +419,6 @@ impl Module for CrashGameModule {
             bus,
             state: None,
             update_interval: Duration::from_millis(50),
-            game_start_time: None,
             crypto: ctx.crypto.clone(),
             board_game: ctx.board_game.clone(),
             crash_game: ctx.crash_game.clone(),
@@ -422,7 +448,9 @@ impl Module for CrashGameModule {
                 }
             }
             _ = update_interval.tick() => {
-                self.handle_update().await?;
+                if let Err(e) = self.handle_update().await {
+                    tracing::warn!("Error handling update: {:?}", e);
+                }
             }
         };
 

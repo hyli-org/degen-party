@@ -4,7 +4,7 @@ use borsh::{BorshDeserialize, BorshSerialize};
 use game::{GameAction, GameState};
 use sdk::{
     secp256k1, utils::parse_calldata, Blob, BlobData, BlobIndex, Calldata, ContractAction,
-    ContractName, RunResult, StateCommitment, StructuredBlobData, ZkContract,
+    ContractName, LaneId, RunResult, StateCommitment, StructuredBlobData, ZkContract,
 };
 use serde::{Deserialize, Serialize};
 
@@ -80,9 +80,28 @@ impl ZkContract for GameState {
         )
         .expect()?;
 
+        let Some(ref ctx) = contract_input.tx_ctx else {
+            return Err("Missing transaction context".into());
+        };
+
+        // Rollup mode, ensure everything is sent to the same lane ID or we are well past interaction timeout
+        let interaction_timeout = ctx.timestamp.0.saturating_add(60 * 60 * 24 * 1000); // 24 hours
+        if self.lane_id == LaneId::default() || ctx.timestamp.0 > interaction_timeout {
+            self.lane_id = ctx.lane_id.clone();
+        } else if self.lane_id != ctx.lane_id {
+            return Err("Invalid lane ID".into());
+        }
+
         let events = self
-            .process_action(&contract_input.identity, action.0, action.1)
+            .process_action(
+                &contract_input.identity,
+                action.0,
+                action.1,
+                ctx.timestamp.0,
+            )
             .map_err(|e| e.to_string())?;
+
+        self.last_interaction_time = ctx.timestamp.0;
 
         let game_events = events
             .iter()

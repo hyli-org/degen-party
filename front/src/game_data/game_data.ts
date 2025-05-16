@@ -4,11 +4,13 @@ import { authService } from "./auth";
 
 export interface MinigameResult {
     contract_name: string;
-    player_results: Array<{
-        player_id: bigint;
-        coins_delta: number;
-        stars_delta: number;
-    }>;
+    player_results: Array<PlayerMinigameResult>;
+}
+
+export interface PlayerMinigameResult {
+    player_id: string;
+    coins_delta: number;
+    stars_delta: number;
 }
 
 export interface CrashGameChainEvent {
@@ -26,24 +28,24 @@ export interface Board {
 
 export interface Player {
     id: string;
-    public_key: string;
     name: string;
     position: number;
     coins: number;
     stars: number;
+    used_uuids: Array<bigint>;
 }
 
 export type GamePhase =
     | "Registration"
     | "Rolling"
     | "Moving"
-    | "SpaceEffect"
-    | "MinigameStart"
-    | "MinigamePlay"
+    | { MinigameStart: string }
+    | { MinigamePlay: string }
     | "TurnEnd"
     | "GameOver";
 
 export type GameAction =
+    | { EndGame: null }
     | {
           Initialize: {
               player_count: number;
@@ -54,18 +56,9 @@ export type GameAction =
       }
     | { RegisterPlayer: { name: string; identity: string } }
     | { StartGame: null }
-    | { EndGame: null }
     | { RollDice: null }
-    | { MovePlayer: { player_id: string; spaces: number } }
-    | { StartMinigame }
-    | {
-          EndMinigame: {
-              result: {
-                  contract_name: string;
-                  player_results: { player_id: bigint; coins_delta: number; stars_delta: number }[];
-              };
-          };
-      }
+    | { StartMinigame: null }
+    | { EndMinigame: { result: MinigameResult } }
     | { EndTurn: null };
 
 export type GameEvent =
@@ -78,8 +71,9 @@ export type GameEvent =
     | { MinigameEnded: { result: MinigameResult } }
     | { TurnEnded: { next_player: string } }
     | { GameEnded: { winner_id: string; final_stars: number; final_coins: number } }
+    | { GameInitialized: { player_count: number; board_size: number; random_seed: number } }
     | { PlayerRegistered: { name: string; player_id: string } }
-    | "GameStarted";
+    | { GameStarted: null };
 
 export type GameStateCommand =
     | {
@@ -106,12 +100,16 @@ export type GameStateEvent =
       };
 
 export interface GameState {
-    id: string;
     players: Player[];
     current_turn: number;
     board: Board;
     phase: GamePhase;
     max_players: number;
+    minigames: string[];
+    dice: { min: number; max: number; seed: number };
+    backend_identity: string;
+    last_interaction_time: bigint;
+    lane_id: string;
 }
 
 export const gameState = reactive({
@@ -302,34 +300,34 @@ export function playerAvatar(id: string): string {
 export const DEFAULT_PLAYERS: Player[] = [
     {
         id: "1",
-        public_key: "sample_key_1",
         name: "Mario",
         coins: 87,
         position: 23,
         stars: 1,
+        used_uuids: [],
     },
     {
         id: "2",
-        public_key: "sample_key_2",
         name: "Luigi",
         coins: 64,
         position: 18,
         stars: 2,
+        used_uuids: [],
     },
     {
         id: "3",
-        public_key: "sample_key_3",
         name: "Peach",
         coins: 103,
         position: 27,
         stars: 3,
+        used_uuids: [],
     },
     {
         id: "4",
-        public_key: "sample_key_4",
         name: "Toad",
         coins: 52,
         position: 15,
         stars: 0,
+        used_uuids: [],
     },
 ];

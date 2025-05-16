@@ -120,7 +120,7 @@ const reset = async () => {
             </div>
 
             <div v-else class="space-y-6">
-                <div v-if="!hasJoined" class="space-y-4">
+                <div v-if="!hasJoined && slotsRemaining > 0" class="space-y-4">
                     <div class="space-y-2">
                         <label class="block text-[#FFC636]">Your Name</label>
                         <input
@@ -136,13 +136,6 @@ const reset = async () => {
                         class="w-full py-3 rounded-lg bg-[#FFC636] text-[#1A0C3B] font-bold hover:bg-[#FFD666] transition-colors disabled:opacity-50"
                     >
                         Join Game
-                    </button>
-                    <button
-                        @click="reset"
-                        :disabled="!playerName"
-                        class="w-full py-3 rounded-lg bg-[#36C6FF] text-[#1A0C3B] font-bold hover:bg-[#D666FF] transition-colors disabled:opacity-50"
-                    >
-                        Start a new game
                     </button>
                 </div>
 
@@ -166,6 +159,14 @@ const reset = async () => {
                         class="w-full py-3 rounded-lg bg-[#FFC636] text-[#1A0C3B] font-bold hover:bg-[#FFD666] transition-colors disabled:opacity-50"
                     >
                         {{ canStartGame ? "Start Game!" : "Waiting for players..." }}
+                    </button>
+                    <button
+                        v-else
+                        @click="reset"
+                        :disabled="!playerName"
+                        class="w-full py-3 rounded-lg bg-[#36C6FF] text-[#1A0C3B] font-bold hover:bg-[#D666FF] transition-colors disabled:opacity-50"
+                    >
+                        Start a new game
                     </button>
                 </div>
             </div>

@@ -3,14 +3,19 @@ use std::sync::Arc;
 use anyhow::Result;
 use client_sdk::rest_client::NodeApiHttpClient;
 use hyle_modules::{
-    bus::SharedMessageBus, module_bus_client, module_handle_messages, modules::Module,
+    bus::BusClientSender, bus::SharedMessageBus, module_bus_client, module_handle_messages,
+    modules::Module,
 };
 use sdk::BlobTransaction;
 use tracing::{error, info};
 
+#[derive(Debug, Clone)]
+pub struct ConfirmedBlobTransaction(pub BlobTransaction);
+
 module_bus_client! {
 #[derive(Debug)]
 pub struct FakeLaneManagerBusClient {
+    sender(ConfirmedBlobTransaction),
     receiver(BlobTransaction),
 }
 }
@@ -59,6 +64,7 @@ impl FakeLaneManager {
             "Transaction successfully sent to the blockchain. Hash: {}",
             tx_hash
         );
+        self.bus.send(ConfirmedBlobTransaction(tx))?;
         Ok(())
     }
 }

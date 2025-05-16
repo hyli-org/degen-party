@@ -9,7 +9,7 @@ use hyle_modules::modules::{
 };
 use sdk::{utils::as_hyle_output, BlockHeight, ZkContract};
 
-#[derive(Default, Debug, BorshSerialize, BorshDeserialize, Clone)]
+#[derive(Debug, BorshSerialize, BorshDeserialize, Clone)]
 pub struct BoardGameExecutor {
     state: board_game::game::GameState,
 }
@@ -31,7 +31,7 @@ impl TxExecutorHandler for BoardGameExecutor {
     }
 }
 
-#[derive(Default, Debug, BorshSerialize, BorshDeserialize, Clone)]
+#[derive(Debug, BorshSerialize, BorshDeserialize, Clone)]
 pub struct CrashGameExecutor {
     state: crash_game::GameState,
 }
