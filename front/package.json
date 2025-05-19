@@ -17,7 +17,7 @@
         "crypto-js": "^4.2.0",
         "elliptic": "^6.6.1",
         "gsap": "^3.13.0",
-        "hyli-testnet-chat": "^0.1.0",
+        "hyli-testnet-chat": "^0.1.1",
         "three": "^0.174.0",
         "uuid": "^11.1.0",
         "vue": "^3.5.14",

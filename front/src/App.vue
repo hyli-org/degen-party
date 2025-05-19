@@ -20,6 +20,8 @@ const toggleChat = () => {
     showChat.value = !showChat.value;
 };
 const nodeUrl = window.location.hostname === "localhost" ? "http://localhost:4321" : "https://node.testnet.hyli.org";
+const indexerUrl =
+    window.location.hostname === "localhost" ? "http://localhost:4321" : "https://indexer.testnet.hyli.org";
 
 const players = computed(() => {
     if (!gameState?.game?.players?.length) return DEFAULT_PLAYERS;
@@ -113,6 +115,7 @@ const connectionStatusColor = computed(() => {
             :nickname="getLocalPlayerId()"
             :processBlobTx="addIdentityToMessage"
             :node_url="nodeUrl"
+            :indexer_url="indexerUrl"
         ></testnet-chat>
 
         <Lobby v-if="gameState.isInLobby" />
