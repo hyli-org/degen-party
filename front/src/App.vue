@@ -11,7 +11,7 @@ import { ref, computed } from "vue";
 import Lobby from "./components/Lobby.vue";
 import { wsState } from "./utils/shared-websocket";
 
-import { TestnetChatElement } from "hyle-testnet-chat";
+import { TestnetChatElement } from "hyli-testnet-chat";
 import { addIdentityToMessage } from "./game_data/auth";
 customElements.define("testnet-chat", TestnetChatElement);
 
