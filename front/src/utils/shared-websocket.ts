@@ -58,7 +58,6 @@ class SharedWebSocketService {
         const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
         const port = window.location.hostname === "localhost" ? ":8082" : "";
         const wsUrl = `${protocol}//${window.location.hostname}${port}/ws`;
-        //const wsUrl = `${protocol}//192.168.23.151${port}/ws`;
 
         console.log("Connecting to WebSocket:", wsUrl);
 
@@ -149,7 +148,7 @@ class SharedWebSocketService {
             };
 
             if (this.ws?.readyState === WebSocket.OPEN) {
-                this.ws.send(JSON.stringify({Message: authenticatedMessage}));
+                this.ws.send(JSON.stringify({ Message: authenticatedMessage }));
             } else {
                 throw new Error("WebSocket is not connected");
             }
