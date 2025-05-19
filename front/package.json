@@ -9,27 +9,29 @@
         "preview": "vite preview"
     },
     "dependencies": {
-        "@tailwindcss/vite": "^4.0.17",
+        "@tailwindcss/vite": "^4.1.7",
         "@types/three": "^0.174.0",
         "@types/uuid": "^10.0.0",
-        "@vueuse/core": "^13.0.0",
+        "@vueuse/core": "^13.2.0",
+        "borsher": "^4.0.0",
         "crypto-js": "^4.2.0",
         "elliptic": "^6.6.1",
-        "gsap": "^3.12.7",
+        "gsap": "^3.13.0",
+        "hyli-testnet-chat": "^0.1.0",
         "three": "^0.174.0",
         "uuid": "^11.1.0",
-        "vue": "^3.5.13",
-        "vue-router": "^4.5.0"
+        "vue": "^3.5.14",
+        "vue-router": "^4.5.1"
     },
     "devDependencies": {
-        "@vitejs/plugin-vue": "^5.2.3",
+        "@vitejs/plugin-vue": "^5.2.4",
         "@vue/tsconfig": "^0.7.0",
         "autoprefixer": "^10.4.21",
         "postcss": "^8.5.3",
         "prettier": "3.5.3",
-        "tailwindcss": "^4.0.17",
+        "tailwindcss": "^4.1.7",
         "typescript": "~5.7.3",
-        "vite": "^6.2.3",
-        "vue-tsc": "^2.2.8"
+        "vite": "^6.3.5",
+        "vue-tsc": "^2.2.10"
     }
 }

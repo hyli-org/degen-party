@@ -1,9 +1,24 @@
 <script setup lang="ts">
-import { isCurrentPlayer, gameState, DEFAULT_PLAYERS, playerColor, playerAvatar } from "./game_data/game_data";
+import {
+    isCurrentPlayer,
+    gameState,
+    DEFAULT_PLAYERS,
+    playerColor,
+    playerAvatar,
+    getLocalPlayerId,
+} from "./game_data/game_data";
 import { ref, computed } from "vue";
 import Lobby from "./components/Lobby.vue";
-import { boardGameService } from "./game_data/game_data";
 import { wsState } from "./utils/shared-websocket";
+
+import { TestnetChatElement } from "hyle-testnet-chat";
+import { addIdentityToMessage } from "./game_data/auth";
+customElements.define("testnet-chat", TestnetChatElement);
+
+const showChat = ref(false);
+const toggleChat = () => {
+    showChat.value = !showChat.value;
+};
 
 const players = computed(() => {
     if (!gameState?.game?.players?.length) return DEFAULT_PLAYERS;
@@ -48,8 +63,15 @@ const connectionStatusColor = computed(() => {
             </div>
 
             <div class="flex items-center gap-4">
+                <button
+                    @click="toggleChat"
+                    class="px-4 py-2 rounded-full border-3 border-white bg-black/20 font-bold text-white hover:bg-black/30 transition-colors"
+                >
+                    <span v-if="showChat">Hide Chat</span>
+                    <span v-else>Show Chat</span>
+                </button>
                 <div
-                    class="connection-status flex items-center gap-2 px-3 py-1.5 rounded-full border-3 border-white bg-black/20"
+                    class="connection-status flex items-center gap-2 px-4 py-2 rounded-full border-3 border-white bg-black/20"
                 >
                     <div class="flex items-center gap-2">
                         <div class="h-3 w-3 rounded-full animate-pulse" :class="connectionStatusColor"></div>
@@ -83,6 +105,13 @@ const connectionStatusColor = computed(() => {
                 </template>
             </div>
         </header>
+
+        <testnet-chat
+            v-if="showChat"
+            class="fixed top-[5rem] right-0 bg-white rounded-[20px]"
+            :nickname="getLocalPlayerId()"
+            :processBlobTx="addIdentityToMessage"
+        ></testnet-chat>
 
         <Lobby v-if="gameState.isInLobby" />
         <main v-else class="relative z-1 mx-auto flex w-full max-w-[1400px] flex-1 flex-col overflow-y-auto p-4">
