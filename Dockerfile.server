@@ -4,8 +4,9 @@ FROM $DEP_IMAGE AS builder
 
 RUN apt-get update && apt-get -y install curl g++ git
 
-RUN curl -L https://sp1up.succinct.xyz | bash
-RUN /root/.sp1/bin/sp1up
+RUN if ! /root/.sp1/bin/cargo-prove prove -V 2>/dev/null; then \
+    curl -L https://sp1up.succinct.xyz | bash && /root/.sp1/bin/sp1up; \
+fi
 
 # Build application
 COPY Cargo.toml Cargo.lock ./
