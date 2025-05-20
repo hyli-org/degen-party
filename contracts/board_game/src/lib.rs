@@ -1,7 +1,7 @@
 pub mod game;
 
 use borsh::{BorshDeserialize, BorshSerialize};
-use game::{GameAction, GameState};
+use game::{GameAction, GamePhase, GameState};
 use sdk::{
     secp256k1, utils::parse_calldata, Blob, BlobData, BlobIndex, Calldata, ContractAction,
     ContractName, LaneId, RunResult, StateCommitment, StructuredBlobData, ZkContract,
@@ -35,29 +35,26 @@ impl ZkContract for GameState {
         let (action, exec_ctx) =
             parse_calldata::<GameActionBlob>(contract_input).map_err(|e| e.to_string())?;
 
-        // For EndMinigame actions, verify the caller matches the minigame contract
-        if let GameAction::EndMinigame { result } = &action.1 {
+        // For Minigame actions, verify the caller matches the minigame contract
+        // The data is validated when processing the action, and is only repeated here
+        // so the minigame can use that as a source of truth for composition.
+        if let GameAction::StartMinigame { .. } = &action.1 {
+            if let GamePhase::StartMinigame(minigame) = &self.phase {
+                // Verify that the caller matches the minigame contract name
+                if exec_ctx.caller.0 != minigame.0 {
+                    return Err("Invalid caller for StartMinigame action".into());
+                }
+            } else if let GamePhase::FinalMinigame(minigame) = &self.phase {
+                if exec_ctx.caller.0 != minigame.0 {
+                    return Err("Invalid caller for FinalMinigame action".into());
+                }
+            } else {
+                return Err("Invalid phase for StartMinigame action".into());
+            }
+        } else if let GameAction::EndMinigame { result } = &action.1 {
             // Verify that the caller matches the minigame contract name
             if exec_ctx.caller.0 != result.contract_name.0 {
                 return Err("Invalid caller for EndMinigame action".into());
-            }
-        } else if let GameAction::StartMinigame = &action.1 {
-            // Check that we're calling the minigame with an approriate blob
-            let game::GamePhase::MinigameStart(contract_name) = &self.phase else {
-                return Err("Invalid game phase for StartMinigame action".into());
-            };
-            // Check that one of the other blobs is for the minigame, but this doesn't really do much TBH.
-            if contract_input
-                .blobs
-                .iter()
-                .all(|(_, blob)| blob.contract_name != *contract_name)
-            {
-                return Err("Invalid contract name for StartMinigame action".into());
-            }
-        } else if let GameAction::RegisterPlayer { identity, .. } = &action.1 {
-            // Check we are this pubkey
-            if &contract_input.identity != identity {
-                return Err("Invalid public key for RegisterPlayer action".into());
             }
         }
 
@@ -68,9 +65,10 @@ impl ZkContract for GameState {
             GameAction::Initialize { .. } => "Initialize",
             GameAction::StartGame => "StartGame",
             GameAction::RegisterPlayer { .. } => "RegisterPlayer",
-            GameAction::RollDice => "RollDice",
+            GameAction::PlaceBet { .. } => "PlaceBet",
+            GameAction::SpinWheel => "SpinWheel",
             GameAction::EndTurn => "EndTurn",
-            GameAction::StartMinigame => "StartMinigame",
+            GameAction::StartMinigame { .. } => "StartMinigame",
             GameAction::EndMinigame { .. } => "EndMinigame",
         };
 

@@ -8,13 +8,22 @@ import {
     getLocalPlayerId,
 } from "./game_data/game_data";
 import { ref, computed } from "vue";
+import { useRoute } from "vue-router";
 import Lobby from "./components/Lobby.vue";
 import { wsState } from "./utils/shared-websocket";
 
 import { addIdentityToMessage } from "./game_data/auth";
 import * as HyliWallet from "hyli-wallet";
 import { TestnetChatElement } from "hyli-testnet-chat";
+import { watchEffect } from "vue";
 customElements.define("testnet-chat", TestnetChatElement);
+
+const route = useRoute();
+const routeFullPath = ref(route.fullPath);
+watchEffect(() => {
+    console.log("Route changed:", route.fullPath);
+    routeFullPath.value = route.fullPath;
+});
 
 const showChat = ref(false);
 const toggleChat = () => {
@@ -120,7 +129,9 @@ const connectionStatusColor = computed(() => {
             :indexer_url="indexerUrl"
         ></testnet-chat>
 
-        <Lobby v-if="gameState.isInLobby" />
+        <RouterView :key="routeFullPath" />
+
+        <!--
         <main v-else class="relative z-1 mx-auto flex w-full max-w-[1400px] flex-1 flex-col overflow-y-auto p-4">
             <div class="flex gap-4">
                 <div
@@ -190,6 +201,7 @@ const connectionStatusColor = computed(() => {
                 </div>
             </div>
         </main>
+        -->
     </div>
 </template>
 

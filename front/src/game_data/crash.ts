@@ -15,10 +15,6 @@ export type CrashGameCommand =
           payload: { players: Array<[string, string]> };
       }
     | {
-          type: "PlaceBet";
-          payload: { player_id: string; amount: number };
-      }
-    | {
           type: "CashOut";
           payload: { player_id: string };
       }
@@ -37,9 +33,8 @@ export type CrashGameEvent = {
 };
 
 export interface CrashGameMinigameVerifiableState {
-    state: "PlacingBets" | "Running" | "Crashed";
-    active_bets: Record<string, { amount: number; cashed_out_at?: number | null }>;
-    players: Record<string, { id: string; name: string; coins: number }>;
+    state: "WaitingForStart" | "Running" | "Crashed";
+    players: Record<string, { id: string; name: string; bet: number; cashed_out_at?: number }>;
 }
 
 export interface CrashGameMinigameBackendState {
@@ -73,32 +68,8 @@ class CrashGameService extends BaseWebSocketService {
                 } else {
                     console.log("Crash game state cleared");
                 }
-                for (const chainEvent of event.payload.events) {
-                    if (chainEvent.BetPlaced) {
-                        console.log("Bet placed:", chainEvent.BetPlaced);
-                    }
-                    if (chainEvent.PlayerCashedOut) {
-                        console.log("Player cashed out:", chainEvent.PlayerCashedOut);
-                    }
-                }
             }
         }
-    }
-
-    placeBet(amount: number) {
-        this.send(
-            {
-                type: "CrashGame",
-                payload: {
-                    type: "PlaceBet",
-                    payload: {
-                        player_id: getLocalPlayerId(),
-                        amount,
-                    },
-                },
-            },
-            "PlaceBet",
-        );
     }
 
     cashOut() {

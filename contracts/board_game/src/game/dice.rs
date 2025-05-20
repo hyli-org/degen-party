@@ -26,4 +26,16 @@ impl Dice {
         let range = (self.max - self.min + 1) as u64;
         self.min + ((self.seed >> 16) % range) as u8
     }
+
+    pub fn shuffle<T>(&mut self, slice: &mut [T]) {
+        let len = slice.len();
+        if len < 2 {
+            return;
+        }
+        for i in (1..len).rev() {
+            // Use dice's RNG to pick a random index
+            let j = (self.roll() as usize) % (i + 1);
+            slice.swap(i, j);
+        }
+    }
 }

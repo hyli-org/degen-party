@@ -10,7 +10,6 @@ export interface MinigameResult {
 export interface PlayerMinigameResult {
     player_id: string;
     coins_delta: number;
-    stars_delta: number;
 }
 
 export interface CrashGameChainEvent {
@@ -19,45 +18,39 @@ export interface CrashGameChainEvent {
     };
 }
 
-export type Space = "Blue" | "Red" | "Event" | "MinigameSpace" | "Star" | "Finish";
-
-export interface Board {
-    spaces: Space[];
-    size: number;
-}
-
 export interface Player {
     id: string;
     name: string;
     position: number;
     coins: number;
-    stars: number;
     used_uuids: Array<bigint>;
 }
 
 export type GamePhase =
     | "Registration"
-    | "Rolling"
-    | "Moving"
-    | { MinigameStart: string }
-    | { MinigamePlay: string }
-    | "TurnEnd"
+    | "Betting"
+    | "WheelSpin"
+    | { StartMinigame: string }
+    | { InMinigame: string }
+    | "FinalMinigame"
     | "GameOver";
+
+export type MinigameSetup = Array<[string, string, number]>;
 
 export type GameAction =
     | { EndGame: null }
     | {
           Initialize: {
               player_count: number;
-              board_size: number;
               minigames: string[];
               random_seed: number;
           };
       }
-    | { RegisterPlayer: { name: string; identity: string } }
+    | { RegisterPlayer: { name: string } }
     | { StartGame: null }
-    | { RollDice: null }
-    | { StartMinigame: null }
+    | { PlaceBet: { amount: number } }
+    | { SpinWheel: null }
+    | { StartMinigame: { minigame: string; players: MinigameSetup } }
     | { EndMinigame: { result: MinigameResult } }
     | { EndTurn: null };
 
@@ -65,15 +58,16 @@ export type GameEvent =
     | { DiceRolled: { player_id: string; value: number } }
     | { PlayerMoved: { player_id: string; new_position: number } }
     | { CoinsChanged: { player_id: string; amount: number } }
-    | { StarsChanged: { player_id: string; amount: number } }
     | { MinigameReady: { minigame_type: string } }
     | { MinigameStarted: { minigame_type: string } }
     | { MinigameEnded: { result: MinigameResult } }
     | { TurnEnded: { next_player: string } }
-    | { GameEnded: { winner_id: string; final_stars: number; final_coins: number } }
-    | { GameInitialized: { player_count: number; board_size: number; random_seed: number } }
+    | { GameEnded: { winner_id: string; final_coins: number } }
+    | { GameInitialized: { player_count: number; random_seed: number } }
     | { PlayerRegistered: { name: string; player_id: string } }
-    | { GameStarted: null };
+    | { GameStarted: null }
+    | { BetPlaced: { player_id: string; amount: number } }
+    | { WheelSpun: { outcome: number } };
 
 export type GameStateCommand =
     | {
@@ -102,20 +96,23 @@ export type GameStateEvent =
 export interface GameState {
     players: Player[];
     current_turn: number;
-    board: Board;
     phase: GamePhase;
     max_players: number;
     minigames: string[];
     dice: { min: number; max: number; seed: number };
+    round: number;
+    bets: Record<string, number>;
     backend_identity: string;
     last_interaction_time: bigint;
     lane_id: string;
+    all_or_nothing?: boolean;
 }
 
 export const gameState = reactive({
     game: null as GameState | null,
     running_minigame: null as string | null,
     isInLobby: true,
+    isInMinigame: false,
 });
 
 class BoardGameService extends BaseWebSocketService {
@@ -159,7 +156,8 @@ class BoardGameService extends BaseWebSocketService {
                                     type: "SubmitAction",
                                     payload: {
                                         action: {
-                                            StartMinigame: null,
+                                            // Replaced in the backend
+                                            StartMinigame: { minigame: "", players: [] },
                                         },
                                     },
                                 },
@@ -192,7 +190,7 @@ class BoardGameService extends BaseWebSocketService {
         );
     }
 
-    async initGame(config: { playerCount: number; boardSize: number }) {
+    async initGame(config: { playerCount: number }) {
         await this.send(
             {
                 type: "GameState",
@@ -202,7 +200,6 @@ class BoardGameService extends BaseWebSocketService {
                         action: {
                             Initialize: {
                                 player_count: +config.playerCount,
-                                board_size: +config.boardSize,
                                 minigames: [], // will be overwritten by the server
                                 random_seed: 7, // will be overwritten by the server
                             },
@@ -224,7 +221,6 @@ class BoardGameService extends BaseWebSocketService {
                         action: {
                             RegisterPlayer: {
                                 name,
-                                identity: getLocalPlayerId(),
                             },
                         },
                     },
@@ -303,7 +299,6 @@ export const DEFAULT_PLAYERS: Player[] = [
         name: "Mario",
         coins: 87,
         position: 23,
-        stars: 1,
         used_uuids: [],
     },
     {
@@ -311,7 +306,6 @@ export const DEFAULT_PLAYERS: Player[] = [
         name: "Luigi",
         coins: 64,
         position: 18,
-        stars: 2,
         used_uuids: [],
     },
     {
@@ -319,7 +313,6 @@ export const DEFAULT_PLAYERS: Player[] = [
         name: "Peach",
         coins: 103,
         position: 27,
-        stars: 3,
         used_uuids: [],
     },
     {
@@ -327,7 +320,6 @@ export const DEFAULT_PLAYERS: Player[] = [
         name: "Toad",
         coins: 52,
         position: 15,
-        stars: 0,
         used_uuids: [],
     },
 ];

@@ -8,9 +8,6 @@ impl fmt::Display for ChainEvent {
             ChainEvent::MinigameInitialized { player_count } => {
                 write!(f, "Minigame initialized with {} players", player_count)
             }
-            ChainEvent::BetPlaced { player_id, amount } => {
-                write!(f, "Player {} placed bet of {}", player_id, amount)
-            }
             ChainEvent::GameStarted => {
                 write!(f, "Game started")
             }

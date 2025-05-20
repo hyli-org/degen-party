@@ -16,7 +16,7 @@ use hyle_modules::{
         Module,
     },
 };
-use sdk::verifiers::Secp256k1Blob;
+use sdk::{verifiers::Secp256k1Blob, Blob, BlobIndex};
 use sdk::{BlobTransaction, ContractName, Identity};
 use sdk::{ContractAction, StructuredBlobData};
 use secp256k1::Message;
@@ -160,63 +160,67 @@ impl GameStateModule {
         tracing::warn!("Handling action: {:?}", action);
 
         match &action {
-            GameAction::StartMinigame => {
-                let players: Vec<(Identity, String, Option<u64>)> = self
-                    .state
-                    .as_ref()
-                    .context("Game not initialized")?
-                    .players
-                    .iter()
-                    .map(|p| (p.id.clone(), p.name.clone(), Some(p.coins as u64)))
-                    .collect();
-                // TODO: conceptually, we should perhaps skip this one ?
-                blobs.push(GameActionBlob(uuid_128, action.clone()).as_blob(
-                    self.board_game.clone(),
-                    None,
-                    None,
-                ));
-                // TODO: we should make sure that our current state is synchronised
-                if let GamePhase::MinigameStart(minigame_type) =
+            GameAction::EndMinigame { result: _ } => {
+                bail!("EndMinigame cannot be called directly");
+            }
+            GameAction::StartMinigame { .. } => {
+                if let GamePhase::StartMinigame(minigame_type) =
                     &self.state.as_ref().context("Game not initialized")?.phase
                 {
-                    if minigame_type == &self.crash_game {
-                        blobs.push(
-                            ChainActionBlob(
-                                uuid_128,
-                                crash_game::ChainAction::InitMinigame { players },
-                            )
-                            .as_blob(
-                                self.crash_game.clone(),
-                                None,
-                                None,
-                            ),
-                        );
-                    } else {
-                        bail!("Unsupported minigame type: {}", minigame_type);
+                    if minigame_type != &self.crash_game {
+                        bail!("Not the right minigame");
                     }
+                    let Some(state) = &self.state else {
+                        bail!("Game not initialized");
+                    };
+                    tracing::warn!("Starting minigame: {:?}", minigame_type);
+                    // TODO ensure we are synchronized correctly.
+                    blobs.push(
+                        GameActionBlob(
+                            uuid_128,
+                            GameAction::StartMinigame {
+                                minigame: minigame_type.clone(),
+                                players: state.get_minigame_setup(),
+                            },
+                        )
+                        .as_blob(
+                            self.board_game.clone(),
+                            Some(BlobIndex(1)),
+                            None,
+                        ),
+                    );
+                    blobs.push(
+                        ChainActionBlob(
+                            uuid_128,
+                            crash_game::ChainAction::InitMinigame {
+                                players: state.get_minigame_setup(),
+                            },
+                        )
+                        .as_blob(
+                            self.crash_game.clone(),
+                            None,
+                            Some(vec![BlobIndex(0)]),
+                        ),
+                    );
                 } else {
                     bail!("Not ready to start a game");
                 }
             }
-            GameAction::EndMinigame { result: _ } => {}
             GameAction::EndGame => {
-                // Redo the action as the backend for now.
                 let tx = self.create_backend_tx(action.clone())?;
                 self.bus.send(tx)?;
                 return Ok(());
             }
             GameAction::Initialize {
                 player_count,
-                board_size,
-                ..
+                minigames,
+                random_seed,
             } => {
-                // Overwrite some settings
                 blobs.push(
                     GameActionBlob(
                         uuid_128,
                         GameAction::Initialize {
                             player_count: *player_count,
-                            board_size: *board_size,
                             minigames: vec![self.crash_game.clone().0],
                             random_seed: uuid_128 as u64,
                         },
@@ -225,8 +229,6 @@ impl GameStateModule {
                 );
             }
             _ => {
-                // Submit the action as a blob
-                // With a random UUID to avoid hash collisions
                 blobs.push(GameActionBlob(uuid_128, action.clone()).as_blob(
                     self.board_game.clone(),
                     None,
@@ -263,7 +265,6 @@ impl GameStateModule {
             uuid,
             match action {
                 GameAction::EndGame => "EndGame",
-                GameAction::RollDice => "RollDice",
                 _ => unreachable!(),
             }
         )
@@ -293,6 +294,8 @@ impl GameStateModule {
 
     async fn on_tick(&mut self) -> Result<()> {
         if let Some(state) = &self.state {
+            // TODO: when placing bets force inactive players to bet everything
+            /*
             if state.phase == GamePhase::Rolling {
                 let likely_timed_out = SystemTime::now().duration_since(UNIX_EPOCH)?.as_millis()
                     > state.last_interaction_time + 15 * 1000;
@@ -301,6 +304,7 @@ impl GameStateModule {
                     self.bus.send(tx)?;
                 }
             }
+             */
         }
         Ok(())
     }

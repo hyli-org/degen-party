@@ -2,26 +2,29 @@ use anyhow::{anyhow, bail, Result};
 use borsh::{BorshDeserialize, BorshSerialize};
 use sdk::{ContractName, Identity, LaneId, StateCommitment};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
-pub mod board;
 pub mod dice;
 pub mod player;
 pub mod utils;
 
+const ROUNDS: usize = 10;
 #[derive(Debug, Clone, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
 pub struct GameState {
     pub players: Vec<Player>,
     pub current_turn: usize,
-    pub board: Board,
     pub phase: GamePhase,
     pub max_players: usize,
     pub minigames: Vec<ContractName>,
     pub dice: dice::Dice,
+    pub round: usize,
+    pub bets: HashMap<Identity, u64>,
 
     // Metadata to ensure the game runs smoothly
     pub backend_identity: Identity,
     pub last_interaction_time: u128,
     pub lane_id: LaneId,
+    pub all_or_nothing: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
@@ -30,24 +33,7 @@ pub struct Player {
     pub name: String,
     pub position: usize,
     pub coins: i32,
-    pub stars: i32,
     pub used_uuids: Vec<u128>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
-pub struct Board {
-    pub spaces: Vec<Space>,
-    pub size: usize,
-}
-
-#[derive(Debug, Copy, Clone, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
-pub enum Space {
-    Blue,
-    Red,
-    Event,
-    MinigameSpace,
-    Star,
-    Finish,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, BorshSerialize, BorshDeserialize, PartialEq)]
@@ -60,36 +46,41 @@ pub struct MinigameResult {
 pub struct PlayerMinigameResult {
     pub player_id: Identity,
     pub coins_delta: i32,
-    pub stars_delta: i32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, BorshSerialize, BorshDeserialize, PartialEq, Eq)]
 pub enum GamePhase {
     Registration,
-    Rolling,
-    Moving,
-    MinigameStart(ContractName),
-    MinigamePlay(ContractName),
-    TurnEnd,
+    Betting,
+    WheelSpin,
+    StartMinigame(ContractName),
+    InMinigame(ContractName),
+    FinalMinigame(ContractName),
     GameOver,
 }
+
+pub type MinigameSetup = Vec<(Identity, String, u64)>;
 
 #[derive(Debug, Clone, Serialize, Deserialize, BorshSerialize, BorshDeserialize, PartialEq)]
 pub enum GameAction {
     EndGame,
     Initialize {
         player_count: usize,
-        board_size: usize,
         minigames: Vec<String>,
         random_seed: u64,
     },
     RegisterPlayer {
         name: String,
-        identity: Identity,
     },
     StartGame,
-    RollDice,
-    StartMinigame,
+    PlaceBet {
+        amount: u64,
+    },
+    SpinWheel,
+    StartMinigame {
+        minigame: ContractName,
+        players: MinigameSetup,
+    },
     EndMinigame {
         result: MinigameResult,
     },
@@ -110,10 +101,6 @@ pub enum GameEvent {
         player_id: Identity,
         amount: i32,
     },
-    StarsChanged {
-        player_id: Identity,
-        amount: i32,
-    },
     MinigameReady {
         minigame_type: String,
     },
@@ -128,12 +115,10 @@ pub enum GameEvent {
     },
     GameEnded {
         winner_id: Identity,
-        final_stars: i32,
         final_coins: i32,
     },
     GameInitialized {
         player_count: usize,
-        board_size: usize,
         random_seed: u64,
     },
     PlayerRegistered {
@@ -141,6 +126,17 @@ pub enum GameEvent {
         player_id: Identity,
     },
     GameStarted,
+    BetPlaced {
+        player_id: Identity,
+        amount: u64,
+    },
+    WheelSpun {
+        outcome: u8,
+    },
+    PlayersSwappedCoins {
+        swaps: Vec<(Identity, Identity)>,
+    },
+    AllOrNothingActivated,
 }
 
 impl From<StateCommitment> for GameState {
@@ -154,10 +150,6 @@ impl GameState {
         Self {
             players: Vec::new(),
             current_turn: 0,
-            board: Board {
-                spaces: Vec::new(),
-                size: 0,
-            },
             phase: GamePhase::GameOver,
             max_players: 4,
             minigames: Vec::new(),
@@ -166,20 +158,16 @@ impl GameState {
             backend_identity,
             last_interaction_time: 0,
             lane_id: LaneId::default(),
+            round: 0,
+            bets: HashMap::new(),
+            all_or_nothing: false,
         }
     }
 
-    pub fn reset(
-        &mut self,
-        player_count: usize,
-        board_size: usize,
-        minigames: Vec<ContractName>,
-        random_seed: u64,
-    ) {
+    pub fn reset(&mut self, player_count: usize, minigames: Vec<ContractName>, random_seed: u64) {
         *self = Self {
             players: Vec::with_capacity(player_count),
             current_turn: 0,
-            board: Board::new(board_size, random_seed),
             phase: GamePhase::GameOver,
             max_players: player_count,
             minigames,
@@ -188,6 +176,9 @@ impl GameState {
             backend_identity: self.backend_identity.clone(),
             last_interaction_time: self.last_interaction_time,
             lane_id: self.lane_id.clone(),
+            round: self.round,
+            bets: self.bets.clone(),
+            all_or_nothing: false,
         }
     }
 
@@ -209,22 +200,16 @@ impl GameState {
         Ok(())
     }
 
-    // Helper function for updating stars and generating events
-    fn update_player_stars(
-        &mut self,
-        player_index: usize,
-        delta: i32,
-        events: &mut Vec<GameEvent>,
-    ) -> Result<()> {
-        let Some(player) = self.players.get_mut(player_index) else {
-            return Err(anyhow!("Player not found"));
-        };
-        player.stars = (player.stars + delta).max(0);
-        events.push(GameEvent::StarsChanged {
-            player_id: player.id.clone(),
-            amount: delta,
-        });
-        Ok(())
+    pub fn get_minigame_setup(&self) -> MinigameSetup {
+        self.bets
+            .iter()
+            .filter_map(|(id, &bet)| {
+                self.players
+                    .iter()
+                    .find(|p| p.id == *id)
+                    .map(|p| (p.id.clone(), p.name.clone(), bet))
+            })
+            .collect()
     }
 
     // Helper function for handling minigame results
@@ -237,15 +222,11 @@ impl GameState {
         if result.coins_delta != 0 {
             self.update_player_coins(player_index, result.coins_delta, events)?;
         }
-
-        if result.stars_delta != 0 {
-            self.update_player_stars(player_index, result.stars_delta, events)?;
-        }
         Ok(())
     }
 
-    fn get_current_player_index(&self) -> usize {
-        self.current_turn % self.players.len()
+    fn is_registered(&self, caller: &Identity) -> bool {
+        self.players.iter().any(|p| p.id == *caller)
     }
 
     fn get_current_player(&self) -> Result<&Player> {
@@ -254,33 +235,8 @@ impl GameState {
             .ok_or_else(|| anyhow!("Invalid current turn index"))
     }
 
-    fn get_current_player_mut(&mut self) -> Result<&mut Player> {
-        let len = self.players.len();
-        self.players
-            .get_mut(self.current_turn % len)
-            .ok_or_else(|| anyhow!("Invalid current turn index"))
-    }
-
     fn advance_turn(&mut self) {
         self.current_turn += 1;
-    }
-
-    fn determine_winner(&self) -> (Identity, i32, i32) {
-        let winner = self
-            .players
-            .iter()
-            .max_by(|a, b| {
-                // First compare stars
-                let star_cmp = a.stars.cmp(&b.stars);
-                if star_cmp != std::cmp::Ordering::Equal {
-                    return star_cmp;
-                }
-                // If stars are equal, compare coins
-                a.coins.cmp(&b.coins)
-            })
-            .unwrap();
-
-        (winner.id.clone(), winner.stars, winner.coins)
     }
 
     pub fn process_action(
@@ -306,10 +262,9 @@ impl GameState {
                 if is_backend || game_timed_out {
                     events.push(GameEvent::GameEnded {
                         winner_id: Identity::default(),
-                        final_stars: 0,
                         final_coins: 0,
                     });
-                    self.reset(4, 30, self.minigames.clone(), self.dice.seed);
+                    self.reset(4, self.minigames.clone(), self.dice.seed);
                 } else {
                     return Err(anyhow!("Only the backend can end the game"));
                 }
@@ -318,7 +273,6 @@ impl GameState {
                 GamePhase::GameOver,
                 GameAction::Initialize {
                     player_count,
-                    board_size,
                     minigames,
                     random_seed,
                 },
@@ -328,51 +282,43 @@ impl GameState {
                 }
                 self.reset(
                     player_count,
-                    board_size,
                     minigames.into_iter().map(|x| x.into()).collect::<Vec<_>>(),
                     random_seed,
                 );
                 self.phase = GamePhase::Registration;
                 events.push(GameEvent::GameInitialized {
                     player_count,
-                    board_size,
                     random_seed,
                 });
             }
-            // Registration Phase
-            (GamePhase::Registration, GameAction::RegisterPlayer { name, identity }) => {
-                if identity != *caller {
-                    return Err(anyhow!("Invalid player for RegisterPlayer action"));
-                }
 
+            // Registration Phase
+            (GamePhase::Registration, GameAction::RegisterPlayer { name }) => {
                 if self.players.len() >= self.max_players {
                     return Err(anyhow!("Game is full"));
                 }
 
                 // Check if player already exists by public key
-                if self.players.iter().any(|p| p.id == identity) {
-                    return Err(anyhow!(
-                        "Player with public key {} already exists",
-                        identity
-                    ));
+                if self.is_registered(caller) {
+                    return Err(anyhow!("Player with identity {} already exists", caller));
                 }
+
                 // Check if player already exists by name
                 if self.players.iter().any(|p| p.name == name) {
                     return Err(anyhow!("Player with name {} already exists", name));
                 }
 
                 self.players.push(Player {
-                    id: identity.clone(),
+                    id: caller.clone(),
                     name: name.clone(),
                     position: 0,
                     coins: 100,
-                    stars: 0,
                     used_uuids: Vec::new(),
                 });
 
                 events.push(GameEvent::PlayerRegistered {
                     name: name.clone(),
-                    player_id: identity,
+                    player_id: caller.clone(),
                 });
             }
 
@@ -387,124 +333,141 @@ impl GameState {
                     ));
                 }
 
-                self.phase = GamePhase::Rolling;
+                self.phase = GamePhase::Betting;
                 events.push(GameEvent::GameStarted);
             }
 
-            // Rolling Phase
-            (GamePhase::Rolling, GameAction::RollDice) => {
-                let current_player = self.get_current_player()?.clone();
-
-                // 10 seconds to roll the dice or anyone can.
-                let is_timed_out = timestamp - self.last_interaction_time > 10 * 1000;
-                if current_player.id != *caller && !is_timed_out {
-                    return Err(anyhow!("Invalid player for RegisterPlayer action"));
+            // Betting Phase
+            (GamePhase::Betting, GameAction::PlaceBet { amount }) => {
+                if self.bets.contains_key(caller) {
+                    return Err(anyhow!("Player has already placed a bet"));
                 }
-
-                let roll_value = self.dice.roll();
-
-                events.push(GameEvent::DiceRolled {
-                    player_id: current_player.id,
-                    value: roll_value,
-                });
-
-                // Move to movement phase
-                self.phase = GamePhase::Moving;
-
-                // Automatically handle movement
-                let new_position = board::calculate_next_position(
-                    current_player.position,
-                    roll_value as i32,
-                    self.board.size,
-                );
-
-                {
-                    let current_player = self.get_current_player_mut()?;
-                    current_player.position = new_position;
+                let Some(player) = self.players.iter().find(|p| p.id == *caller) else {
+                    return Err(anyhow!("Player {} not found", caller));
+                };
+                if self.all_or_nothing {
+                    if amount != player.coins as u64 {
+                        return Err(anyhow!("All or nothing round: you must bet all your coins"));
+                    }
+                } else if player.coins < amount as i32 {
+                    return Err(anyhow!("Player {} does not have enough coins", caller));
                 }
-                let current_player = self.get_current_player()?.clone();
-
-                events.push(GameEvent::PlayerMoved {
-                    player_id: current_player.id,
-                    new_position,
+                self.bets.insert(caller.clone(), amount);
+                events.push(GameEvent::BetPlaced {
+                    player_id: caller.clone(),
+                    amount,
                 });
+                // TODO timeouts
+                if self.bets.len() == self.players.len() {
+                    if self.round >= ROUNDS {
+                        let Some(final_minigame) = self.minigames.first() else {
+                            return Err(anyhow!("No final minigame available"));
+                        };
+                        self.phase = GamePhase::FinalMinigame(final_minigame.clone());
+                    } else {
+                        self.phase = GamePhase::WheelSpin;
+                    }
+                    self.all_or_nothing = false; // Reset after round
+                } else {
+                    self.phase = GamePhase::Betting;
+                }
+            }
 
-                let space = *self
-                    .board
-                    .spaces
-                    .get(current_player.position)
-                    .ok_or_else(|| anyhow!("Invalid player position"))?;
-
-                let player_index = self.get_current_player_index();
-                match space {
-                    Space::Blue => {
-                        self.update_player_coins(player_index, 3, &mut events)?;
+            // Wheel Spin Phase
+            (GamePhase::WheelSpin, GameAction::SpinWheel) => {
+                // Use dice to determine the wheel outcome
+                let outcome = self.dice.roll() % 6;
+                events.push(GameEvent::WheelSpun { outcome });
+                match outcome {
+                    0 => {
+                        // Nothing happens, go to next round
+                        self.round += 1;
+                        self.bets.clear();
+                        self.phase = GamePhase::Betting;
                     }
-                    Space::Red => {
-                        if current_player.coins >= 3 {
-                            self.update_player_coins(player_index, -3, &mut events)?;
-                        } else {
-                            let current_coins = current_player.coins;
-                            self.update_player_coins(player_index, -current_coins, &mut events)?;
+                    1 => {
+                        // Randomly pay out the bets to players
+                        let bet_entries: Vec<_> =
+                            std::mem::take(&mut self.bets).into_iter().collect();
+                        let mut player_indices: Vec<_> = (0..self.players.len()).collect();
+                        self.dice.shuffle(&mut player_indices);
+                        for (i, (bettor, amount)) in bet_entries.iter().enumerate() {
+                            // Remove bet from bettor
+                            let Some(bettor_idx) =
+                                self.players.iter().position(|p| p.id == *bettor)
+                            else {
+                                return Err(anyhow!("Bettor not found"));
+                            };
+                            self.update_player_coins(bettor_idx, -(*amount as i32), &mut events)?;
+                            // Pay out to a random player
+                            let winner_idx = player_indices[i % player_indices.len()];
+                            self.update_player_coins(winner_idx, *amount as i32, &mut events)?;
                         }
+                        self.round += 1;
+                        self.bets.clear();
+                        self.phase = GamePhase::Betting;
                     }
-                    Space::Star => {
-                        if current_player.coins >= 20 {
-                            self.update_player_coins(player_index, -20, &mut events)?;
-                            self.update_player_stars(player_index, 1, &mut events)?;
-                        }
+                    2 => {
+                        // All or nothing: players must bet all their coins next round
+                        self.all_or_nothing = true;
+                        events.push(GameEvent::AllOrNothingActivated);
+                        self.round += 1;
+                        self.bets.clear();
+                        self.phase = GamePhase::Betting;
                     }
-                    Space::MinigameSpace => {
+                    _ => {
+                        // Minigame: emit MinigameReady and transition to InMinigame for StartMinigame
                         if let Some(minigame_type) = self.minigames.first() {
-                            self.phase = GamePhase::MinigameStart(minigame_type.clone());
                             events.push(GameEvent::MinigameReady {
-                                minigame_type: minigame_type.clone().0,
+                                minigame_type: minigame_type.0.clone(),
                             });
-                            return Ok(events);
+                            self.phase = GamePhase::StartMinigame(minigame_type.clone());
                         } else {
-                            return Err(anyhow!("No minigames available"));
+                            // TODO: should be impossible
+                            return Err(anyhow!("No minigame available"));
                         }
                     }
-                    Space::Event => {
-                        // For now, events just give or take a random amount of coins (-5 to +5)
-                        let roll = self.dice.roll() as i32;
-                        let coin_change = if roll % 2 == 0 { roll } else { -roll };
-                        self.update_player_coins(player_index, coin_change, &mut events)?;
-                    }
-                    Space::Finish => {
-                        // Game is over, determine the winner
-                        let (winner_id, final_stars, final_coins) = self.determine_winner();
-                        events.push(GameEvent::GameEnded {
-                            winner_id,
-                            final_stars,
-                            final_coins,
-                        });
-                        self.phase = GamePhase::GameOver;
-                        return Ok(events);
-                    }
-                }
-
-                if self.phase != GamePhase::GameOver {
-                    self.phase = GamePhase::TurnEnd;
-                    self.end_turn(&mut events);
                 }
             }
 
-            // Minigame Setup Phase
-            (GamePhase::MinigameStart(minigame_type), GameAction::StartMinigame) => {
+            (
+                GamePhase::StartMinigame(expected_minigame),
+                GameAction::StartMinigame { minigame, players },
+            ) => {
+                // Check the starting state is valid.
+                if expected_minigame != minigame {
+                    return Err(anyhow!("Minigame mismatch"));
+                }
+                let minigame_players = self.get_minigame_setup();
+                if minigame_players != players {
+                    return Err(anyhow!("Minigame players mismatch"));
+                }
                 events.push(GameEvent::MinigameStarted {
-                    minigame_type: minigame_type.0.clone(),
+                    minigame_type: minigame.0.clone(),
                 });
-                self.phase = GamePhase::MinigamePlay(minigame_type.clone());
+                self.phase = GamePhase::InMinigame(minigame);
             }
 
-            // Minigame End Phase
-            (GamePhase::MinigamePlay(minigame_type), GameAction::EndMinigame { result }) => {
-                // Verify the minigame contract is valid
-                if minigame_type != result.contract_name {
-                    return Err(anyhow!("Invalid minigame contract"));
+            (
+                GamePhase::FinalMinigame(final_minigame),
+                GameAction::StartMinigame { minigame, players },
+            ) => {
+                // Check the starting state is valid.
+                if minigame == final_minigame {
+                    return Err(anyhow!("Minigame mismatch"));
                 }
+                let minigame_players = self.get_minigame_setup();
+                if minigame_players != players {
+                    return Err(anyhow!("Minigame players mismatch"));
+                }
+                events.push(GameEvent::MinigameStarted {
+                    minigame_type: minigame.0.clone(),
+                });
+                self.phase = GamePhase::InMinigame(minigame);
+            }
 
+            // InMinigame Phase
+            (GamePhase::InMinigame(_), GameAction::EndMinigame { result }) => {
                 // Apply results for each player
                 for player_result in &result.player_results {
                     self.apply_minigame_result(
@@ -519,13 +482,23 @@ impl GameState {
 
                 events.push(GameEvent::MinigameEnded { result });
 
-                self.phase = GamePhase::TurnEnd;
-                self.end_turn(&mut events);
-            }
-
-            // Turn End Phase
-            (GamePhase::TurnEnd, GameAction::EndTurn) => {
-                self.end_turn(&mut events);
+                // End the game if the round limit is reached
+                if self.round >= ROUNDS {
+                    let winner = self
+                        .players
+                        .iter()
+                        .max_by_key(|p| p.coins)
+                        .ok_or_else(|| anyhow!("No players found"))?;
+                    events.push(GameEvent::GameEnded {
+                        winner_id: winner.id.clone(),
+                        final_coins: winner.coins,
+                    });
+                    self.phase = GamePhase::GameOver;
+                } else {
+                    self.round += 1;
+                    self.bets.clear();
+                    self.phase = GamePhase::Betting;
+                }
             }
 
             // Invalid phase/action combinations
@@ -544,6 +517,6 @@ impl GameState {
         events.push(GameEvent::TurnEnded {
             next_player: next_player_id,
         });
-        self.phase = GamePhase::Rolling;
+        self.phase = GamePhase::Betting;
     }
 }

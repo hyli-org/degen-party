@@ -169,6 +169,7 @@ impl EnsureRegistration {
             state_commitment,
             contract_name: contract_name.clone(),
             timeout_window: Some(100),
+            constructor_metadata: None, // TODO: fix this for CSI
         };
         #[cfg(not(feature = "fake_proofs"))]
         let register_tx = APIRegisterContract {
@@ -177,6 +178,7 @@ impl EnsureRegistration {
             state_commitment,
             contract_name: contract_name.clone(),
             timeout_window: Some(100),
+            constructor_metadata: None, // TODO: fix this for CSI
         };
         let res = self.hyle_client.register_contract(&register_tx).await?;
 

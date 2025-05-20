@@ -4,7 +4,6 @@ import { boardGameService, gameState } from "../game_data/game_data";
 
 const playerName = ref("Player");
 const playerCount = ref(4);
-const boardSize = ref(30);
 const hasJoined = ref(false);
 
 const canStartGame = computed(() => {
@@ -33,7 +32,6 @@ const initAndJoinGame = async () => {
     // Create the game.
     await boardGameService.initGame({
         playerCount: playerCount.value,
-        boardSize: boardSize.value,
     });
 
     // Wait a bit for game to be created
@@ -96,18 +94,6 @@ const reset = async () => {
                         <option value="2">2 Players</option>
                         <option value="3">3 Players</option>
                         <option value="4">4 Players</option>
-                    </select>
-                </div>
-
-                <div class="space-y-2">
-                    <label class="block text-[#FFC636]">Board Size</label>
-                    <select
-                        v-model="boardSize"
-                        class="w-full px-4 py-2 rounded-lg bg-[#1A0C3B] border-2 border-[#FFC636] text-white"
-                    >
-                        <option value="20">Small (20 spaces)</option>
-                        <option value="30">Medium (30 spaces)</option>
-                        <option value="40">Large (40 spaces)</option>
                     </select>
                 </div>
 

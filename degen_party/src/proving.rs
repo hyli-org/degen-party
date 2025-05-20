@@ -7,7 +7,7 @@ use hyle_modules::modules::{
     prover::{AutoProver, AutoProverCtx},
     ModulesHandler,
 };
-use sdk::{utils::as_hyle_output, BlockHeight, ZkContract};
+use sdk::{utils::as_hyle_output, BlockHeight, RegisterContractEffect, ZkContract};
 
 #[derive(Debug, BorshSerialize, BorshDeserialize, Clone)]
 pub struct BoardGameExecutor {
@@ -15,7 +15,7 @@ pub struct BoardGameExecutor {
 }
 
 impl TxExecutorHandler for BoardGameExecutor {
-    fn handle(&mut self, calldata: &sdk::Calldata) -> Result<sdk::HyleOutput, String> {
+    fn handle(&mut self, calldata: &sdk::Calldata) -> Result<sdk::HyleOutput> {
         let initial_state_commitment = self.state.commit();
         let mut res = self.state.execute(calldata);
         Ok(as_hyle_output(
@@ -26,8 +26,21 @@ impl TxExecutorHandler for BoardGameExecutor {
         ))
     }
 
-    fn build_commitment_metadata(&self, _blob: &sdk::Blob) -> Result<Vec<u8>, String> {
+    fn build_commitment_metadata(&self, _blob: &sdk::Blob) -> Result<Vec<u8>> {
         Ok(self.state.commit().0)
+    }
+
+    fn construct_state(
+        _register_blob: &RegisterContractEffect,
+        metadata: &Option<Vec<u8>>,
+    ) -> anyhow::Result<Self> {
+        if let Some(metadata) = metadata {
+            Ok(Self {
+                state: board_game::game::GameState::new(borsh::from_slice(metadata)?),
+            })
+        } else {
+            anyhow::bail!("No metadata provided");
+        }
     }
 }
 
@@ -37,7 +50,7 @@ pub struct CrashGameExecutor {
 }
 
 impl TxExecutorHandler for CrashGameExecutor {
-    fn handle(&mut self, calldata: &sdk::Calldata) -> Result<sdk::HyleOutput, String> {
+    fn handle(&mut self, calldata: &sdk::Calldata) -> Result<sdk::HyleOutput> {
         let initial_state_commitment = self.state.commit();
         let mut res = self.state.execute(calldata);
         Ok(as_hyle_output(
@@ -48,8 +61,22 @@ impl TxExecutorHandler for CrashGameExecutor {
         ))
     }
 
-    fn build_commitment_metadata(&self, _blob: &sdk::Blob) -> Result<Vec<u8>, String> {
+    fn build_commitment_metadata(&self, _blob: &sdk::Blob) -> Result<Vec<u8>> {
         Ok(self.state.commit().0)
+    }
+
+    fn construct_state(
+        _register_blob: &RegisterContractEffect,
+        metadata: &Option<Vec<u8>>,
+    ) -> anyhow::Result<Self> {
+        if let Some(metadata) = metadata {
+            let (board_contract, backend_identity) = borsh::from_slice(metadata)?;
+            Ok(Self {
+                state: crash_game::GameState::new(board_contract, backend_identity),
+            })
+        } else {
+            anyhow::bail!("No metadata provided");
+        }
     }
 }
 

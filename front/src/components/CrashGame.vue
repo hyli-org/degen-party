@@ -2,101 +2,67 @@
     <div class="crash-game">
         <div class="game-title">CRASH GAME</div>
 
-        <div class="game-container card relative">
-            <canvas ref="gameCanvas" class="game-canvas"></canvas>
+        <div class="flex gap-8">
+            <div class="game-container card relative">
+                <canvas ref="gameCanvas" class="game-canvas"></canvas>
 
-            <div v-if="gameEnded" class="game-over">
-                <div class="crash-title">CRASHED AT</div>
-                <div class="crash-value">{{ currentMultiplier.toFixed(2) }}x</div>
-                <div class="crash-face">💥</div>
-            </div>
-
-            <div v-else-if="!gameStarted" class="game-waiting">
-                <div class="waiting-text">GAME STARTING SOON!</div>
-                <div class="players-bet">Players Ready: {{ playersWhoBet }}</div>
-                <div>{{ Math.round(timeLeftForBets / 100) / 10 }} seconds left to place your bet!</div>
-            </div>
-
-            <div v-else-if="gameStarted" class="current-multiplier">
-                <div class="multiplier-value">
-                    {{ currentMultiplier.toFixed(2) }}<span class="multiplier-x">x</span>
+                <div v-if="gameEnded" class="game-over">
+                    <div class="crash-title">CRASHED AT</div>
+                    <div class="crash-value">{{ currentMultiplier.toFixed(2) }}x</div>
+                    <div class="crash-face">💥</div>
                 </div>
-                <div class="current-payout">Current Payout</div>
-                <div v-if="betAmount > 0" class="profit-display">
-                    +{{ (betAmount * currentMultiplier - betAmount).toFixed(2) }} coins!
-                </div>
-            </div>
 
-            <div v-if="hasPlayerCashedOut" class="cashed-out-overlay">
-                <div class="cashout-content">
-                    <div class="cashout-multiplier">CASHED OUT AT {{ playerCashedOutAt.toFixed(2) }}x</div>
-                    <div class="cashout-profit">
-                        <span class="profit-label">PROFIT:</span>
-                        <span class="profit-amount">
-                            🪙
-                            {{ Math.floor(betAmount * playerCashedOutAt - betAmount) }}
-                        </span>
+                <div v-else-if="!gameStarted" class="game-waiting">
+                    <div class="waiting-text">GAME STARTING SOON!</div>
+                    <div class="players-bet">
+                        Game starting in {{ Math.round(timeLeftForBets / 100) / 10 }} seconds !
                     </div>
                 </div>
+
+                <div v-else-if="gameStarted" class="current-multiplier">
+                    <div class="multiplier-value">
+                        {{ currentMultiplier.toFixed(2) }}<span class="multiplier-x">x</span>
+                    </div>
+                    <div class="current-payout">Current Payout</div>
+                    <div v-if="betAmount > 0" class="profit-display">
+                        +{{ (betAmount * currentMultiplier - betAmount).toFixed(2) }} coins!
+                    </div>
+                </div>
+
+                <div v-if="hasPlayerCashedOut" class="cashed-out-overlay">
+                    <div class="cashout-content">
+                        <div class="cashout-multiplier">CASHED OUT AT {{ playerCashedOutAt.toFixed(2) }}x</div>
+                        <div class="cashout-profit">
+                            <span class="profit-label">PROFIT:</span>
+                            <span class="profit-amount">
+                                🪙
+                                {{ Math.floor(betAmount * playerCashedOutAt - betAmount) }}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                <div v-if="gameStarted || gameEnded" class="current-time">
+                    <span class="time-label">TIME:</span> {{ calculateGameTime.toFixed(1) }}s
+                </div>
             </div>
 
-            <div v-if="gameStarted || gameEnded" class="current-time">
-                <span class="time-label">TIME:</span> {{ calculateGameTime.toFixed(1) }}s
+            <div class="w-[300px] game-controls card h-full">
+                <div class="controls-wrapper flex flex-col items-center justify-center h-full">
+                    <button
+                        v-if="!gameEnded"
+                        :disabled="!gameStarted || hasPlayerCashedOut"
+                        class="action-button cashout-action"
+                        @click="handleActionButton"
+                    >
+                        <span class="btn-text"> 🚀 CASH OUT! </span>
+                    </button>
+                    <button v-else-if="gameEnded" class="action-button next-action" @click="handleActionButton">
+                        <span class="btn-text"> <span class="btn-icon">🎮</span> BACK TO BOARD </span>
+                    </button>
+                </div>
             </div>
         </div>
-
-        <div class="game-controls card">
-            <div class="controls-wrapper">
-                <div class="bet-controls">
-                    <div class="bet-label">COINS TO WAGER</div>
-                    <div class="bet-input-wrapper">
-                        <div class="currency-symbol">🪙</div>
-                        <input
-                            type="number"
-                            v-model="betAmount"
-                            :disabled="gameStarted || !canPlaceBet"
-                            min="1"
-                            class="bet-input"
-                            style="padding-right: 40px"
-                        />
-                    </div>
-                    <div class="bet-quick-amounts">
-                        <button class="quick-amount" @click="betAmount = 5">
-                            5 <span class="points-text">COINS</span>
-                        </button>
-                        <button class="quick-amount" @click="betAmount = 10">
-                            10 <span class="points-text">COINS</span>
-                        </button>
-                        <button class="quick-amount" @click="betAmount = 25">
-                            25 <span class="points-text">COINS</span>
-                        </button>
-                        <button class="quick-amount" @click="betAmount = 50">
-                            50 <span class="points-text">COINS</span>
-                        </button>
-                    </div>
-                </div>
-
-                <button
-                    v-if="!gameStarted && !gameEnded"
-                    class="action-button bet-action"
-                    @click="handleActionButton"
-                    :disabled="!canPlaceBet"
-                >
-                    <span class="btn-text"> <span class="btn-icon">🎲</span> PLACE BETS! </span>
-                </button>
-                <button
-                    v-else-if="gameStarted && !hasPlayerCashedOut && !gameEnded"
-                    class="action-button cashout-action"
-                    @click="handleActionButton"
-                >
-                    <span class="btn-text"> <span class="btn-icon">🚀</span> BLAST OFF! </span>
-                </button>
-                <button v-else class="action-button next-action" @click="handleActionButton">
-                    <span class="btn-text"> <span class="btn-icon">🎮</span> BACK TO BOARD </span>
-                </button>
-            </div>
-        </div>
-
         <ConfettiEffect :active="showConfetti" :duration="3000" />
 
         <div v-if="showFinalResults" class="final-results-modal">
@@ -147,12 +113,11 @@ const calculateGameTime = computed(
 );
 
 const handleActionButton = () => {
-    if (!gameStarted.value) {
-        crashGameService.placeBet(betAmount.value);
-    } else if (!gameEnded.value) {
+    if (!gameEnded.value) {
         crashGameService.cashOut();
     } else {
         console.log("Game ended, returning to board...");
+        gameState.isInMinigame = false;
         crashGameService.returnToBoard();
     }
 };
@@ -172,35 +137,26 @@ crashGameState.minigame = {
 // Updated in gameloop();
 const timeLeftForBets = ref(0);
 
-const gameStarted = computed(() => crashGameState.minigame_verifiable?.state != "PlacingBets");
+const gameStarted = computed(() => crashGameState.minigame_verifiable?.state != "WaitingForStart");
 const gameEnded = computed(() => gameStarted.value && crashGameState.minigame_verifiable?.state == "Crashed");
 const currentMultiplier = computed(() => crashGameState.minigame_backend?.current_multiplier ?? 1);
 
-// Update computed property to show ratio of players who bet
-const playersWhoBet = computed(() => {
-    const activeBets = Object.keys(crashGameState.minigame_verifiable?.active_bets || {}).length;
-    const totalPlayers = gameState.game?.players.length || 0;
-    return `${activeBets}/${totalPlayers}`;
-});
-
-const canPlaceBet = computed(() => !gameStarted.value);
-
 const hasPlayerCashedOut = computed(() => {
-    return !!crashGameState.minigame_verifiable?.active_bets?.[getLocalPlayerId()]?.cashed_out_at;
+    return !!crashGameState.minigame_verifiable?.players?.[getLocalPlayerId()]?.cashed_out_at;
 });
 const playerCashedOutAt = computed(() => {
-    return crashGameState.minigame_verifiable?.active_bets?.[getLocalPlayerId()]?.cashed_out_at ?? 0;
+    return crashGameState.minigame_verifiable?.players?.[getLocalPlayerId()]?.cashed_out_at ?? 0;
 });
 
 const cashouts = computed(() => {
     const cashoutList: Cashout[] = [];
-    if (crashGameState.minigame_verifiable?.active_bets) {
-        for (const [playerId, bet] of Object.entries(crashGameState.minigame_verifiable.active_bets)) {
+    if (crashGameState.minigame_verifiable?.players) {
+        for (const [playerId, bet] of Object.entries(crashGameState.minigame_verifiable.players)) {
             if (bet.cashed_out_at) {
                 const player = gameState.game?.players.find((p) => p.id.toString() === playerId);
                 cashoutList.push({
                     playerId,
-                    amount: bet.amount,
+                    amount: bet.bet,
                     multiplier: bet.cashed_out_at,
                     playerName: player?.name || "Unknown Player",
                 });
@@ -210,7 +166,11 @@ const cashouts = computed(() => {
     return cashoutList;
 });
 
-const betAmount = ref(10);
+const betAmount = computed(() => {
+    const playerId = getLocalPlayerId();
+    const bet = crashGameState.minigame_verifiable?.players?.[playerId];
+    return bet ? bet.bet : 0;
+});
 
 // Confetti state
 const showConfetti = ref(false);
@@ -273,7 +233,7 @@ function gameLoop(timestamp: number) {
     }
 
     const timeLeft = Date.now() - (crashGameState.minigame_backend?.game_setup_time || 0);
-    timeLeftForBets.value = 30000 - Math.max(0, timeLeft);
+    timeLeftForBets.value = 10000 - Math.max(0, timeLeft);
 
     // Update rocket animation
     rocketAnimationOffset.value = Math.sin(Date.now() / 200) * 1.5;
@@ -326,27 +286,12 @@ watch(gameEnded, (newValue) => {
             // Calculate final results for each player
             const results: FinalResult[] = [];
 
-            if (crashGameState.minigame_verifiable?.active_bets) {
-                for (const [playerId, bet] of Object.entries(crashGameState.minigame_verifiable.active_bets)) {
-                    const player = gameState.game?.players.find((p) => p.id.toString() === playerId);
-                    if (!player) continue;
-
-                    let profit = 0;
-                    if (bet.cashed_out_at) {
-                        // Player cashed out successfully
-                        profit = Math.floor(bet.amount * bet.cashed_out_at - bet.amount);
-                    } else {
-                        // Player didn't cash out, lost their bet
-                        profit = -bet.amount;
-                    }
-
-                    results.push({
-                        playerId,
-                        playerName: player.name,
-                        profit,
-                    });
-                }
-            }
+            cashouts.value.forEach((cashout) => {
+                const playerId = cashout.playerId;
+                const playerName = cashout.playerName;
+                const profit = Math.floor(cashout.amount * cashout.multiplier - cashout.amount);
+                results.push({ playerId, playerName, profit });
+            });
 
             // Sort by profit (highest to lowest)
             results.sort((a, b) => b.profit - a.profit);
@@ -388,8 +333,6 @@ watch(gameEnded, (newValue) => {
 /* Common Card Styles */
 .card {
     position: relative;
-    width: 100%;
-    aspect-ratio: 16/9;
     background: #1a237e;
     border-radius: 20px;
     overflow: hidden;
@@ -429,7 +372,7 @@ watch(gameEnded, (newValue) => {
 .game-container {
     position: relative;
     width: 100%;
-    aspect-ratio: 16/9;
+    aspect-ratio: 4/3;
     overflow: hidden;
 }
 
@@ -627,7 +570,6 @@ watch(gameEnded, (newValue) => {
 
 /* Game Controls */
 .game-controls {
-    width: 100%;
     background: linear-gradient(to bottom, #ff9c38, #ff6f1e);
     border: 6px solid #ffd700;
     border-radius: 20px;

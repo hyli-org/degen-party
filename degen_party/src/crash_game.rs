@@ -35,16 +35,7 @@ use crate::{
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", content = "payload")]
 pub enum CrashGameCommand {
-    Initialize {
-        players: Vec<(Identity, String, Option<u64>)>,
-    },
-    PlaceBet {
-        player_id: Identity,
-        amount: u64,
-    },
-    CashOut {
-        player_id: Identity,
-    },
+    CashOut { player_id: Identity },
     End,
 }
 
@@ -91,12 +82,6 @@ impl CrashGameModule {
     ) -> Result<()> {
         let uuid_128: u128 = uuid::Uuid::parse_str(&message_id)?.as_u128();
         let mut blobs = match event {
-            CrashGameCommand::Initialize { players } => {
-                self.handle_initialize(uuid_128, players).await
-            }
-            CrashGameCommand::PlaceBet { player_id, amount } => {
-                self.handle_place_bet(uuid_128, player_id, amount).await
-            }
             CrashGameCommand::CashOut { player_id } => {
                 self.handle_cash_out(uuid_128, player_id).await
             }
@@ -119,40 +104,6 @@ impl CrashGameModule {
     }
 
     // Pre-chain validation and transaction submission
-    async fn handle_initialize(
-        &mut self,
-        uuid_128: u128,
-        players: Vec<(Identity, String, Option<u64>)>,
-    ) -> Result<Vec<Blob>> {
-        Ok(vec![ChainActionBlob(
-            uuid_128,
-            ChainAction::InitMinigame { players },
-        )
-        .as_blob(self.crash_game.clone(), None, None)])
-    }
-
-    async fn handle_place_bet(
-        &mut self,
-        uuid_128: u128,
-        player_id: Identity,
-        amount: u64,
-    ) -> Result<Vec<Blob>> {
-        // Pre-chain validationsa
-        if let Some(state) = &mut self.state {
-            if let Err(err) = state.validate_bet(player_id.clone(), amount) {
-                bail!("Invalid bet: {:?}", err);
-            }
-        } else {
-            bail!("Game not initialized");
-        }
-
-        Ok(vec![ChainActionBlob(
-            uuid_128,
-            ChainAction::PlaceBet { player_id, amount },
-        )
-        .as_blob(self.crash_game.clone(), None, None)])
-    }
-
     async fn handle_cash_out(&mut self, uuid_128: u128, player_id: Identity) -> Result<Vec<Blob>> {
         // Pre-chain validation
         let current_multiplier = self
@@ -210,7 +161,6 @@ impl CrashGameModule {
                             .map(|r| PlayerMinigameResult {
                                 player_id: r.0.clone(),
                                 coins_delta: r.1,
-                                stars_delta: 0,
                             })
                             .collect(),
                     },
@@ -269,10 +219,10 @@ impl CrashGameModule {
             return Ok(());
         };
 
-        if state.minigame_verifiable.state == MinigameState::PlacingBets {
-            // After a while start anyways
+        if state.minigame_verifiable.state == MinigameState::WaitingForStart {
+            // After a while start
             let now = SystemTime::now().duration_since(UNIX_EPOCH)?.as_millis();
-            if now.saturating_sub(state.minigame_backend.game_setup_time.unwrap()) > 30_000 {
+            if now.saturating_sub(state.minigame_backend.game_setup_time.unwrap()) > 10_000 {
                 self.bus.send(self.create_backend_tx(ChainAction::Start)?)?;
                 return Ok(());
             }
@@ -334,67 +284,41 @@ impl CrashGameModule {
             if let Ok(StructuredBlobData::<ChainActionBlob> { parameters, .. }) =
                 StructuredBlobData::<ChainActionBlob>::try_from(blob.data.clone())
             {
-                tracing::debug!("Received blob: {:?}", parameters);
-                let events = self.apply_chain_action(&tx.identity, &parameters.1).await?;
+                tracing::warn!("Received ChainActionBlob: {:?}", parameters);
+                if let ChainAction::InitMinigame { .. } = parameters.1 {
+                    let mut state = GameState::new(
+                        self.board_game.clone(),
+                        Identity::new(format!("{}@secp256k1", self.crypto.public_key)),
+                    );
+                    state.minigame_backend.game_setup_time =
+                        Some(SystemTime::now().duration_since(UNIX_EPOCH)?.as_millis());
+                    state.minigame_backend.current_time = state.minigame_backend.game_setup_time;
+                    self.state = Some(state);
+                } else if let ChainAction::Start = parameters.1 {
+                    if let Some(state) = &mut self.state {
+                        state.minigame_backend.game_start_time =
+                            Some(SystemTime::now().duration_since(UNIX_EPOCH)?.as_millis());
+                        state.minigame_backend.current_time =
+                            state.minigame_backend.game_start_time;
+                    }
+                }
+
+                // rust makes this so bad
+                let mut events = None;
+                if let Some(state) = &mut self.state {
+                    // TODO: this is actually unsafe if the transactions between both contracts don't match...
+                    events = Some(state.process_chain_action(&tx.identity, &parameters.1, None)?);
+                }
                 if let Some(state) = &self.state {
-                    self.broadcast_state_update(state.clone(), events)?;
+                    if let Some(events) = events {
+                        self.broadcast_state_update(state.clone(), events)?;
+                    }
                 }
             } else {
                 tracing::warn!("Failed to parse blob as ChainActionBlob");
             }
         }
         Ok(())
-    }
-
-    async fn apply_chain_action(
-        &mut self,
-        identity: &Identity,
-        action: &ChainAction,
-    ) -> Result<Vec<ChainEvent>> {
-        match action {
-            ChainAction::InitMinigame { .. } => {
-                let mut state = GameState::new(
-                    self.board_game.clone(),
-                    Identity::new(format!("{}@secp256k1", self.crypto.public_key)),
-                );
-                state.minigame_backend.game_setup_time =
-                    Some(SystemTime::now().duration_since(UNIX_EPOCH)?.as_millis());
-                state.minigame_backend.current_time = state.minigame_backend.game_setup_time;
-                self.state = Some(state);
-            }
-            ChainAction::Start => {
-                if let Some(state) = &mut self.state {
-                    state.minigame_backend.game_start_time =
-                        Some(SystemTime::now().duration_since(UNIX_EPOCH)?.as_millis());
-                    state.minigame_backend.current_time = state.minigame_backend.game_start_time;
-                }
-            }
-            ChainAction::Done => {
-                self.state = None;
-                return Ok(vec![ChainEvent::MinigameEnded {
-                    final_results: vec![],
-                }]);
-            }
-            _ => {}
-        }
-
-        // Apply action to state and handle side effects
-        match &mut self.state {
-            Some(state) => {
-                let time = SystemTime::now().duration_since(UNIX_EPOCH)?.as_millis();
-                let events = state.process_chain_action(identity, action.clone(), time)?;
-                state.last_interaction_time = time;
-                tracing::debug!("Applied action {:?}, got events: {:?}", action, events);
-
-                if let ChainAction::PlaceBet { .. } = action {
-                    if state.ready_to_start() {
-                        self.bus.send(self.create_backend_tx(ChainAction::Start)?)?;
-                    }
-                }
-                Ok(events)
-            }
-            None => Err(anyhow::anyhow!("Game not initialized")),
-        }
     }
 
     // Helper methods
@@ -439,7 +363,9 @@ impl Module for CrashGameModule {
                     signed_data,
                 } = msg.message;
                 if let InboundWebsocketMessage::CrashGame(event) = message {
-                    self.handle_player_message(event, signature, public_key, message_id, signed_data).await?;
+                    if let Err(e) = self.handle_player_message(event, signature, public_key, message_id, signed_data).await {
+                        tracing::warn!("Error handling player message: {:?}", e);
+                    }
                 }
             }
             listen<BlobTransaction> tx => {

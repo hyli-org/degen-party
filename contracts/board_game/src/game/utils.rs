@@ -19,45 +19,42 @@ impl std::fmt::Display for GameEvent {
                     write!(f, "Player {} lost {} coins", player_id, amount.abs())
                 }
             }
-            GameEvent::StarsChanged { player_id, amount } => {
-                if *amount > 0 {
-                    write!(f, "Player {} gained {} stars", player_id, amount)
-                } else {
-                    write!(f, "Player {} lost {} stars", player_id, amount.abs())
-                }
+            GameEvent::BetPlaced { player_id, amount } => {
+                write!(f, "Player {} placed a bet of {}", player_id, amount)
+            }
+            GameEvent::WheelSpun { outcome } => {
+                write!(f, "Wheel spun, outcome: {}", outcome)
             }
             GameEvent::MinigameReady { minigame_type } => {
                 write!(f, "Minigame '{}' is ready", minigame_type)
             }
-            GameEvent::MinigameEnded { result } => {
-                write!(f, "Minigame ended with result: {:?}", result)
-            }
             GameEvent::MinigameStarted { minigame_type } => {
                 write!(f, "Minigame '{}' started", minigame_type)
+            }
+            GameEvent::MinigameEnded { result } => {
+                write!(f, "Minigame ended with result: {:?}", result)
             }
             GameEvent::TurnEnded { next_player } => {
                 write!(f, "Turn ended, next player is {}", next_player)
             }
             GameEvent::GameEnded {
                 winner_id,
-                final_stars,
                 final_coins,
             } => {
                 write!(
                     f,
-                    "Game ended, winner is {}, final stars: {}, final coins: {}",
-                    winner_id, final_stars, final_coins
+                    "Game ended, winner is {}, final coins: {}",
+                    winner_id, final_coins
                 )
             }
             GameEvent::GameInitialized {
                 player_count,
-                board_size,
                 random_seed,
             } => {
                 write!(
                     f,
-                    "Game initialized with {} players, board size {}, random seed {}",
-                    player_count, board_size, random_seed
+                    "Game initialized with {} players, random seed {}",
+                    player_count, random_seed
                 )
             }
             GameEvent::PlayerRegistered { name, player_id } => {
@@ -65,6 +62,9 @@ impl std::fmt::Display for GameEvent {
             }
             GameEvent::GameStarted => {
                 write!(f, "Game started")
+            }
+            _ => {
+                write!(f, "Unknown game event")
             }
         }
     }
