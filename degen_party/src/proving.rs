@@ -58,9 +58,8 @@ pub async fn setup_auto_provers(
     handler: &mut ModulesHandler,
 ) -> Result<()> {
     #[cfg(not(feature = "fake_proofs"))]
-    let board_game_prover = Arc::new(client_sdk::helpers::sp1::SP1Prover::new(
-        contracts::BOARD_GAME_ELF,
-    ));
+    let board_game_prover =
+        Arc::new(client_sdk::helpers::sp1::SP1Prover::new(contracts::BOARD_GAME_ELF).await);
     #[cfg(feature = "fake_proofs")]
     let board_game_prover = Arc::new(client_sdk::helpers::test::TxExecutorTestProver::new(
         BoardGameExecutor {
@@ -91,9 +90,8 @@ pub async fn setup_auto_provers(
         ctx.client.get_contract(&ctx.crash_game).await?.state.0
     })?;
     #[cfg(not(feature = "fake_proofs"))]
-    let crash_game_prover = Arc::new(client_sdk::helpers::sp1::SP1Prover::new(
-        contracts::CRASH_GAME_ELF,
-    ));
+    let crash_game_prover =
+        Arc::new(client_sdk::helpers::sp1::SP1Prover::new(contracts::CRASH_GAME_ELF).await);
     #[cfg(feature = "fake_proofs")]
     let crash_game_prover = Arc::new(client_sdk::helpers::test::TxExecutorTestProver::new(
         CrashGameExecutor {

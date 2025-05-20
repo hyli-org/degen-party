@@ -11,8 +11,9 @@ import { ref, computed } from "vue";
 import Lobby from "./components/Lobby.vue";
 import { wsState } from "./utils/shared-websocket";
 
-import { TestnetChatElement } from "hyli-testnet-chat";
 import { addIdentityToMessage } from "./game_data/auth";
+import * as HyliWallet from "hyli-wallet";
+import { TestnetChatElement } from "hyli-testnet-chat";
 customElements.define("testnet-chat", TestnetChatElement);
 
 const showChat = ref(false);
@@ -73,6 +74,7 @@ const connectionStatusColor = computed(() => {
                     <span v-if="showChat">Hide Chat</span>
                     <span v-else>Show Chat</span>
                 </button>
+                <hyli-wallet providers="password,google"></hyli-wallet>
                 <div
                     class="connection-status flex items-center gap-2 px-4 py-2 rounded-full border-3 border-white bg-black/20"
                 >
