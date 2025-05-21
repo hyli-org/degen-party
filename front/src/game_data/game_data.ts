@@ -67,7 +67,7 @@ export type GameEvent =
     | { PlayerRegistered: { name: string; player_id: string } }
     | { GameStarted: null }
     | { BetPlaced: { player_id: string; amount: number } }
-    | { WheelSpun: { outcome: number } };
+    | { WheelSpun: { round: number; outcome: number } };
 
 export type GameStateCommand =
     | {
@@ -95,11 +95,11 @@ export type GameStateEvent =
 
 export interface GameState {
     players: Player[];
-    current_turn: number;
     phase: GamePhase;
     max_players: number;
     minigames: string[];
     dice: { min: number; max: number; seed: number };
+    round_started_at: number;
     round: number;
     bets: Record<string, number>;
     backend_identity: string;
@@ -274,7 +274,7 @@ export function getLocalPlayerId(): string {
 
 export function isCurrentPlayer(id: string): boolean {
     if (!gameState.game) return false;
-    return id === gameState.game.players[gameState.game.current_turn % gameState.game.players.length]?.id;
+    return id === gameState.game.players[gameState.game.round % gameState.game.players.length]?.id;
 }
 
 export function playerColor(id: string): string {

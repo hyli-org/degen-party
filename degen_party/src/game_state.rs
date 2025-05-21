@@ -164,46 +164,48 @@ impl GameStateModule {
                 bail!("EndMinigame cannot be called directly");
             }
             GameAction::StartMinigame { .. } => {
-                if let GamePhase::StartMinigame(minigame_type) =
-                    &self.state.as_ref().context("Game not initialized")?.phase
-                {
-                    if minigame_type != &self.crash_game {
-                        bail!("Not the right minigame");
+                match &self.state.as_ref().context("Game not initialized")?.phase {
+                    GamePhase::StartMinigame(minigame_type)
+                    | GamePhase::FinalMinigame(minigame_type) => {
+                        if minigame_type != &self.crash_game {
+                            bail!("Not the right minigame");
+                        }
+                        let Some(state) = &self.state else {
+                            bail!("Game not initialized");
+                        };
+                        tracing::warn!("Starting minigame: {:?}", minigame_type);
+                        // TODO ensure we are synchronized correctly.
+                        blobs.push(
+                            GameActionBlob(
+                                uuid_128,
+                                GameAction::StartMinigame {
+                                    minigame: minigame_type.clone(),
+                                    players: state.get_minigame_setup(),
+                                },
+                            )
+                            .as_blob(
+                                self.board_game.clone(),
+                                Some(BlobIndex(1)),
+                                None,
+                            ),
+                        );
+                        blobs.push(
+                            ChainActionBlob(
+                                uuid_128,
+                                crash_game::ChainAction::InitMinigame {
+                                    players: state.get_minigame_setup(),
+                                },
+                            )
+                            .as_blob(
+                                self.crash_game.clone(),
+                                None,
+                                Some(vec![BlobIndex(0)]),
+                            ),
+                        );
                     }
-                    let Some(state) = &self.state else {
-                        bail!("Game not initialized");
-                    };
-                    tracing::warn!("Starting minigame: {:?}", minigame_type);
-                    // TODO ensure we are synchronized correctly.
-                    blobs.push(
-                        GameActionBlob(
-                            uuid_128,
-                            GameAction::StartMinigame {
-                                minigame: minigame_type.clone(),
-                                players: state.get_minigame_setup(),
-                            },
-                        )
-                        .as_blob(
-                            self.board_game.clone(),
-                            Some(BlobIndex(1)),
-                            None,
-                        ),
-                    );
-                    blobs.push(
-                        ChainActionBlob(
-                            uuid_128,
-                            crash_game::ChainAction::InitMinigame {
-                                players: state.get_minigame_setup(),
-                            },
-                        )
-                        .as_blob(
-                            self.crash_game.clone(),
-                            None,
-                            Some(vec![BlobIndex(0)]),
-                        ),
-                    );
-                } else {
-                    bail!("Not ready to start a game");
+                    _ => {
+                        bail!("Not ready to start a game");
+                    }
                 }
             }
             GameAction::EndGame => {

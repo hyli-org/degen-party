@@ -1,16 +1,42 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch, nextTick } from "vue";
 import { gameState, getLocalPlayerId, boardGameService, isCurrentPlayer } from "../game_data/game_data";
-import { animState } from "./animState";
+import {
+    animState,
+    currentRoundEvents,
+    markAnimationPlayed,
+    isAnimationPlayed,
+    getAnimationPlayedTime,
+} from "./animState";
+import { watchEffect } from "vue";
 
 const currentGame = computed(() => gameState.game);
 const localPlayerId = getLocalPlayerId();
 
 const currentPlayer = computed(() => {
-    if (!currentGame.value) return null;
-    return currentGame.value.players[currentGame.value.current_turn % currentGame.value.players.length];
+    return true; // TODO
+    //if (!currentGame.value) return null;
+    //return currentGame.value.players[currentGame.value.round % currentGame.value.players.length];
 });
 const isMyTurn = computed(() => isCurrentPlayer(localPlayerId));
+
+const currentState = computed(() => {
+    if (!currentGame.value) return "Other";
+    if (currentGame.value.phase != "WheelSpin") {
+        if (currentGame.value.phase == "Betting") {
+            if (Date.now() - currentGame.value.round_started_at > 30 * 1000) {
+            } else {
+                return "Betting";
+            }
+        } else {
+            return currentGame.value.phase;
+        }
+    }
+    if (isMyTurn.value) {
+        return "MyTurn";
+    }
+    return "Waiting";
+});
 
 const wheelOptions = [
     { label: "Quiet day", color: "#36C6FF", outcome: 0 },
@@ -18,14 +44,13 @@ const wheelOptions = [
     { label: "Fumble", color: "#00C49A", outcome: 1 },
     { label: "Minigame", color: "#FF4D4D", outcome: 4 },
     { label: "All or Nothing", color: "#FFB347", outcome: 2 },
-    { label: "Minigame", color: "#FF4D4D", outcome: 5 },
+    //{ label: "Minigame", color: "#FF4D4D", outcome: 5 },
 ];
 
 const canvasRef = ref<HTMLCanvasElement | null>(null);
 const spinning = ref(false);
 const spinAngle = ref(0); // in radians
 const targetAngle = ref(0); // in radians
-const spinStartTime = ref(0);
 const spinDuration = 2; // seconds
 const lastOutcome = ref<number | null>(null);
 
@@ -57,7 +82,7 @@ function drawWheel(angle: number) {
     // Draw labels
     ctx.save();
     ctx.translate(center, center);
-    ctx.font = "bold 18px sans-serif";
+    ctx.font = "bold 12px sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     for (let i = 0; i < wheelOptions.length; i++) {
@@ -99,8 +124,7 @@ function drawWheel(angle: number) {
 
 function animateSpin() {
     if (!spinning.value) return;
-    const now = performance.now();
-    const elapsed = (now - spinStartTime.value) / 1000;
+    const elapsed = animState.timeInRound - getAnimationPlayedTime("SpinWheel");
     let t = Math.min(1, elapsed / spinDuration);
     // Ease out cubic
     t = 1 - Math.pow(1 - t, 3);
@@ -116,6 +140,7 @@ function animateSpin() {
 }
 
 function startSpinAnimation(outcome: number) {
+    markAnimationPlayed("SpinWheel");
     // The wheel should land so that the outcome slice is at the top (pointer)
     const sliceAngle = (2 * Math.PI) / wheelOptions.length;
     // Add several full spins for effect
@@ -123,20 +148,18 @@ function startSpinAnimation(outcome: number) {
     const outcomeIndex = wheelOptions.findIndex((option) => option.outcome === outcome);
     const outcomeAngle = sliceAngle * outcomeIndex;
     targetAngle.value = fullSpins * 2 * Math.PI - outcomeAngle;
-    spinStartTime.value = performance.now();
     spinning.value = true;
     animateSpin();
     lastOutcome.value = outcome;
 }
 
-watch(
-    () => [animState.nextEvent, animState.nextRound],
-    (_) => {
-        spinAngle.value = 0;
-        console.log("Spinning wheel to outcome ", animState.nextEvent);
-        startSpinAnimation(animState.nextEvent!);
-    },
-);
+watchEffect(() => {
+    const outcome = currentRoundEvents.value?.outcome;
+    console.log("Outcome changed", outcome);
+    if (outcome === undefined || outcome === -1 || isAnimationPlayed("SpinWheel")) return;
+    spinAngle.value = 0;
+    startSpinAnimation(outcome);
+});
 
 onMounted(() => {
     nextTick(() => {
@@ -145,22 +168,51 @@ onMounted(() => {
 });
 
 function spinWheel() {
-    if (!isMyTurn.value) return;
     boardGameService.sendAction({ SpinWheel: null });
 }
 </script>
 
 <template>
-    <div class="relative flex flex-col items-center">
-        <canvas ref="canvasRef" width="340" height="340" class="mb-4" />
-        <div v-if="currentGame?.phase !== 'WheelSpin'" class="text-[#FFD700] font-bold text-lg mt-2">Placing bets</div>
-        <div v-else-if="!isMyTurn" class="text-[#FFD700] font-bold text-lg mt-2">Waiting for current player...</div>
+    <div class="relative flex flex-col items-center transition-all transition-duration-500">
+        <canvas ref="canvasRef" width="256" height="256" class="mb-4" />
         <button
-            v-else
+            v-if="currentState === 'MyTurn' && !isAnimationPlayed('SpinWheel')"
             @click="spinWheel"
-            class="px-8 py-4 rounded-xl font-bold text-2xl border-4 border-white shadow-md transition-all duration-150 hover:-translate-y-1 hover:shadow-lg focus:outline-none bg-gradient-to-b from-[#FF4D4D] to-[#CC0000] text-white"
+            class="spinWheelButton"
         >
             Spin the Wheel
         </button>
     </div>
 </template>
+
+<style scoped>
+.spinWheelButton {
+    padding-left: 2rem;
+    padding-right: 2rem;
+    padding-top: 1rem;
+    padding-bottom: 1rem;
+    border-radius: 0.75rem;
+    font-weight: bold;
+    font-size: 1.5rem;
+    border-width: 4px;
+    border-color: #fff;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    transition-property: all;
+    transition-duration: 150ms;
+    background: linear-gradient(to bottom, #ff4d4d, #cc0000);
+    color: #fff;
+}
+
+.spinWheelButton:not(:disabled):hover {
+    transform: translateY(-0.25rem);
+    box-shadow: 0 10px 15px rgba(0, 0, 0, 0.15);
+    outline: none;
+    /* background and color remain the same as default */
+}
+
+.spinWheelButton:disabled {
+    background: #9ca3af; /* Tailwind gray-400 */
+    color: #374151; /* Tailwind gray-700 */
+    cursor: not-allowed;
+}
+</style>

@@ -19,6 +19,13 @@ class AuthService {
         this.publicKey = localStorage.getItem(PUBLIC_KEY_STORAGE_KEY);
     }
 
+    reload(privateKey: string, publicKey: string) {
+        localStorage.setItem(SESSION_KEY_STORAGE_KEY, privateKey);
+        localStorage.setItem(PUBLIC_KEY_STORAGE_KEY, publicKey);
+        this.sessionKey = localStorage.getItem(SESSION_KEY_STORAGE_KEY);
+        this.publicKey = localStorage.getItem(PUBLIC_KEY_STORAGE_KEY);
+    }
+
     generateSessionKey(): string {
         // Génère une paire de clés ECDSA
         const keyPair = this.ec.genKeyPair();

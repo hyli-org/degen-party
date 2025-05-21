@@ -6,6 +6,7 @@ WORKDIR /app
 
 # Copier les fichiers de l'application
 COPY front/package.json front/bun.lockb ./
+COPY wallet-wrapper ../wallet-wrapper
 
 # Installer les dépendances
 RUN bun install

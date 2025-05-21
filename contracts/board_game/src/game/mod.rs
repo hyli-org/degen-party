@@ -12,19 +12,19 @@ const ROUNDS: usize = 10;
 #[derive(Debug, Clone, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
 pub struct GameState {
     pub players: Vec<Player>,
-    pub current_turn: usize,
-    pub phase: GamePhase,
     pub max_players: usize,
     pub minigames: Vec<ContractName>,
     pub dice: dice::Dice,
+    pub phase: GamePhase,
+    pub round_started_at: u128,
     pub round: usize,
     pub bets: HashMap<Identity, u64>,
+    pub all_or_nothing: bool,
 
     // Metadata to ensure the game runs smoothly
     pub backend_identity: Identity,
     pub last_interaction_time: u128,
     pub lane_id: LaneId,
-    pub all_or_nothing: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
@@ -131,6 +131,7 @@ pub enum GameEvent {
         amount: u64,
     },
     WheelSpun {
+        round: usize, // for convenience on frontend
         outcome: u8,
     },
     PlayersSwappedCoins {
@@ -149,36 +150,36 @@ impl GameState {
     pub fn new(backend_identity: Identity) -> Self {
         Self {
             players: Vec::new(),
-            current_turn: 0,
             phase: GamePhase::GameOver,
             max_players: 4,
             minigames: Vec::new(),
             dice: dice::Dice::new(1, 10, 0),
+            round_started_at: 0,
+            round: 0,
+            bets: HashMap::new(),
+            all_or_nothing: false,
 
             backend_identity,
             last_interaction_time: 0,
             lane_id: LaneId::default(),
-            round: 0,
-            bets: HashMap::new(),
-            all_or_nothing: false,
         }
     }
 
     pub fn reset(&mut self, player_count: usize, minigames: Vec<ContractName>, random_seed: u64) {
         *self = Self {
             players: Vec::with_capacity(player_count),
-            current_turn: 0,
             phase: GamePhase::GameOver,
             max_players: player_count,
             minigames,
             dice: dice::Dice::new(1, 10, random_seed),
+            round_started_at: 0,
+            round: self.round,
+            bets: self.bets.clone(),
+            all_or_nothing: false,
 
             backend_identity: self.backend_identity.clone(),
             last_interaction_time: self.last_interaction_time,
             lane_id: self.lane_id.clone(),
-            round: self.round,
-            bets: self.bets.clone(),
-            all_or_nothing: false,
         }
     }
 
@@ -227,16 +228,6 @@ impl GameState {
 
     fn is_registered(&self, caller: &Identity) -> bool {
         self.players.iter().any(|p| p.id == *caller)
-    }
-
-    fn get_current_player(&self) -> Result<&Player> {
-        self.players
-            .get(self.current_turn % self.players.len())
-            .ok_or_else(|| anyhow!("Invalid current turn index"))
-    }
-
-    fn advance_turn(&mut self) {
-        self.current_turn += 1;
     }
 
     pub fn process_action(
@@ -334,11 +325,16 @@ impl GameState {
                 }
 
                 self.phase = GamePhase::Betting;
+                self.round_started_at = timestamp;
+                self.round = 0;
                 events.push(GameEvent::GameStarted);
             }
 
             // Betting Phase
             (GamePhase::Betting, GameAction::PlaceBet { amount }) => {
+                if timestamp - self.round_started_at > 30_000 {
+                    return Err(anyhow!("Betting time is over"));
+                }
                 if self.bets.contains_key(caller) {
                     return Err(anyhow!("Player has already placed a bet"));
                 }
@@ -357,12 +353,14 @@ impl GameState {
                     player_id: caller.clone(),
                     amount,
                 });
-                // TODO timeouts
                 if self.bets.len() == self.players.len() {
-                    if self.round >= ROUNDS {
+                    if self.round >= ROUNDS - 1 {
                         let Some(final_minigame) = self.minigames.first() else {
                             return Err(anyhow!("No final minigame available"));
                         };
+                        events.push(GameEvent::MinigameReady {
+                            minigame_type: final_minigame.0.clone(),
+                        });
                         self.phase = GamePhase::FinalMinigame(final_minigame.clone());
                     } else {
                         self.phase = GamePhase::WheelSpin;
@@ -374,15 +372,32 @@ impl GameState {
             }
 
             // Wheel Spin Phase
-            (GamePhase::WheelSpin, GameAction::SpinWheel) => {
+            (GamePhase::WheelSpin, GameAction::SpinWheel)
+            | (GamePhase::Betting, GameAction::SpinWheel) => {
+                if self.phase == GamePhase::Betting {
+                    // Check we're over the timeout
+                    if timestamp - self.round_started_at < 30_000 {
+                        return Err(anyhow!("Not enough time has passed"));
+                    }
+                    // All players that haven't placed bets lose 10 coins
+                    for i in 0..self.players.len() {
+                        if !self.bets.contains_key(&self.players[i].id) {
+                            self.update_player_coins(i, -10, &mut events)?;
+                        }
+                    }
+                }
                 // Use dice to determine the wheel outcome
-                let outcome = self.dice.roll() % 6;
-                events.push(GameEvent::WheelSpun { outcome });
+                let outcome = self.dice.roll() % 5;
+                events.push(GameEvent::WheelSpun {
+                    outcome,
+                    round: self.round,
+                });
                 match outcome {
                     0 => {
                         // Nothing happens, go to next round
                         self.round += 1;
                         self.bets.clear();
+                        self.round_started_at = timestamp;
                         self.phase = GamePhase::Betting;
                     }
                     1 => {
@@ -405,6 +420,7 @@ impl GameState {
                         }
                         self.round += 1;
                         self.bets.clear();
+                        self.round_started_at = timestamp;
                         self.phase = GamePhase::Betting;
                     }
                     2 => {
@@ -413,6 +429,7 @@ impl GameState {
                         events.push(GameEvent::AllOrNothingActivated);
                         self.round += 1;
                         self.bets.clear();
+                        self.round_started_at = timestamp;
                         self.phase = GamePhase::Betting;
                     }
                     _ => {
@@ -453,7 +470,7 @@ impl GameState {
                 GameAction::StartMinigame { minigame, players },
             ) => {
                 // Check the starting state is valid.
-                if minigame == final_minigame {
+                if minigame != final_minigame {
                     return Err(anyhow!("Minigame mismatch"));
                 }
                 let minigame_players = self.get_minigame_setup();
@@ -483,7 +500,7 @@ impl GameState {
                 events.push(GameEvent::MinigameEnded { result });
 
                 // End the game if the round limit is reached
-                if self.round >= ROUNDS {
+                if self.round >= ROUNDS - 1 {
                     let winner = self
                         .players
                         .iter()
@@ -497,6 +514,7 @@ impl GameState {
                 } else {
                     self.round += 1;
                     self.bets.clear();
+                    self.round_started_at = timestamp;
                     self.phase = GamePhase::Betting;
                 }
             }
@@ -508,15 +526,5 @@ impl GameState {
         }
 
         Ok(events)
-    }
-
-    // Helper function for ending turns and transitioning to rolling phase
-    fn end_turn(&mut self, events: &mut Vec<GameEvent>) {
-        self.advance_turn();
-        let next_player_id = self.get_current_player().unwrap().id.clone();
-        events.push(GameEvent::TurnEnded {
-            next_player: next_player_id,
-        });
-        self.phase = GamePhase::Betting;
     }
 }

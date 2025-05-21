@@ -11,7 +11,7 @@ import {
 import Backdrop from "./Backdrop.vue";
 import { addIdentityToMessage } from "../game_data/auth";
 import PlayerBar from "./PlayerBar.vue";
-import { animState } from "./animState";
+import { animState, isAnimationPlayed, markAnimationPlayed, markAnimationPlayedIn } from "./animState";
 import SpinningWheel from "./SpinningWheel.vue";
 
 const timer = ref(30);
@@ -49,6 +49,7 @@ function placeBet(amount: number) {
     boardGameService.sendAction({ PlaceBet: { amount } }).finally(() => {
         placingBet.value = false;
     });
+    markAnimationPlayedIn("DoneBetting", 0.8);
 }
 
 function validateCustomBet(): boolean {
@@ -77,12 +78,17 @@ function setCustomBet(amount: number) {
     validateCustomBet();
 }
 
+const betScreenActive = computed(() => {
+    console.log("betScreenActive", isAnimationPlayed("DoneBetting"));
+    return !isAnimationPlayed("DoneBetting");
+});
+
 onMounted(() => {
     timer.value = 30;
     if (timerInterval.value) clearInterval(timerInterval.value);
     timerInterval.value = setInterval(() => {
-        if (timer.value > 0) timer.value--;
-    }, 1000) as unknown as number;
+        timer.value = Math.round(Math.max(0, 30 - (Date.now() - currentGame.value!.round_started_at) / 1000) * 10) / 10;
+    }, 100) as unknown as number;
 });
 
 watch(
@@ -91,6 +97,14 @@ watch(
         if (phase !== "Betting" && timerInterval.value) {
             clearInterval(timerInterval.value);
         }
+        console.log("phase", phase);
+        if (typeof phase === "object" && "FinalMinigame" in phase) {
+            markAnimationPlayed("FinalMinigameRound");
+            markAnimationPlayed("SpinWheel");
+        }
+    },
+    {
+        immediate: true,
     },
 );
 </script>
@@ -101,15 +115,17 @@ watch(
             <Backdrop class="absolute w-full h-full" />
             <!-- Wheel spin -->
             <div
+                v-show="!isAnimationPlayed('FinalMinigameRound')"
                 class="absolute top-8 right-8 z-10 bg-white p-8 rounded-[2rem] flex flex-col items-center justify-center gap-6 min-w-[320px]"
             >
                 <SpinningWheel></SpinningWheel>
             </div>
             <!-- Bet Controls & Timer -->
             <div
-                class="absolute bottom-8 right-8 z-10 bg-white p-8 rounded-[2rem] flex flex-col items-center justify-center gap-4 min-w-[320px] mx-auto"
+                v-if="betScreenActive"
+                class="absolute bottom-8 right-8 z-10 bg-white p-8 rounded-[2rem] flex flex-col items-center justify-center gap-4 min-w-[320px] mx-auto transition-all transition-duration-500"
             >
-                <div v-if="!hasBet" class="relative mb-4">
+                <div v-if="!hasBet && timer > 0" class="relative mb-4">
                     <div class="text-2xl font-bold text-black">Place your bet. Only {{ timer }}s left!</div>
                     <div
                         v-if="allOrNothing"
@@ -179,6 +195,7 @@ watch(
                     </div>
                 </div>
                 <div v-else-if="hasBet" class="text-green-400 font-bold text-2xl">Bet placed!</div>
+                <div v-else class="text-red-400 font-bold text-2xl">Time's up! You lost 10 coins.</div>
             </div>
         </div>
         <PlayerBar>

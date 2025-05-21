@@ -31,7 +31,6 @@ const router = createRouter({
 });
 
 watchEffect(() => {
-    return;
     if (gameState.isInLobby) {
         router.push({ name: "Lobby" });
     } else if (gameState.isInMinigame) {

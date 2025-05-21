@@ -15,7 +15,7 @@
                 <div v-else-if="!gameStarted" class="game-waiting">
                     <div class="waiting-text">GAME STARTING SOON!</div>
                     <div class="players-bet">
-                        Game starting in {{ Math.round(timeLeftForBets / 100) / 10 }} seconds !
+                        Game starting in {{ Math.round(timeLeftTillStart / 100) / 10 }} seconds !
                     </div>
                 </div>
 
@@ -48,14 +48,15 @@
             </div>
 
             <div class="w-[300px] game-controls card h-full">
-                <div class="controls-wrapper flex flex-col items-center justify-center h-full">
+                <div class="flex flex-col items-center justify-center h-full">
+                    <h3 v-if="!isPlayerInGame">You did not bet, so you are missing this round !</h3>
                     <button
-                        v-if="!gameEnded"
+                        v-else-if="!gameEnded"
                         :disabled="!gameStarted || hasPlayerCashedOut"
                         class="action-button cashout-action"
                         @click="handleActionButton"
                     >
-                        <span class="btn-text"> 🚀 CASH OUT! </span>
+                        <span class="btn-text"> <span class="text-3xl">🚀</span><br />CASH OUT! </span>
                     </button>
                     <button v-else-if="gameEnded" class="action-button next-action" @click="handleActionButton">
                         <span class="btn-text"> <span class="btn-icon">🎮</span> BACK TO BOARD </span>
@@ -90,6 +91,7 @@ import ConfettiEffect from "./ConfettiEffect.vue";
 import { crashGameService, crashGameState } from "../game_data/crash";
 import { gameState, getLocalPlayerId } from "../game_data/game_data";
 import { addBackgroundEffects, Cashout, drawFlightPath } from "./CrashGameHelper";
+import { animState } from "./animState";
 
 // Define emits for party game integration
 const emits = defineEmits(["win", "lose"]);
@@ -118,6 +120,7 @@ const handleActionButton = () => {
     } else {
         console.log("Game ended, returning to board...");
         gameState.isInMinigame = false;
+        animState.currentRoundIndex++;
         crashGameService.returnToBoard();
     }
 };
@@ -135,11 +138,20 @@ crashGameState.minigame = {
 */
 
 // Updated in gameloop();
-const timeLeftForBets = ref(0);
+const timeLeftTillStart = ref(0);
 
 const gameStarted = computed(() => crashGameState.minigame_verifiable?.state != "WaitingForStart");
-const gameEnded = computed(() => gameStarted.value && crashGameState.minigame_verifiable?.state == "Crashed");
+const gameEnded = computed(
+    () =>
+        gameStarted.value &&
+        (crashGameState.minigame_verifiable?.state == "Crashed" ||
+            crashGameState.minigame_verifiable?.state == "Uninitialized"),
+);
 const currentMultiplier = computed(() => crashGameState.minigame_backend?.current_multiplier ?? 1);
+
+const isPlayerInGame = computed(() => {
+    return crashGameState.minigame_verifiable?.players?.[getLocalPlayerId()] !== undefined;
+});
 
 const hasPlayerCashedOut = computed(() => {
     return !!crashGameState.minigame_verifiable?.players?.[getLocalPlayerId()]?.cashed_out_at;
@@ -233,7 +245,7 @@ function gameLoop(timestamp: number) {
     }
 
     const timeLeft = Date.now() - (crashGameState.minigame_backend?.game_setup_time || 0);
-    timeLeftForBets.value = 10000 - Math.max(0, timeLeft);
+    timeLeftTillStart.value = 10000 - Math.max(0, timeLeft);
 
     // Update rocket animation
     rocketAnimationOffset.value = Math.sin(Date.now() / 200) * 1.5;
@@ -578,13 +590,6 @@ watch(gameEnded, (newValue) => {
     margin-bottom: 1.5rem;
 }
 
-.controls-wrapper {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 1.5rem;
-}
-
 /* Bet Controls */
 .bet-controls {
     flex: 1;
@@ -661,7 +666,7 @@ watch(gameEnded, (newValue) => {
 /* Action Buttons */
 .action-button {
     min-width: 180px;
-    height: 70px;
+    height: 130px;
     font-size: 1.3rem;
     text-transform: uppercase;
     letter-spacing: 1px;
@@ -711,12 +716,24 @@ watch(gameEnded, (newValue) => {
     background: linear-gradient(to bottom, #65f58e, #44d76b);
 }
 
+.cashout-action:disabled {
+    background: linear-gradient(to bottom, #ccc, #aaa);
+    cursor: not-allowed;
+    box-shadow: none;
+}
+
 .next-action {
     background: linear-gradient(to bottom, #54d1ff, #30a8d5);
 }
 
 .next-action:hover {
     background: linear-gradient(to bottom, #6adbff, #42b6e0);
+}
+
+.next-action:disabled {
+    background: linear-gradient(to bottom, #ccc, #aaa);
+    cursor: not-allowed;
+    box-shadow: none;
 }
 
 /* Animations */
@@ -746,11 +763,6 @@ watch(gameEnded, (newValue) => {
 
 /* Responsive Design */
 @media (max-width: 768px) {
-    .controls-wrapper {
-        flex-direction: column;
-        gap: 1.5rem;
-    }
-
     .action-button {
         width: 100%;
     }

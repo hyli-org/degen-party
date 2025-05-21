@@ -22,8 +22,8 @@ impl std::fmt::Display for GameEvent {
             GameEvent::BetPlaced { player_id, amount } => {
                 write!(f, "Player {} placed a bet of {}", player_id, amount)
             }
-            GameEvent::WheelSpun { outcome } => {
-                write!(f, "Wheel spun, outcome: {}", outcome)
+            GameEvent::WheelSpun { round, outcome } => {
+                write!(f, "Wheel spun for round {}, outcome: {}", round, outcome)
             }
             GameEvent::MinigameReady { minigame_type } => {
                 write!(f, "Minigame '{}' is ready", minigame_type)

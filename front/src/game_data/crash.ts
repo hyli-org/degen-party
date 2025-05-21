@@ -33,7 +33,7 @@ export type CrashGameEvent = {
 };
 
 export interface CrashGameMinigameVerifiableState {
-    state: "WaitingForStart" | "Running" | "Crashed";
+    state: "Uninitialized" | "WaitingForStart" | "Running" | "Crashed";
     players: Record<string, { id: string; name: string; bet: number; cashed_out_at?: number }>;
 }
 
@@ -56,13 +56,11 @@ export const crashGameState = reactive({
 
 class CrashGameService extends BaseWebSocketService {
     protected override onMessage(data: any) {
-        console.log("Crash game service received data", data);
         if (data.type === "CrashGame") {
             const event = data.payload;
             if (event.type === "StateUpdated") {
                 const state = event.payload.state;
                 if (state) {
-                    console.log("Crash game state updated", state.current_minigame);
                     crashGameState.minigame_verifiable = state.minigame_verifiable;
                     crashGameState.minigame_backend = state.minigame_backend;
                 } else {

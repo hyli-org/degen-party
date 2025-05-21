@@ -22,7 +22,7 @@
         "uuid": "^11.1.0",
         "vue": "^3.5.14",
         "vue-router": "^4.5.1",
-        "wallet-wrapper": "link:wallet-wrapper"
+        "wallet-wrapper": "file:../wallet-wrapper"
     },
     "devDependencies": {
         "@vitejs/plugin-vue": "^5.2.4",

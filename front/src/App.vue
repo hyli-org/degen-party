@@ -16,6 +16,9 @@ import { addIdentityToMessage } from "./game_data/auth";
 import * as HyliWallet from "hyli-wallet";
 import { TestnetChatElement } from "hyli-testnet-chat";
 import { watchEffect } from "vue";
+import { animState } from "./components/animState";
+import { onWalletReady } from "./utils/wallet";
+
 customElements.define("testnet-chat", TestnetChatElement);
 
 const route = useRoute();
@@ -40,7 +43,7 @@ const players = computed(() => {
 
 const currentTurn = computed(() => {
     if (!gameState.game) return 1;
-    return Math.floor(gameState.game.current_turn / players.value.length) + 1;
+    return gameState.game.round + 1;
 });
 
 const countdown = ref(60); // Seconds left in mini-game
@@ -83,7 +86,7 @@ const connectionStatusColor = computed(() => {
                     <span v-if="showChat">Hide Chat</span>
                     <span v-else>Show Chat</span>
                 </button>
-                <hyli-wallet providers="password,google"></hyli-wallet>
+                <hyli-wallet @walletReady="onWalletReady" providers="password,google"></hyli-wallet>
                 <div
                     class="connection-status flex items-center gap-2 px-4 py-2 rounded-full border-3 border-white bg-black/20"
                 >
@@ -106,15 +109,8 @@ const connectionStatusColor = computed(() => {
                     >
                         Turn
                         <span class="font-baloo text-2xl font-extrabold text-[var(--star-yellow)]">
-                            {{ currentTurn }}
+                            {{ animState.currentRoundIndex + 1 }}
                         </span>
-                    </div>
-                    <div
-                        class="rounded-full border-3 border-white bg-black/20 px-4 py-2 font-bold text-white flex items-center gap-2"
-                        :class="{ warning: countdown < 15 }"
-                    >
-                        <span class="timer-icon">⏱️</span>
-                        <span class="font-baloo text-2xl font-extrabold">{{ countdown }}s</span>
                     </div>
                 </template>
             </div>

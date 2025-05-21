@@ -1,10 +1,15 @@
 <script setup lang="ts">
 import { ref, computed } from "vue";
 import { boardGameService, gameState } from "../game_data/game_data";
+import { walletState } from "../utils/wallet";
+import { authService } from "../game_data/auth";
 
 const playerName = ref("Player");
 const playerCount = ref(4);
 const hasJoined = ref(false);
+const password = ref("");
+
+const status = ref("");
 
 const canStartGame = computed(() => {
     if (!gameState.game) return false;
@@ -29,6 +34,21 @@ const initAndJoinGame = async () => {
 
     gameState.playerName = playerName.value;
 
+    /*
+    password: string,
+    expiration: number,
+    whitelist: string[],
+    onWalletEvent?: WalletEventCallback,
+    onError?: WalletErrorCallback,
+    */
+    status.value = "sess_key";
+    const { sessionKey } = await walletState.registerSessionKey(password.value, 60 * 60 * 24, [
+        "board_game_2",
+        "crash_game_2",
+    ]);
+    authService.reload(sessionKey.privateKey, sessionKey.publicKey);
+
+    status.value = "game";
     // Create the game.
     await boardGameService.initGame({
         playerCount: playerCount.value,
@@ -37,9 +57,13 @@ const initAndJoinGame = async () => {
     // Wait a bit for game to be created
     await new Promise((resolve) => setTimeout(resolve, 200));
 
+    status.value = "register";
+
     // Register the player
     await boardGameService.registerPlayer(playerName.value);
     hasJoined.value = true;
+
+    status.value = "done";
 
     // Temp Hack
     //for (let i = 0; i < playerCount.value - 1; i++) {
@@ -56,9 +80,19 @@ const joinGame = async () => {
         return;
     }
 
+    status.value = "sess_key";
+    const { sessionKey } = await walletState.registerSessionKey(password.value, 60 * 60 * 24, [
+        "board_game_2",
+        "crash_game_2",
+    ]);
+    authService.reload(sessionKey.privateKey, sessionKey.publicKey);
+
+    status.value = "register";
+
     gameState.playerName = playerName.value;
     await boardGameService.registerPlayer(playerName.value);
     hasJoined.value = true;
+    status.value = "done";
 };
 
 const startGame = async () => {
@@ -85,6 +119,16 @@ const reset = async () => {
                 </div>
 
                 <div class="space-y-2">
+                    <label class="block text-[#FFC636]">Password</label>
+                    <input
+                        v-model="password"
+                        type="password"
+                        class="w-full px-4 py-2 rounded-lg bg-[#1A0C3B] border-2 border-[#FFC636] text-white"
+                        placeholder="Enter password"
+                    />
+                </div>
+
+                <div class="space-y-2">
                     <label class="block text-[#FFC636]">Number of Players</label>
                     <select
                         v-model="playerCount"
@@ -99,10 +143,15 @@ const reset = async () => {
 
                 <button
                     @click="initAndJoinGame"
-                    class="w-full py-3 rounded-lg bg-[#FFC636] text-[#1A0C3B] font-bold hover:bg-[#FFD666] transition-colors"
+                    :disabled="status !== ''"
+                    class="w-full py-3 rounded-lg bg-[#FFC636] text-[#1A0C3B] font-bold hover:bg-[#FFD666] transition-colors disabled:opacity-50"
                 >
                     Create & Join Game
                 </button>
+
+                <p v-if="status === 'sess_key'" class="text-red-500">Creating session key...</p>
+                <p v-if="status === 'game'" class="text-red-500">Creating game...</p>
+                <p v-if="status === 'register'" class="text-red-500">Registering player...</p>
             </div>
 
             <div v-else class="space-y-6">
@@ -116,13 +165,28 @@ const reset = async () => {
                             placeholder="Enter your name"
                         />
                     </div>
+
+                    <div class="space-y-2">
+                        <label class="block text-[#FFC636]">Password</label>
+                        <input
+                            v-model="password"
+                            type="password"
+                            class="w-full px-4 py-2 rounded-lg bg-[#1A0C3B] border-2 border-[#FFC636] text-white"
+                            placeholder="Enter password"
+                        />
+                    </div>
+
                     <button
                         @click="joinGame"
-                        :disabled="!playerName"
+                        :disabled="!playerName || status !== ''"
                         class="w-full py-3 rounded-lg bg-[#FFC636] text-[#1A0C3B] font-bold hover:bg-[#FFD666] transition-colors disabled:opacity-50"
                     >
                         Join Game
                     </button>
+
+                    <p v-if="status === 'sess_key'" class="text-red-500">Creating session key...</p>
+                    <p v-if="status === 'game'" class="text-red-500">Creating game...</p>
+                    <p v-if="status === 'register'" class="text-red-500">Registering player...</p>
                 </div>
 
                 <div class="space-y-4">
