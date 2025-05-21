@@ -43,8 +43,8 @@ const initAndJoinGame = async () => {
     */
     status.value = "sess_key";
     const { sessionKey } = await walletState.registerSessionKey(password.value, 60 * 60 * 24, [
-        "board_game_2",
-        "crash_game_2",
+        gameState.board_game_contract,
+        gameState.crash_game_contract,
     ]);
     authService.reload(sessionKey.privateKey, sessionKey.publicKey);
 
@@ -82,8 +82,8 @@ const joinGame = async () => {
 
     status.value = "sess_key";
     const { sessionKey } = await walletState.registerSessionKey(password.value, 60 * 60 * 24, [
-        "board_game_2",
-        "crash_game_2",
+        gameState.board_game_contract,
+        gameState.crash_game_contract,
     ]);
     authService.reload(sessionKey.privateKey, sessionKey.publicKey);
 

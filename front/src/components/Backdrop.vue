@@ -48,7 +48,7 @@ watchEffect(() => {
         }
         return;
     }
-    if (gameState?.game?.round >= TRAIL_LENGTH - 1) {
+    if (animState.currentRoundIndex >= TRAIL_LENGTH - 1) {
         if (!isAnimationPlayed("StartFinalGame") && percentTravelled.value > 0.99) {
             markAnimationPlayedIn("StartFinalGame", 1.0, () => {
                 gameState.isInMinigame = true;

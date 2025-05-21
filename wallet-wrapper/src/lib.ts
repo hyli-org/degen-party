@@ -8,6 +8,7 @@ class HyliWalletElement extends HTMLElement {
     private mountPoint: HTMLDivElement | null = null;
 
     wallet: any = null;
+    config: any = null;
 
     connectedCallback() {
         if (this.mountPoint) {
@@ -36,11 +37,7 @@ class HyliWalletElement extends HTMLElement {
             React.createElement(
                 WalletProvider,
                 {
-                    config: {
-                        nodeBaseUrl: "http://localhost:4321",
-                        walletServerBaseUrl: "http://localhost:4000",
-                        applicationWsUrl: "ws://localhost:8081/ws",
-                    },
+                    config: this.config,
                 },
                 React.createElement(HyliWalletWrapper, { getWallet, providers })
             )

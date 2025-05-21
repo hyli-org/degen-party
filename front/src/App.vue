@@ -17,7 +17,7 @@ import * as HyliWallet from "hyli-wallet";
 import { TestnetChatElement } from "hyli-testnet-chat";
 import { watchEffect } from "vue";
 import { animState } from "./components/animState";
-import { onWalletReady } from "./utils/wallet";
+import { onWalletReady, walletConfig } from "./utils/wallet";
 
 customElements.define("testnet-chat", TestnetChatElement);
 
@@ -86,7 +86,11 @@ const connectionStatusColor = computed(() => {
                     <span v-if="showChat">Hide Chat</span>
                     <span v-else>Show Chat</span>
                 </button>
-                <hyli-wallet @walletReady="onWalletReady" providers="password,google"></hyli-wallet>
+                <hyli-wallet
+                    :config="walletConfig"
+                    @walletReady="onWalletReady"
+                    providers="password,google"
+                ></hyli-wallet>
                 <div
                     class="connection-status flex items-center gap-2 px-4 py-2 rounded-full border-3 border-white bg-black/20"
                 >

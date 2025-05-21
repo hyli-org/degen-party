@@ -113,6 +113,9 @@ export const gameState = reactive({
     running_minigame: null as string | null,
     isInLobby: true,
     isInMinigame: false,
+
+    board_game_contract: "",
+    crash_game_contract: "",
 });
 
 class BoardGameService extends BaseWebSocketService {
@@ -146,6 +149,10 @@ class BoardGameService extends BaseWebSocketService {
                     gameState.isInLobby = false;
                 if (this.onStateUpdated) {
                     this.onStateUpdated(event.payload);
+                }
+                if (event.payload.state.board_game) {
+                    gameState.board_game_contract = event.payload.state.board_game;
+                    gameState.crash_game_contract = event.payload.state.crash_game;
                 }
                 for (const e of event.payload.events) {
                     if (e instanceof Object && "MinigameReady" in e) {

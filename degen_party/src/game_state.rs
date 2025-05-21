@@ -41,6 +41,8 @@ pub enum GameStateEvent {
     StateUpdated {
         state: Option<GameState>,
         events: Vec<GameEvent>,
+        board_game: ContractName,
+        crash_game: ContractName,
     },
     MinigameEnded {
         contract_name: ContractName,
@@ -317,6 +319,8 @@ impl GameStateModule {
                 message: OutboundWebsocketMessage::GameStateEvent(GameStateEvent::StateUpdated {
                     state: Some(state.clone()),
                     events: vec![],
+                    board_game: self.board_game.clone(),
+                    crash_game: self.crash_game.clone(),
                 }),
             })?;
         }
@@ -340,6 +344,8 @@ impl GameStateModule {
                         GameStateEvent::StateUpdated {
                             state: Some(self.state.clone().unwrap()),
                             events,
+                            board_game: self.board_game.clone(),
+                            crash_game: self.crash_game.clone(),
                         },
                     ),
                 })?;
