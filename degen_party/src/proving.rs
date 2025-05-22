@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{path::Path, sync::Arc};
 
 use anyhow::Result;
 use borsh::{BorshDeserialize, BorshSerialize};
@@ -9,6 +9,9 @@ use hyle_modules::modules::{
     ModulesHandler,
 };
 use sdk::{utils::as_hyle_output, BlockHeight, RegisterContractEffect, ZkContract};
+use sp1_sdk::Prover;
+use sp1_sdk::SP1ProvingKey;
+use tracing::info;
 
 #[derive(Debug, BorshSerialize, BorshDeserialize, Clone)]
 pub struct BoardGameExecutor {
@@ -86,8 +89,13 @@ pub async fn setup_auto_provers(
     handler: &mut ModulesHandler,
 ) -> Result<()> {
     #[cfg(not(feature = "fake_proofs"))]
-    let board_game_prover =
-        Arc::new(client_sdk::helpers::sp1::SP1Prover::new(contracts::BOARD_GAME_ELF).await);
+    let board_game_prover = {
+        let pk = load_pk(
+            contracts::BOARD_GAME_ELF,
+            &ctx.data_directory.join("board_game_pk.json"),
+        );
+        Arc::new(client_sdk::helpers::sp1::SP1Prover::new(pk).await)
+    };
     #[cfg(feature = "fake_proofs")]
     let board_game_prover = Arc::new(client_sdk::helpers::test::TxExecutorTestProver::<
         board_game::game::GameState,
@@ -124,8 +132,13 @@ pub async fn setup_auto_provers(
             .0
     })?;
     #[cfg(not(feature = "fake_proofs"))]
-    let crash_game_prover =
-        Arc::new(client_sdk::helpers::sp1::SP1Prover::new(contracts::CRASH_GAME_ELF).await);
+    let crash_game_prover = {
+        let pk = load_pk(
+            contracts::CRASH_GAME_ELF,
+            &ctx.data_directory.join("crash_game_pk.json"),
+        );
+        Arc::new(client_sdk::helpers::sp1::SP1Prover::new(pk).await)
+    };
     #[cfg(feature = "fake_proofs")]
     let crash_game_prover = Arc::new(client_sdk::helpers::test::TxExecutorTestProver::<
         crash_game::GameState,
@@ -145,4 +158,28 @@ pub async fn setup_auto_provers(
         .await?;
 
     Ok(())
+}
+
+pub fn load_pk(elf: &[u8], pk_path: &Path) -> SP1ProvingKey {
+    if pk_path.exists() {
+        info!("Loading proving key from disk");
+        return std::fs::read(pk_path)
+            .map(|bytes| serde_json::from_slice(&bytes).expect("Failed to deserialize proving key"))
+            .expect("Failed to read proving key from disk");
+    } else if let Err(e) = std::fs::create_dir_all(pk_path.parent().unwrap()) {
+        tracing::error!("Failed to create data directory: {}", e);
+    }
+
+    info!("Building proving key");
+    let client = sp1_sdk::ProverClient::builder().cpu().build();
+    let (pk, _) = client.setup(elf);
+
+    if let Err(e) = std::fs::write(
+        pk_path,
+        serde_json::to_vec(&pk).expect("Failed to serialize proving key"),
+    ) {
+        tracing::error!("Failed to save proving key to disk: {}", e);
+    }
+
+    pk
 }
