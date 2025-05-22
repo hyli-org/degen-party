@@ -181,7 +181,7 @@ watch(
                             <button
                                 @click="placeCustomBet"
                                 :disabled="hasBet || placingBet || !validateCustomBet()"
-                                class="px-4 py-2 rounded-xl font-bold text-lg border-4 border-white shadow-md transition-all duration-150 hover:-translate-y-1 hover:shadow-lg focus:outline-none bg-gradient-to-b from-[#FF4D4D] to-[#CC0000] text-white"
+                                class="px-4 py-2 rounded-xl font-bold text-lg border-4 border-white shadow-md transition-all duration-150 hover:-translate-y-1 hover:shadow-lg focus:outline-none bg-gradient-to-b from-[#FF4D4D] to-[#CC0000] text-white disabled:from-[#999999] disabled:to-[#777] disabled:opacity-50"
                             >
                                 Bet
                             </button>

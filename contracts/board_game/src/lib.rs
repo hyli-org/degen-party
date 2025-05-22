@@ -3,8 +3,8 @@ pub mod game;
 use borsh::{BorshDeserialize, BorshSerialize};
 use game::{GameAction, GamePhase, GameState};
 use sdk::{
-    secp256k1, utils::parse_calldata, Blob, BlobData, BlobIndex, Calldata, ContractAction,
-    ContractName, LaneId, RunResult, StateCommitment, StructuredBlobData, ZkContract,
+    utils::parse_calldata, Blob, BlobData, BlobIndex, Calldata, ContractAction, ContractName,
+    LaneId, RunResult, StateCommitment, StructuredBlobData, ZkContract,
 };
 use serde::{Deserialize, Serialize};
 
@@ -58,26 +58,6 @@ impl ZkContract for GameState {
             }
         }
 
-        let expected_data = uuid::Uuid::from_u128(action.0).to_string();
-
-        let expected_action_data = match &action.1 {
-            GameAction::EndGame => "EndGame",
-            GameAction::Initialize { .. } => "Initialize",
-            GameAction::StartGame => "StartGame",
-            GameAction::RegisterPlayer { .. } => "RegisterPlayer",
-            GameAction::PlaceBet { .. } => "PlaceBet",
-            GameAction::SpinWheel => "SpinWheel",
-            GameAction::EndTurn => "EndTurn",
-            GameAction::StartMinigame { .. } => "StartMinigame",
-            GameAction::EndMinigame { .. } => "EndMinigame",
-        };
-
-        secp256k1::CheckSecp256k1::new(
-            contract_input,
-            format!("{}:{}", expected_data, expected_action_data).as_bytes(),
-        )
-        .expect()?;
-
         let Some(ref ctx) = contract_input.tx_ctx else {
             return Err("Missing transaction context".into());
         };
@@ -105,7 +85,7 @@ impl ZkContract for GameState {
             .iter()
             .map(|event| event.to_string())
             .collect::<Vec<String>>();
-        Ok((game_events.join("\n"), exec_ctx, vec![]))
+        Ok((game_events.join("\n").into_bytes(), exec_ctx, vec![]))
     }
 
     fn commit(&self) -> StateCommitment {

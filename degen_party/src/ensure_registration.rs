@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use anyhow::Result;
-use client_sdk::rest_client::NodeApiHttpClient;
+use client_sdk::rest_client::{NodeApiClient, NodeApiHttpClient};
 use hyle_modules::{
     bus::SharedMessageBus, module_bus_client, module_handle_messages, modules::Module,
 };
@@ -41,8 +41,8 @@ impl Module for EnsureRegistration {
             crash_game: ctx.crash_game.clone(),
         };
 
-        let a = ctx.client.get_contract(&ctx.board_game).await;
-        let b = ctx.client.get_contract(&ctx.crash_game).await;
+        let a = ctx.client.get_contract(ctx.board_game.clone()).await;
+        let b = ctx.client.get_contract(ctx.crash_game.clone()).await;
 
         if let (Ok(_), Ok(_)) = (a, b) {
             tracing::info!("Contracts already registered");
@@ -72,8 +72,8 @@ impl Module for EnsureRegistration {
 
         tokio::time::timeout(std::time::Duration::from_secs(60), async {
             loop {
-                let a = ctx.client.get_contract(&ctx.board_game).await;
-                let b = ctx.client.get_contract(&ctx.crash_game).await;
+                let a = ctx.client.get_contract(ctx.board_game.clone()).await;
+                let b = ctx.client.get_contract(ctx.crash_game.clone()).await;
                 if let (Ok(_), Ok(_)) = (a, b) {
                     break;
                 }
@@ -180,7 +180,10 @@ impl EnsureRegistration {
             timeout_window: Some(100),
             constructor_metadata: None, // TODO: fix this for CSI
         };
-        let res = self.hyle_client.register_contract(&register_tx).await?;
+        let res = self
+            .hyle_client
+            .register_contract(register_tx.clone())
+            .await?;
 
         tracing::warn!(
             "✅ Register contract for {} tx sent. Tx hash: {}",

@@ -5,8 +5,8 @@ use borsh::{BorshDeserialize, BorshSerialize};
 use sdk::caller::ExecutionContext;
 use sdk::utils::parse_calldata;
 use sdk::{
-    secp256k1, Blob, BlobData, BlobIndex, Calldata, ContractAction, ContractName, Identity, LaneId,
-    RunResult, StateCommitment, StructuredBlobData, ZkContract,
+    Blob, BlobData, BlobIndex, Calldata, ContractAction, ContractName, Identity, LaneId, RunResult,
+    StateCommitment, StructuredBlobData, ZkContract,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -173,20 +173,6 @@ impl ZkContract for GameState {
             return Err("Invalid lane ID".into());
         }
 
-        let expected_data = uuid::Uuid::from_u128(action.0).to_string();
-        let expected_action_data = match &action.1 {
-            ChainAction::InitMinigame { .. } => "StartMinigame",
-            ChainAction::Start => "Start",
-            ChainAction::CashOut { .. } => "CashOut",
-            ChainAction::Crash { .. } => "Crash",
-            ChainAction::Done => "EndMinigame",
-        };
-        secp256k1::CheckSecp256k1::new(
-            contract_input,
-            format!("{}:{}", expected_data, expected_action_data).as_bytes(),
-        )
-        .expect()?;
-
         let events = self
             .process_chain_action(
                 &contract_input.identity,
@@ -201,7 +187,7 @@ impl ZkContract for GameState {
             .iter()
             .map(|event| event.to_string())
             .collect::<Vec<String>>();
-        Ok((chain_events.join("\n"), exec_ctx, vec![]))
+        Ok((chain_events.join("\n").into_bytes(), exec_ctx, vec![]))
     }
 
     fn commit(&self) -> StateCommitment {
@@ -420,8 +406,7 @@ impl GameState {
 
     fn calculate_multiplier(elapsed_millis: u64) -> f64 {
         let elapsed_secs = elapsed_millis as f64 / 1000.0;
-        let speed = BASE_SPEED + (elapsed_millis as f64 * ACCELERATION);
-        (elapsed_secs * speed).exp()
+        (elapsed_secs * 0.2).exp()
     }
 
     fn calculate_winnings(bet_amount: u64, multiplier: f64) -> u64 {

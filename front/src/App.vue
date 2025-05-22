@@ -13,11 +13,11 @@ import Lobby from "./components/Lobby.vue";
 import { wsState } from "./utils/shared-websocket";
 
 import { addIdentityToMessage } from "./game_data/auth";
-import * as HyliWallet from "hyli-wallet";
+import * as HyliWallet from "wallet-wrapper";
 import { TestnetChatElement } from "hyli-testnet-chat";
 import { watchEffect } from "vue";
 import { animState } from "./components/animState";
-import { onWalletReady, walletConfig } from "./utils/wallet";
+import { onWalletReady, walletConfig, sessionKeyConfig } from "./utils/wallet";
 
 customElements.define("testnet-chat", TestnetChatElement);
 
@@ -88,8 +88,10 @@ const connectionStatusColor = computed(() => {
                 </button>
                 <hyli-wallet
                     :config="walletConfig"
-                    @walletReady="onWalletReady"
-                    providers="password,google"
+                    :sessionKeyConfig="sessionKeyConfig"
+                    :providers="['password', 'google']"
+                    :toto="sessionKeyConfig?.whitelist?.[0]"
+                    @walletUpdate="onWalletReady"
                 ></hyli-wallet>
                 <div
                     class="connection-status flex items-center gap-2 px-4 py-2 rounded-full border-3 border-white bg-black/20"
@@ -130,78 +132,6 @@ const connectionStatusColor = computed(() => {
         ></testnet-chat>
 
         <RouterView :key="routeFullPath" />
-
-        <!--
-        <main v-else class="relative z-1 mx-auto flex w-full max-w-[1400px] flex-1 flex-col overflow-y-auto p-4">
-            <div class="flex gap-4">
-                <div
-                    class="flex-[3_3_0%] h-fit overflow-hidden rounded-[30px] border-6 border-[#E67E22] bg-white shadow-xl relative"
-                >
-                    <div class="wooden-border"></div>
-                    <RouterView />
-                </div>
-
-                <div class="flex-1 min-w-[280px]">
-                    <div class="overflow-hidden rounded-[30px] border-6 border-[#E67E22] bg-white shadow-xl relative">
-                        <div class="wooden-border"></div>
-                        <h3
-                            class="p-4 text-center text-xl font-extrabold uppercase tracking-wider text-white"
-                            style="background: linear-gradient(to bottom, var(--yoshi-green), #4caf50)"
-                        >
-                            Party Players
-                        </h3>
-
-                        <div class="flex flex-col gap-3 p-4">
-                            <div
-                                v-for="player in players"
-                                :key="player.id"
-                                class="relative flex items-center gap-3 rounded-2xl border-l-6 bg-gray-50 p-3 shadow transition-all duration-300"
-                                :class="{
-                                    'scale-105 shadow-lg bg-[rgba(255,250,230,0.8)]': isCurrentPlayer(player.id),
-                                }"
-                                :style="{ borderColor: playerColor(player.id) }"
-                            >
-                                <div
-                                    class="flex h-10 w-10 items-center justify-center rounded-full border-3 border-white text-2xl shadow"
-                                    :style="{ backgroundColor: playerColor(player.id) }"
-                                >
-                                    {{ playerAvatar(player.id) }}
-                                </div>
-
-                                <div class="flex-1 pr-6">
-                                    <div class="text-lg font-bold text-gray-800">
-                                        {{ player.name || "Unknown player" }}
-                                    </div>
-                                    <div class="flex justify-between text-sm text-gray-600">
-                                        <span>Position: {{ player.position }}</span>
-                                        <span class="flex items-center gap-1 font-bold text-[#ff9800]">
-                                            <div><span class="coin-icon">🪙</span> {{ player.coins }}</div>
-                                            <div><span class="coin-icon">⭐</span> {{ player.stars }}</div>
-                                        </span>
-                                    </div>
-                                </div>
-
-                                <div
-                                    v-if="isCurrentPlayer(player.id)"
-                                    class="absolute right-2.5 top-1/2 -translate-y-1/2 text-2xl text-[var(--star-yellow)] active-marker"
-                                >
-                                    ▶
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="border-t border-dashed border-gray-200 p-4">
-                            <h4 class="mb-2 font-baloo text-xl text-gray-800">Mini-Game Rules</h4>
-                            <p class="text-sm text-gray-600">
-                                Bet your coins on the rocket! Cash out before it crashes to win, but wait too long and
-                                you'll lose everything!
-                            </p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </main>
-        -->
     </div>
 </template>
 

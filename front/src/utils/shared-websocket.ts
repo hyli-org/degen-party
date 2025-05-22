@@ -2,6 +2,7 @@ import { reactive } from "vue";
 import { authService } from "../game_data/auth";
 import { v4 as uuidv4 } from "uuid";
 import { SHA256, enc, lib } from "crypto-js";
+import { walletState } from "./wallet";
 
 export interface WebSocketState {
     connected: boolean;
@@ -130,21 +131,28 @@ class SharedWebSocketService {
             if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
                 await this.connect();
             }
-
+            /*
             // Get the public key or generate one if not exists
             const publicKey = authService.getSessionKey() || authService.generateSessionKey();
 
             // Create a string to be signed that includes message ID and identifier
             const messageId = uuidv4();
             const stringToSign = `${messageId}:${signed_data}`;
+            */
+            const identity_blobs = (() => {
+                try {
+                    return walletState.createIdentityBlobs();
+                } catch (_) {
+                    return [];
+                }
+            })();
 
             // Create the authenticated message
             const authenticatedMessage: AuthenticatedMessage = {
                 message,
-                signature: authService.signMessage(stringToSign),
-                public_key: publicKey,
-                message_id: messageId,
-                signed_data: stringToSign,
+                identity: walletState?.wallet?.address || "",
+                uuid: uuidv4(),
+                identity_blobs,
             };
 
             if (this.ws?.readyState === WebSocket.OPEN) {

@@ -1,6 +1,7 @@
-import { reactive } from "vue";
+import { computed, reactive } from "vue";
 import { BaseWebSocketService } from "../utils/base-websocket";
 import { authService } from "./auth";
+import { walletState } from "../utils/wallet";
 
 export interface MinigameResult {
     contract_name: string;
@@ -150,9 +151,10 @@ class BoardGameService extends BaseWebSocketService {
                 if (this.onStateUpdated) {
                     this.onStateUpdated(event.payload);
                 }
-                if (event.payload.state.board_game) {
-                    gameState.board_game_contract = event.payload.state.board_game;
-                    gameState.crash_game_contract = event.payload.state.crash_game;
+                if (event.payload.board_game) {
+                    console.log("Board game contract", event.payload.board_game);
+                    gameState.board_game_contract = event.payload.board_game;
+                    gameState.crash_game_contract = event.payload.crash_game;
                 }
                 for (const e of event.payload.events) {
                     if (e instanceof Object && "MinigameReady" in e) {
@@ -185,6 +187,7 @@ class BoardGameService extends BaseWebSocketService {
 
     async sendAction(action: GameAction) {
         if (!gameState.game) return;
+        console.log("Sending action", action);
         await this.send(
             {
                 type: "GameState",
@@ -275,8 +278,9 @@ class BoardGameService extends BaseWebSocketService {
 export const boardGameService = new BoardGameService();
 boardGameService.connect().catch(console.error);
 
+const playerId = computed(() => walletState?.wallet?.address || "");
 export function getLocalPlayerId(): string {
-    return `${authService.getSessionKey() || authService.generateSessionKey()}@secp256k1`;
+    return playerId.value;
 }
 
 export function isCurrentPlayer(id: string): boolean {

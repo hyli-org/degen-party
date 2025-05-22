@@ -7,6 +7,7 @@ use board_game::{
     game::{GameAction, GameEvent, GamePhase, GameState},
     GameActionBlob,
 };
+use client_sdk::rest_client::NodeApiClient;
 use crash_game::ChainActionBlob;
 use hyle_modules::{
     bus::{command_response::Query, BusClientSender, SharedMessageBus},
@@ -86,7 +87,11 @@ impl Module for GameStateModule {
             board_game: ctx.board_game.clone(),
             crash_game: ctx.crash_game.clone(),
             state: Some(borsh::from_slice(
-                &ctx.client.get_contract(&ctx.board_game).await?.state.0,
+                &ctx.client
+                    .get_contract(ctx.board_game.clone())
+                    .await?
+                    .state
+                    .0,
             )?),
         })
     }
@@ -104,13 +109,12 @@ impl Module for GameStateModule {
             listen<WsInMessage<AuthenticatedMessage<InboundWebsocketMessage>>> msg => {
                 let AuthenticatedMessage {
                     message,
-                    signature,
-                    public_key,
-                    message_id,
-                    signed_data,
+                    identity,
+                    uuid,
+                    identity_blobs
                 } = msg.message;
                 if let InboundWebsocketMessage::GameState(event) = message {
-                    if let Err(e) = self.handle_user_message(event, signature, public_key, message_id, signed_data).await {
+                    if let Err(e) = self.handle_user_message(event, identity, &uuid, identity_blobs).await {
                         tracing::warn!("Error handling event: {:?}", e);
                     }
                 }
@@ -133,14 +137,13 @@ impl GameStateModule {
     async fn handle_user_message(
         &mut self,
         event: GameStateCommand,
-        signature: String,
-        public_key: String,
-        message_id: String,
-        signed_data: String,
+        identity: Identity,
+        uuid: &str,
+        identity_blobs: Vec<Blob>,
     ) -> Result<()> {
         match event {
             GameStateCommand::SubmitAction { action } => {
-                self.handle_submit_action(action, signature, public_key, message_id, signed_data)
+                self.handle_submit_action(action, identity, uuid, identity_blobs)
                     .await
             }
             GameStateCommand::SendState => self.handle_send_state().await,
@@ -150,14 +153,13 @@ impl GameStateModule {
     async fn handle_submit_action(
         &mut self,
         action: GameAction,
-        signature: String,
-        public_key: String,
-        message_id: String,
-        signed_data: String,
+        identity: Identity,
+        uuid: &str,
+        identity_blobs: Vec<Blob>,
     ) -> Result<()> {
         let mut blobs = vec![];
 
-        let uuid_128: u128 = uuid::Uuid::parse_str(&message_id)?.as_u128();
+        let uuid_128: u128 = uuid::Uuid::parse_str(uuid)?.as_u128();
 
         tracing::warn!("Handling action: {:?}", action);
 
@@ -241,17 +243,9 @@ impl GameStateModule {
             }
         }
 
+        blobs.extend(identity_blobs);
+
         // Add identity blob
-        let identity = format!("{public_key}@secp256k1");
-        blobs.push(
-            Secp256k1Blob::new(
-                Identity::from(identity.clone()),
-                signed_data.as_bytes(),
-                &public_key,
-                &signature,
-            )?
-            .as_blob(),
-        );
         let tx = BlobTransaction::new(identity, blobs);
         self.bus.send(tx)?;
 

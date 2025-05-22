@@ -4,19 +4,19 @@
     "": {
       "name": "wallet-wrapper",
       "dependencies": {
-        "hyli-wallet": "^0.2.1",
+        "hyli-wallet": "^0.2.6",
         "react": "^19.1.0",
         "react-dom": "^19.1.0",
       },
       "devDependencies": {
-        "@eslint/js": "^9.25.0",
-        "@types/react": "^19.1.2",
-        "@types/react-dom": "^19.1.2",
+        "@eslint/js": "^9.27.0",
+        "@types/react": "^19.1.5",
+        "@types/react-dom": "^19.1.5",
         "@vitejs/plugin-react": "^4.4.1",
-        "eslint": "^9.25.0",
+        "eslint": "^9.27.0",
         "eslint-plugin-react-hooks": "^5.2.0",
-        "eslint-plugin-react-refresh": "^0.4.19",
-        "globals": "^16.0.0",
+        "eslint-plugin-react-refresh": "^0.4.20",
+        "globals": "^16.1.0",
         "vite": "^6.3.5",
       },
     },
@@ -354,7 +354,7 @@
 
     "hyli-check-secret": ["hyli-check-secret@0.3.2", "", { "dependencies": { "@aztec/bb.js": "0.82.2", "@noir-lang/noir_js": "1.0.0-beta.2", "@noir-lang/noir_wasm": "1.0.0-beta.2", "hyli": "^0.3.0" } }, "sha512-y7vE3UOttuceYWW2pn+P3ZPw0+k7AM13jGbGNSsVxkJcBAS84XhmzG86Z5lSwEzc1nxmHvvtXVFyCW27TuRnvw=="],
 
-    "hyli-wallet": ["hyli-wallet@0.2.3", "", { "dependencies": { "@types/crypto-js": "^4.2.2", "@types/elliptic": "^6.4.18", "@types/react-router-dom": "^5.3.3", "crypto-js": "^4.2.0", "elliptic": "^6.6.1", "hyli": "^0.3.0" }, "peerDependencies": { "hyli-check-secret": "^0.3.2", "react": "^19.1.0", "react-dom": "^19.1.0", "react-router-dom": "^7.5.0" } }, "sha512-e0M+oOBFSy8ReWWHgeLYv+SNmAn37Fb9zHo6whoARwlvVOv2FhWla/s7PY3OhEey3F6tT09E6Cj0icn0wjJdIQ=="],
+    "hyli-wallet": ["hyli-wallet@0.2.6", "", { "dependencies": { "@types/crypto-js": "^4.2.2", "@types/elliptic": "^6.4.18", "@types/react-router-dom": "^5.3.3", "crypto-js": "^4.2.0", "elliptic": "^6.6.1", "hyli": "^0.3.0" }, "peerDependencies": { "hyli-check-secret": "^0.3.2", "react": "^19.1.0", "react-dom": "^19.1.0", "react-router-dom": "^7.5.0" } }, "sha512-WBoPP41rOgDNNvfvvYFT0R2q0k5TrfYr00jIZpWDk5Ss2wCpH39gh54+1hxXMPDQV6JyvsU5gidSeE/Szvwc+w=="],
 
     "ieee754": ["ieee754@1.2.1", "", {}, "sha512-dcyqhDvX1C46lXZcVqCpK+FtMRQVdIMN6/Df5js2zouUsqG7I6sFxitIC+7KYK29KdXOLHdu9zL4sFnoVQnqaA=="],
 

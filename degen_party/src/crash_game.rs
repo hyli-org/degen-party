@@ -75,29 +75,19 @@ impl CrashGameModule {
     async fn handle_player_message(
         &mut self,
         event: CrashGameCommand,
-        signature: String,
-        public_key: String,
-        message_id: String,
-        signed_data: String,
+        identity: Identity,
+        uuid: &str,
+        identity_blobs: Vec<Blob>,
     ) -> Result<()> {
-        let uuid_128: u128 = uuid::Uuid::parse_str(&message_id)?.as_u128();
+        let uuid_128: u128 = uuid::Uuid::parse_str(uuid)?.as_u128();
         let mut blobs = match event {
             CrashGameCommand::CashOut { player_id } => {
                 self.handle_cash_out(uuid_128, player_id).await
             }
             CrashGameCommand::End => self.handle_end(uuid_128).await,
         }?;
-
-        let identity = format!("{public_key}@secp256k1");
-        blobs.push(
-            Secp256k1Blob::new(
-                Identity::from(identity.clone()),
-                signed_data.as_bytes(),
-                &public_key,
-                &signature,
-            )?
-            .as_blob(),
-        );
+        // Merge blobs with identity blobs
+        blobs.extend(identity_blobs);
         let tx = BlobTransaction::new(identity, blobs);
         self.bus.send(tx)?;
         Ok(())
@@ -245,6 +235,7 @@ impl CrashGameModule {
         }
 
         let now = SystemTime::now().duration_since(UNIX_EPOCH)?.as_millis();
+        let delta = now.saturating_sub(state.minigame_backend.current_time.unwrap());
         state.minigame_backend.current_time = Some(now);
         let elapsed_ms = now.saturating_sub(state.minigame_backend.game_start_time.unwrap());
 
@@ -253,9 +244,12 @@ impl CrashGameModule {
             current_time: elapsed_ms as u64,
         })?;
 
-        // Crash probability calculation
+        // Crash probability calculation: from 1% to 50% after 8 seconds (and staying there)
         let elapsed_secs = elapsed_ms as f64 / 1000.0;
-        let crash_probability = (elapsed_secs * 0.01).min(0.95);
+        let crash_probability = 0.01 + (0.49 * (elapsed_secs / 8.0).min(1.0));
+
+        // Instant probability over delta ms
+        let crash_probability = crash_probability * (delta as f64 / 1000.0);
 
         info!(
             "Updating game state - {}, {}",
@@ -264,7 +258,7 @@ impl CrashGameModule {
 
         let state = state.clone();
 
-        if rand::random::<f64>() < crash_probability && elapsed_secs > 2.0 {
+        if rand::random::<f64>() < crash_probability {
             self.bus.send(self.create_backend_tx(ChainAction::Crash {
                 final_multiplier: state.minigame_backend.current_multiplier,
             })?)?;
@@ -357,13 +351,12 @@ impl Module for CrashGameModule {
             listen<WsInMessage<AuthenticatedMessage<InboundWebsocketMessage>>> msg => {
                 let AuthenticatedMessage {
                     message,
-                    signature,
-                    public_key,
-                    message_id,
-                    signed_data,
+                    identity,
+                    uuid,
+                    identity_blobs,
                 } = msg.message;
                 if let InboundWebsocketMessage::CrashGame(event) = message {
-                    if let Err(e) = self.handle_player_message(event, signature, public_key, message_id, signed_data).await {
+                    if let Err(e) = self.handle_player_message(event, identity, &uuid, identity_blobs).await {
                         tracing::warn!("Error handling player message: {:?}", e);
                     }
                 }

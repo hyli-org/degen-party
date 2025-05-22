@@ -2,12 +2,10 @@
 import { ref, computed } from "vue";
 import { boardGameService, gameState } from "../game_data/game_data";
 import { walletState } from "../utils/wallet";
-import { authService } from "../game_data/auth";
 
 const playerName = ref("Player");
 const playerCount = ref(4);
 const hasJoined = ref(false);
-const password = ref("");
 
 const status = ref("");
 
@@ -33,20 +31,6 @@ const initAndJoinGame = async () => {
     }
 
     gameState.playerName = playerName.value;
-
-    /*
-    password: string,
-    expiration: number,
-    whitelist: string[],
-    onWalletEvent?: WalletEventCallback,
-    onError?: WalletErrorCallback,
-    */
-    status.value = "sess_key";
-    const { sessionKey } = await walletState.registerSessionKey(password.value, 60 * 60 * 24, [
-        gameState.board_game_contract,
-        gameState.crash_game_contract,
-    ]);
-    authService.reload(sessionKey.privateKey, sessionKey.publicKey);
 
     status.value = "game";
     // Create the game.
@@ -80,13 +64,6 @@ const joinGame = async () => {
         return;
     }
 
-    status.value = "sess_key";
-    const { sessionKey } = await walletState.registerSessionKey(password.value, 60 * 60 * 24, [
-        gameState.board_game_contract,
-        gameState.crash_game_contract,
-    ]);
-    authService.reload(sessionKey.privateKey, sessionKey.publicKey);
-
     status.value = "register";
 
     gameState.playerName = playerName.value;
@@ -107,7 +84,11 @@ const reset = async () => {
 <template>
     <div class="flex flex-col items-center justify-center min-h-screen bg-[#1A0C3B] text-white p-8">
         <div class="w-full max-w-md bg-[#2A1C4B] rounded-xl p-8 border-6 border-[#FFC636] shadow-2xl">
-            <div v-if="!gameState.game || gameState.game.phase === 'GameOver'" class="space-y-6">
+            <div v-if="!walletState.sessionKey">
+                <h1 class="text-3xl font-bold text-[#FFC636]">Connect your wallet</h1>
+                <p class="text-gray-400">Please connect your wallet to play the game.</p>
+            </div>
+            <div v-else-if="!gameState.game || gameState.game.phase === 'GameOver'" class="space-y-6">
                 <div class="space-y-2">
                     <label class="block text-[#FFC636]">Your Name</label>
                     <input
@@ -115,16 +96,6 @@ const reset = async () => {
                         type="text"
                         class="w-full px-4 py-2 rounded-lg bg-[#1A0C3B] border-2 border-[#FFC636] text-white"
                         placeholder="Enter your name"
-                    />
-                </div>
-
-                <div class="space-y-2">
-                    <label class="block text-[#FFC636]">Password</label>
-                    <input
-                        v-model="password"
-                        type="password"
-                        class="w-full px-4 py-2 rounded-lg bg-[#1A0C3B] border-2 border-[#FFC636] text-white"
-                        placeholder="Enter password"
                     />
                 </div>
 
@@ -149,7 +120,6 @@ const reset = async () => {
                     Create & Join Game
                 </button>
 
-                <p v-if="status === 'sess_key'" class="text-red-500">Creating session key...</p>
                 <p v-if="status === 'game'" class="text-red-500">Creating game...</p>
                 <p v-if="status === 'register'" class="text-red-500">Registering player...</p>
             </div>
@@ -166,16 +136,6 @@ const reset = async () => {
                         />
                     </div>
 
-                    <div class="space-y-2">
-                        <label class="block text-[#FFC636]">Password</label>
-                        <input
-                            v-model="password"
-                            type="password"
-                            class="w-full px-4 py-2 rounded-lg bg-[#1A0C3B] border-2 border-[#FFC636] text-white"
-                            placeholder="Enter password"
-                        />
-                    </div>
-
                     <button
                         @click="joinGame"
                         :disabled="!playerName || status !== ''"
@@ -184,7 +144,6 @@ const reset = async () => {
                         Join Game
                     </button>
 
-                    <p v-if="status === 'sess_key'" class="text-red-500">Creating session key...</p>
                     <p v-if="status === 'game'" class="text-red-500">Creating game...</p>
                     <p v-if="status === 'register'" class="text-red-500">Registering player...</p>
                 </div>

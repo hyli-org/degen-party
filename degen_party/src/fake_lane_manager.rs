@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use anyhow::Result;
-use client_sdk::rest_client::NodeApiHttpClient;
+use client_sdk::rest_client::{NodeApiClient, NodeApiHttpClient};
 use hyle_modules::{
     bus::BusClientSender, bus::SharedMessageBus, module_bus_client, module_handle_messages,
     modules::Module,
@@ -59,7 +59,7 @@ impl Module for FakeLaneManager {
 impl FakeLaneManager {
     async fn process_transaction(&mut self, tx: BlobTransaction) -> Result<()> {
         // Send the transaction to the Hylé node
-        let tx_hash = self.hyle_client.send_tx_blob(&tx).await?;
+        let tx_hash = self.hyle_client.send_tx_blob(tx.clone()).await?;
         info!(
             "Transaction successfully sent to the blockchain. Hash: {}",
             tx_hash

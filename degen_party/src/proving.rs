@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use borsh::{BorshDeserialize, BorshSerialize};
+use client_sdk::rest_client::NodeApiClient;
 use client_sdk::transaction_builder::TxExecutorHandler;
 use hyle_modules::modules::{
     prover::{AutoProver, AutoProverCtx},
@@ -88,11 +89,9 @@ pub async fn setup_auto_provers(
     let board_game_prover =
         Arc::new(client_sdk::helpers::sp1::SP1Prover::new(contracts::BOARD_GAME_ELF).await);
     #[cfg(feature = "fake_proofs")]
-    let board_game_prover = Arc::new(client_sdk::helpers::test::TxExecutorTestProver::new(
-        BoardGameExecutor {
-            state: borsh::from_slice(&ctx.client.get_contract(&ctx.board_game).await?.state.0)?,
-        },
-    ));
+    let board_game_prover = Arc::new(client_sdk::helpers::test::TxExecutorTestProver::<
+        board_game::game::GameState,
+    >::new());
 
     handler
         .build_module::<AutoProver<BoardGameExecutor>>(
@@ -104,7 +103,11 @@ pub async fn setup_auto_provers(
                 node: ctx.client.clone(),
                 default_state: BoardGameExecutor {
                     state: borsh::from_slice(
-                        &ctx.client.get_contract(&ctx.board_game).await?.state.0,
+                        &ctx.client
+                            .get_contract(ctx.board_game.clone())
+                            .await?
+                            .state
+                            .0,
                     )?,
                 },
             }
@@ -114,17 +117,19 @@ pub async fn setup_auto_provers(
 
     let crash_game_state: crash_game::GameState = borsh::from_slice(&{
         // We expect the game to not be running, so we go through the default init path
-        ctx.client.get_contract(&ctx.crash_game).await?.state.0
+        ctx.client
+            .get_contract(ctx.crash_game.clone())
+            .await?
+            .state
+            .0
     })?;
     #[cfg(not(feature = "fake_proofs"))]
     let crash_game_prover =
         Arc::new(client_sdk::helpers::sp1::SP1Prover::new(contracts::CRASH_GAME_ELF).await);
     #[cfg(feature = "fake_proofs")]
-    let crash_game_prover = Arc::new(client_sdk::helpers::test::TxExecutorTestProver::new(
-        CrashGameExecutor {
-            state: crash_game_state.clone(),
-        },
-    ));
+    let crash_game_prover = Arc::new(client_sdk::helpers::test::TxExecutorTestProver::<
+        crash_game::GameState,
+    >::new());
 
     handler
         .build_module::<AutoProver<CrashGameExecutor>>(Arc::new(AutoProverCtx {

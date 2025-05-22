@@ -1,16 +1,27 @@
-import { reactive } from "vue";
+import { computed, reactive } from "vue";
+import { WalletContextType, WalletUpdateEvent } from "wallet-wrapper";
+import { gameState } from "../game_data/game_data";
+import { authService } from "../game_data/auth";
 
 export const walletState = reactive({
-    wallet: null,
-    registerSessionKey: null,
+    wallet: null as WalletContextType["wallet"],
+    sessionKey: null as { privateKey: string; publicKey: string } | null,
+    createIdentityBlobs: null as any as WalletContextType["createIdentityBlobs"],
+    getOrReuseSessionKey: null as any as WalletContextType["getOrReuseSessionKey"],
 });
 
-export const onWalletReady = async (walletEvent: any) => {
-    console.log("Wallet ready event:", walletEvent.detail[0]);
-    const { wallet, registerSessionKey } = walletEvent.detail[0];
+export const onWalletReady = async (walletEvent: WalletUpdateEvent) => {
+    const { wallet, getOrReuseSessionKey, createIdentityBlobs } = walletEvent.detail;
     walletState.wallet = wallet;
-    walletState.registerSessionKey = registerSessionKey;
-    console.log("Wallet ready:", wallet);
+    walletState.getOrReuseSessionKey = getOrReuseSessionKey;
+    walletState.createIdentityBlobs = createIdentityBlobs;
+    const sessKey = await walletState.getOrReuseSessionKey();
+    if (sessKey) {
+        walletState.sessionKey = sessKey;
+        authService.reload(sessKey.privateKey, sessKey.publicKey);
+    } else {
+        walletState.sessionKey = null;
+    }
 };
 
 export const walletConfig =
@@ -25,3 +36,9 @@ export const walletConfig =
               walletServerBaseUrl: "https://wallet.testnet.hyli.org",
               applicationWsUrl: "wss://wallet.testnet.hyli.org/ws",
           };
+
+export const sessionKeyConfig = computed(() => {
+    let ret = { duration: 60 * 60 * 24 * 7, whitelist: [gameState.board_game_contract, gameState.crash_game_contract] };
+    console.log(ret);
+    return ret;
+});

@@ -238,14 +238,6 @@ impl GameState {
         timestamp: u128,
     ) -> Result<Vec<GameEvent>> {
         let mut events = Vec::new();
-
-        if let Some(player) = self.players.iter_mut().find(|p| &p.id == caller) {
-            if player.used_uuids.contains(&uuid) {
-                bail!("UUID already used");
-            }
-            player.used_uuids.push(uuid);
-        }
-
         match (self.phase.clone(), action) {
             (_, GameAction::EndGame) => {
                 let is_backend = self.backend_identity == *caller;

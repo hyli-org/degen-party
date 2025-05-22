@@ -140,8 +140,8 @@ const containerShift = computed(() => ({
                     top: `calc(50% - ${marker.rel * TRAIL_HEIGHT}px)`,
                 }"
             >
-                <div class="event-title">{{ roundOutcome(marker.round).title }}</div>
-                <div class="event-desc whitespace-pre">{{ roundOutcome(marker.round).description }}</div>
+                <p class="event-title">{{ roundOutcome(marker.round).title }}</p>
+                <p class="event-desc whitespace-pre-line">{{ roundOutcome(marker.round).description }}</p>
             </div>
             <!-- City at the end -->
             <div
