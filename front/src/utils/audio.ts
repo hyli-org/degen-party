@@ -1,4 +1,7 @@
-// Web Audio API utility for sound effects
+import timer from "../assets/timer.mp3?url";
+import crash from "../assets/crash.mp3?url";
+import cashout from "../assets/cashout.mp3?url";
+import tick from "../assets/tick.mp3?url";
 
 let audioContext: AudioContext | null = null;
 const soundBuffers: Record<string, AudioBuffer | null> = {
@@ -13,10 +16,10 @@ export async function initAudio() {
         audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
     }
     await Promise.all([
-        loadSound("timer", "/src/assets/timer.mp3"),
-        loadSound("crash", "/src/assets/crash.mp3"),
-        loadSound("cashout", "/src/assets/cashout.mp3"),
-        loadSound("tick", "/src/assets/tick.mp3"),
+        loadSound("timer", timer),
+        loadSound("crash", crash),
+        loadSound("cashout", cashout),
+        loadSound("tick", tick),
     ]);
 }
 
