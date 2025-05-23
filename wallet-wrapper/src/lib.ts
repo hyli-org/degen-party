@@ -83,4 +83,4 @@ export class HyliWalletElement extends HTMLElement {
     }
 }
 
-customElements.define("hyli-wallet", HyliWalletElement);
+//customElements.define("hyli-wallet", HyliWalletElement);

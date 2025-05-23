@@ -13,13 +13,14 @@ import Lobby from "./components/Lobby.vue";
 import { wsState } from "./utils/shared-websocket";
 
 import { addIdentityToMessage } from "./game_data/auth";
-import * as HyliWallet from "wallet-wrapper";
+import { HyliWalletElement } from "wallet-wrapper";
 import { TestnetChatElement } from "hyli-testnet-chat";
 import { watchEffect } from "vue";
 import { animState } from "./components/animState";
 import { onWalletReady, walletConfig, sessionKeyConfig } from "./utils/wallet";
 
 customElements.define("testnet-chat", TestnetChatElement);
+customElements.define("hyli-wallet", HyliWalletElement);
 
 const route = useRoute();
 const routeFullPath = ref(route.fullPath);
