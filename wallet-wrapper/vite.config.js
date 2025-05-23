@@ -1,6 +1,7 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
-import { analyzer } from "vite-bundle-analyzer";
+//import { analyzer } from "vite-bundle-analyzer";
+
 export default defineConfig((mode) => ({
     define: {
         // Necessary for react-dom to behave
@@ -21,5 +22,5 @@ export default defineConfig((mode) => ({
         outDir: "dist",
         emptyOutDir: true,
     },
-    plugins: [react(), analyzer()],
+    plugins: [react()], //, analyzer()],
 }));
