@@ -2,7 +2,7 @@ use anyhow::{anyhow, bail, Result};
 use borsh::{BorshDeserialize, BorshSerialize};
 use sdk::{ContractName, Identity, LaneId, StateCommitment};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::{collections::HashMap, hash::Hash};
 
 pub mod dice;
 pub mod player;
@@ -173,8 +173,8 @@ impl GameState {
             minigames,
             dice: dice::Dice::new(1, 10, random_seed),
             round_started_at: 0,
-            round: self.round,
-            bets: self.bets.clone(),
+            round: 0,
+            bets: HashMap::new(),
             all_or_nothing: false,
 
             backend_identity: self.backend_identity.clone(),
@@ -228,6 +228,30 @@ impl GameState {
 
     fn is_registered(&self, caller: &Identity) -> bool {
         self.players.iter().any(|p| p.id == *caller)
+    }
+
+    /// Checks if the game should end due to players running out of coins.
+    /// Emits a GameEnded event and sets phase if needed. Returns true if game ended.
+    fn check_and_handle_game_over(&mut self, events: &mut Vec<GameEvent>) -> bool {
+        let players_with_coins: Vec<_> = self.players.iter().filter(|p| p.coins > 0).collect();
+        if players_with_coins.len() == 1 && self.players.len() > 1 {
+            let winner = players_with_coins[0];
+            events.push(GameEvent::GameEnded {
+                winner_id: winner.id.clone(),
+                final_coins: winner.coins,
+            });
+            self.phase = GamePhase::GameOver;
+            true
+        } else if players_with_coins.is_empty() {
+            events.push(GameEvent::GameEnded {
+                winner_id: Identity::default(),
+                final_coins: 0,
+            });
+            self.phase = GamePhase::GameOver;
+            true
+        } else {
+            false
+        }
     }
 
     pub fn process_action(
@@ -324,18 +348,18 @@ impl GameState {
 
             // Betting Phase
             (GamePhase::Betting, GameAction::PlaceBet { amount }) => {
-                // Ignore players with zero coins
-                let Some(player) = self.players.iter().find(|p| p.id == *caller) else {
-                    return Err(anyhow!("Player {} not found", caller));
-                };
-                if player.coins == 0 {
-                    return Err(anyhow!("Player {} is out of the game (no coins)", caller));
-                }
                 if timestamp - self.round_started_at > 30_000 {
                     return Err(anyhow!("Betting time is over"));
                 }
                 if self.bets.contains_key(caller) {
                     return Err(anyhow!("Player has already placed a bet"));
+                }
+                let Some(player) = self.players.iter().find(|p| p.id == *caller) else {
+                    return Err(anyhow!("Player {} not found", caller));
+                };
+                // Ignore players with zero coins
+                if player.coins == 0 {
+                    return Err(anyhow!("Player {} is out of the game (no coins)", caller));
                 }
                 if self.all_or_nothing {
                     if amount != player.coins as u64 {
@@ -363,7 +387,6 @@ impl GameState {
                     } else {
                         self.phase = GamePhase::WheelSpin;
                     }
-                    self.all_or_nothing = false; // Reset after round
                 } else {
                     self.phase = GamePhase::Betting;
                 }
@@ -385,16 +408,10 @@ impl GameState {
                         }
                     }
                 }
+                // Reset after round
+                self.all_or_nothing = false;
                 // After coin updates, check for game over
-                let players_with_coins: Vec<_> =
-                    self.players.iter().filter(|p| p.coins > 0).collect();
-                if players_with_coins.len() == 1 {
-                    let winner = players_with_coins[0];
-                    events.push(GameEvent::GameEnded {
-                        winner_id: winner.id.clone(),
-                        final_coins: winner.coins,
-                    });
-                    self.phase = GamePhase::GameOver;
+                if self.check_and_handle_game_over(&mut events) {
                     return Ok(events);
                 }
                 // Use dice to determine the wheel outcome
@@ -509,15 +526,7 @@ impl GameState {
                 }
 
                 // After coin updates, check for game over
-                let players_with_coins: Vec<_> =
-                    self.players.iter().filter(|p| p.coins > 0).collect();
-                if players_with_coins.len() == 1 {
-                    let winner = players_with_coins[0];
-                    events.push(GameEvent::GameEnded {
-                        winner_id: winner.id.clone(),
-                        final_coins: winner.coins,
-                    });
-                    self.phase = GamePhase::GameOver;
+                if self.check_and_handle_game_over(&mut events) {
                     return Ok(events);
                 }
 

@@ -92,6 +92,7 @@ import { crashGameService, crashGameState } from "../game_data/crash";
 import { gameState, getLocalPlayerId } from "../game_data/game_data";
 import { addBackgroundEffects, Cashout, drawFlightPath } from "./CrashGameHelper";
 import { animState } from "./animState";
+import { playSound } from "../utils/audio";
 
 // Define emits for party game integration
 const emits = defineEmits(["win", "lose"]);
@@ -190,6 +191,42 @@ const showConfetti = ref(false);
 // Add ship image loading at the top of the script section
 const shipImage = new Image();
 shipImage.src = "/ship.svg";
+
+let timerPlaying = false;
+watch(
+    () => !gameStarted.value && timeLeftTillStart.value <= 3000 && timeLeftTillStart.value > 0,
+    (shouldPlay) => {
+        if (shouldPlay && !timerPlaying) {
+            playSound("timer", 0.7);
+            timerPlaying = true;
+        } else if (!shouldPlay && timerPlaying) {
+            // No need to stop, just flag
+            timerPlaying = false;
+        }
+    },
+);
+
+watch(gameEnded, (ended) => {
+    if (ended) {
+        playSound("crash", 0.9);
+    }
+});
+
+// --- CASHOUT SOUND ON NEW PLAYER CASHOUT ---
+let lastCashedOutIds: Set<string> = new Set();
+watch(
+    () => cashouts.value.map((c) => c.playerId),
+    (newIds, oldIds) => {
+        const newSet = new Set(newIds);
+        for (const id of newSet) {
+            if (!lastCashedOutIds.has(id)) {
+                playSound("cashout", 0.5);
+            }
+        }
+        lastCashedOutIds = newSet;
+    },
+    { immediate: true },
+);
 
 // Initialize canvas and start the game loop
 onMounted(() => {

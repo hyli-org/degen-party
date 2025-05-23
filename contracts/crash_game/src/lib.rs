@@ -13,10 +13,6 @@ use std::collections::HashMap;
 
 pub mod utils;
 
-// Game constants
-const BASE_SPEED: f64 = 0.02;
-const ACCELERATION: f64 = 0.000015;
-
 #[derive(Debug, Clone, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
 pub struct Player {
     pub id: Identity,

@@ -22,8 +22,11 @@ const isMyTurn = computed(() => isCurrentPlayer(localPlayerId));
 
 const currentState = computed(() => {
     if (!currentGame.value) return "Other";
+    // reactivity
+    isAnimationPlayed("BettingTimeUp");
     if (currentGame.value.phase != "WheelSpin") {
         if (currentGame.value.phase == "Betting") {
+            console.log("Betting phase", Date.now() - currentGame.value.round_started_at);
             if (Date.now() - currentGame.value.round_started_at > 30 * 1000) {
             } else {
                 return "Betting";

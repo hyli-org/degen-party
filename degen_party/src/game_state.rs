@@ -263,6 +263,7 @@ impl GameStateModule {
             uuid,
             match action {
                 GameAction::EndGame => "EndGame",
+                GameAction::SpinWheel => "SpinWheel",
                 _ => unreachable!(),
             }
         )
@@ -292,17 +293,14 @@ impl GameStateModule {
 
     async fn on_tick(&mut self) -> Result<()> {
         if let Some(state) = &self.state {
-            // TODO: when placing bets force inactive players to bet everything
-            /*
-            if state.phase == GamePhase::Rolling {
+            if state.phase == GamePhase::Betting {
                 let likely_timed_out = SystemTime::now().duration_since(UNIX_EPOCH)?.as_millis()
-                    > state.last_interaction_time + 15 * 1000;
+                    > state.round_started_at + 40 * 1000;
                 if likely_timed_out {
-                    let tx = self.create_backend_tx(GameAction::RollDice)?;
+                    let tx = self.create_backend_tx(GameAction::SpinWheel)?;
                     self.bus.send(tx)?;
                 }
             }
-             */
         }
         Ok(())
     }

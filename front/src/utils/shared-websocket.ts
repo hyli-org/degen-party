@@ -142,7 +142,8 @@ class SharedWebSocketService {
             const identity_blobs = (() => {
                 try {
                     return walletState.createIdentityBlobs();
-                } catch (_) {
+                } catch (e) {
+                    console.error("Error creating identity blobs:", e);
                     return [];
                 }
             })();

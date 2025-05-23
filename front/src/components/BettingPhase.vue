@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from "vue";
+import { ref, computed, onMounted, watch, onUnmounted } from "vue";
 import {
     gameState,
     playerColor,
@@ -13,9 +13,7 @@ import { addIdentityToMessage } from "../game_data/auth";
 import PlayerBar from "./PlayerBar.vue";
 import { animState, isAnimationPlayed, markAnimationPlayed, markAnimationPlayedIn } from "./animState";
 import SpinningWheel from "./SpinningWheel.vue";
-
-const timer = ref(30);
-const timerInterval = ref<number | null>(null);
+import { playLoopingSound } from "../utils/audio";
 
 ////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////
@@ -83,21 +81,75 @@ const betScreenActive = computed(() => {
     return !isAnimationPlayed("DoneBetting");
 });
 
+const timer = ref(30);
+const timerInterval = ref<number | null>(null);
+
+// --- TICKER SOUND EFFECT (Web Audio API) ---
+let tickerHandle: { stop: () => void; setVolume: (v: number) => void; setRate: (r: number) => void } | null = null;
+let tickerActive = false;
+
+function startTicker() {
+    if (tickerHandle) tickerHandle.stop();
+    let volume = getTickerVolume();
+    let rate = getTickerRate();
+    tickerHandle = playLoopingSound("tick", volume, rate);
+    tickerActive = true;
+}
+
+function stopTicker() {
+    tickerActive = false;
+    if (tickerHandle) {
+        tickerHandle.stop();
+        tickerHandle = null;
+    }
+}
+
+function getTickerVolume() {
+    if (timer.value <= 3) return 0.7;
+    if (timer.value <= 10) return 0.7;
+    if (timer.value <= 20) return 0.4;
+    return 0.0;
+}
+
+function getTickerRate() {
+    if (timer.value <= 4) return 2.0;
+    if (timer.value <= 10) return 1.5;
+    return 1.3;
+}
+
+watch(
+    () => timer.value,
+    (newVal, oldVal) => {
+        if (betScreenActive.value && newVal > 0 && !tickerActive) {
+            startTicker();
+        }
+        if ((!betScreenActive.value || newVal <= 0 || hasBet.value) && tickerActive) {
+            stopTicker();
+        }
+        // Adjust volume and rate live if ticker is active
+        if (tickerActive && tickerHandle) {
+            tickerHandle.setVolume(getTickerVolume());
+            tickerHandle.setRate(getTickerRate());
+        }
+    },
+    { immediate: true },
+);
+
 onMounted(() => {
     timer.value = 30;
     if (timerInterval.value) clearInterval(timerInterval.value);
     timerInterval.value = setInterval(() => {
         timer.value = Math.round(Math.max(0, 30 - (Date.now() - currentGame.value!.round_started_at) / 1000) * 10) / 10;
+        if (timer.value <= 0 && !isAnimationPlayed("BettingTimeUp")) {
+            timer.value = 0;
+            markAnimationPlayedIn("BettingTimeUp", 0.5);
+        }
     }, 100) as unknown as number;
 });
 
 watch(
     () => currentGame.value?.phase,
     (phase) => {
-        if (phase !== "Betting" && timerInterval.value) {
-            clearInterval(timerInterval.value);
-        }
-        console.log("phase", phase);
         if (typeof phase === "object" && "FinalMinigame" in phase) {
             markAnimationPlayed("FinalMinigameRound");
             markAnimationPlayed("SpinWheel");
@@ -107,6 +159,10 @@ watch(
         immediate: true,
     },
 );
+
+onUnmounted(() => {
+    stopTicker();
+});
 </script>
 
 <template>
