@@ -2,7 +2,10 @@ use anyhow::{anyhow, bail, Result};
 use borsh::{BorshDeserialize, BorshSerialize};
 use sdk::{ContractName, Identity, LaneId, StateCommitment};
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, hash::Hash};
+use std::{
+    collections::{BTreeMap, HashMap},
+    hash::Hash,
+};
 
 pub mod dice;
 pub mod player;
@@ -18,7 +21,7 @@ pub struct GameState {
     pub phase: GamePhase,
     pub round_started_at: u128,
     pub round: usize,
-    pub bets: HashMap<Identity, u64>,
+    pub bets: BTreeMap<Identity, u64>,
     pub all_or_nothing: bool,
 
     // Metadata to ensure the game runs smoothly
@@ -156,7 +159,7 @@ impl GameState {
             dice: dice::Dice::new(1, 10, 0),
             round_started_at: 0,
             round: 0,
-            bets: HashMap::new(),
+            bets: BTreeMap::new(),
             all_or_nothing: false,
 
             backend_identity,
@@ -174,7 +177,7 @@ impl GameState {
             dice: dice::Dice::new(1, 10, random_seed),
             round_started_at: 0,
             round: 0,
-            bets: HashMap::new(),
+            bets: BTreeMap::new(),
             all_or_nothing: false,
 
             backend_identity: self.backend_identity.clone(),
