@@ -3,11 +3,14 @@ import react from "@vitejs/plugin-react";
 //import { analyzer } from "vite-bundle-analyzer";
 
 // https://vite.dev/config/
-export default defineConfig({
-    plugins: [react()], //, analyzer({ include: /wallet\.es\.js$/ })],
+export default defineConfig((mode) => ({
+    define: {
+        // Necessary for react-dom to behave
+        "process.env.NODE_ENV": JSON.stringify(mode.mode),
+    },
     build: {
         sourcemap: true,
-        minify: false,
+        minify: true,
         lib: {
             entry: "src/lib.ts",
             name: "HyliWallet",
@@ -15,9 +18,10 @@ export default defineConfig({
             formats: ["es", "cjs"],
         },
         rollupOptions: {
-            external: ["barretenberg", "barretenberg/threads"],
+            external: ["hyli-wallet"],
         },
         outDir: "dist",
         emptyOutDir: true,
     },
-});
+    plugins: [react()], //, analyzer()],
+}));

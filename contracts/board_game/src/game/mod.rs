@@ -378,6 +378,18 @@ impl GameState {
                         }
                     }
                 }
+                // After coin updates, check for game over
+                let players_with_coins: Vec<_> =
+                    self.players.iter().filter(|p| p.coins > 0).collect();
+                if players_with_coins.len() == 1 {
+                    let winner = players_with_coins[0];
+                    events.push(GameEvent::GameEnded {
+                        winner_id: winner.id.clone(),
+                        final_coins: winner.coins,
+                    });
+                    self.phase = GamePhase::GameOver;
+                    return Ok(events);
+                }
                 // Use dice to determine the wheel outcome
                 let outcome = self.dice.roll() % 5;
                 events.push(GameEvent::WheelSpun {
@@ -487,6 +499,19 @@ impl GameState {
                         player_result,
                         &mut events,
                     )?;
+                }
+
+                // After coin updates, check for game over
+                let players_with_coins: Vec<_> =
+                    self.players.iter().filter(|p| p.coins > 0).collect();
+                if players_with_coins.len() == 1 {
+                    let winner = players_with_coins[0];
+                    events.push(GameEvent::GameEnded {
+                        winner_id: winner.id.clone(),
+                        final_coins: winner.coins,
+                    });
+                    self.phase = GamePhase::GameOver;
+                    return Ok(events);
                 }
 
                 events.push(GameEvent::MinigameEnded { result });

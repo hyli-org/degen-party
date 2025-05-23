@@ -15,6 +15,6 @@ export default defineConfig({
             },
         }),
         tailwindcss(),
-        //analyzer()
+        //analyzer(),
     ],
 });

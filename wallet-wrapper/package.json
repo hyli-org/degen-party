@@ -3,7 +3,6 @@
     "private": true,
     "version": "0.0.0",
     "type": "module",
-    "main": "dist/hyli-wallet.es.js",
     "module": "dist/hyli-wallet.es.js",
     "types": "dist/types/lib.d.ts",
     "scripts": {
@@ -12,9 +11,10 @@
         "lint": "eslint .",
         "preview": "vite preview"
     },
+    "peerDependencies": {
+        "hyli-wallet": "^0.2.8"
+    },
     "dependencies": {
-        "hyli-check-secret": "^0.3.2",
-        "hyli-wallet": "file:../../wallet/hyli-wallet",
         "react": "^19.1.0",
         "react-dom": "^19.1.0"
     },
@@ -27,6 +27,7 @@
         "eslint-plugin-react-hooks": "^5.2.0",
         "eslint-plugin-react-refresh": "^0.4.20",
         "globals": "^16.1.0",
+        "typescript": "^5.8.3",
         "vite": "^6.3.5",
         "vite-bundle-analyzer": "^0.21.0"
     }
