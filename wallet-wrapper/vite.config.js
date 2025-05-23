@@ -1,6 +1,6 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
-//import { analyzer } from "vite-bundle-analyzer";
+import { analyzer } from "vite-bundle-analyzer";
 
 // https://vite.dev/config/
 export default defineConfig((mode) => ({
@@ -18,10 +18,10 @@ export default defineConfig((mode) => ({
             formats: ["es", "cjs"],
         },
         rollupOptions: {
-            external: ["hyli-wallet"],
+            external: ["@aztec/bb.js", "@noir-lang/noirc_abi", "@noir-lang/acvm_js"],
         },
         outDir: "dist",
         emptyOutDir: true,
     },
-    plugins: [react()], //, analyzer()],
+    plugins: [react(), analyzer()],
 }));

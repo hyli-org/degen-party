@@ -324,15 +324,19 @@ impl GameState {
 
             // Betting Phase
             (GamePhase::Betting, GameAction::PlaceBet { amount }) => {
+                // Ignore players with zero coins
+                let Some(player) = self.players.iter().find(|p| p.id == *caller) else {
+                    return Err(anyhow!("Player {} not found", caller));
+                };
+                if player.coins == 0 {
+                    return Err(anyhow!("Player {} is out of the game (no coins)", caller));
+                }
                 if timestamp - self.round_started_at > 30_000 {
                     return Err(anyhow!("Betting time is over"));
                 }
                 if self.bets.contains_key(caller) {
                     return Err(anyhow!("Player has already placed a bet"));
                 }
-                let Some(player) = self.players.iter().find(|p| p.id == *caller) else {
-                    return Err(anyhow!("Player {} not found", caller));
-                };
                 if self.all_or_nothing {
                     if amount != player.coins as u64 {
                         return Err(anyhow!("All or nothing round: you must bet all your coins"));
@@ -345,7 +349,9 @@ impl GameState {
                     player_id: caller.clone(),
                     amount,
                 });
-                if self.bets.len() == self.players.len() {
+                // Only require bets from players with coins > 0
+                let active_players = self.players.iter().filter(|p| p.coins > 0).count();
+                if self.bets.len() == active_players {
                     if self.round >= ROUNDS - 1 {
                         let Some(final_minigame) = self.minigames.first() else {
                             return Err(anyhow!("No final minigame available"));
@@ -371,9 +377,10 @@ impl GameState {
                     if timestamp - self.round_started_at < 30_000 {
                         return Err(anyhow!("Not enough time has passed"));
                     }
-                    // All players that haven't placed bets lose 10 coins
+                    // Only penalize players with coins > 0 who haven't bet
                     for i in 0..self.players.len() {
-                        if !self.bets.contains_key(&self.players[i].id) {
+                        if self.players[i].coins > 0 && !self.bets.contains_key(&self.players[i].id)
+                        {
                             self.update_player_coins(i, -10, &mut events)?;
                         }
                     }
