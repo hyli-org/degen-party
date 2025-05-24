@@ -63,10 +63,6 @@ const connectionStatusColor = computed(() => {
 
 <template>
     <div class="relative flex h-screen w-full flex-col overflow-hidden">
-        <div class="stars-background"></div>
-        <div class="clouds-background"></div>
-        <div class="grass-overlay"></div>
-
         <header
             class="relative z-10 flex items-center justify-between border-b-[5px] border-white px-6 py-3 shadow-lg"
             style="background: linear-gradient(to bottom, #ff7a7a, var(--mario-red))"
@@ -170,62 +166,6 @@ body {
     width: 100vw;
     overflow: hidden;
     line-height: 1.6;
-}
-
-.stars-background {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background-image: url("data:image/svg+xml,%3Csvg width='100' height='100' viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M50 0 L52 47 L100 50 L52 53 L50 100 L48 53 L0 50 L48 47 Z' fill='%23FFD700' fill-opacity='0.1'/%3E%3C/svg%3E");
-    background-size: 100px 100px;
-    z-index: -3;
-    animation: twinkling 10s linear infinite;
-}
-
-.clouds-background {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background-image:
-        url("data:image/svg+xml,%3Csvg width='200' height='100' viewBox='0 0 200 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M30 40 C10 40 0 60 20 70 C0 80 10 100 30 90 C50 100 70 80 50 70 C70 60 60 40 30 40 Z' fill='white' fill-opacity='0.7'/%3E%3C/svg%3E"),
-        url("data:image/svg+xml,%3Csvg width='300' height='150' viewBox='0 0 300 150' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M50 70 C20 70 0 100 30 120 C0 140 20 180 50 160 C80 180 110 140 80 120 C110 100 80 70 50 70 Z' fill='white' fill-opacity='0.5'/%3E%3C/svg%3E");
-    background-size:
-        300px 150px,
-        500px 250px;
-    background-position:
-        50% 20%,
-        20% 70%;
-    z-index: -2;
-    animation: floating 40s linear infinite;
-}
-
-.grass-overlay {
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    width: 100%;
-    height: 25%;
-    background: var(--grass-color);
-    border-top: 10px solid #378e37;
-    z-index: -1;
-}
-
-.grass-overlay::before {
-    content: "";
-    position: absolute;
-    top: -20px;
-    left: 0;
-    width: 100%;
-    height: 20px;
-    background-image:
-        linear-gradient(45deg, var(--grass-color) 50%, transparent 50%),
-        linear-gradient(-45deg, var(--grass-color) 50%, transparent 50%);
-    background-size: 20px 20px;
-    background-repeat: repeat-x;
 }
 
 .game-logo {

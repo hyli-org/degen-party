@@ -9,7 +9,7 @@ use sdk::{
     StateCommitment, StructuredBlobData, ZkContract,
 };
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 pub mod utils;
 
@@ -35,7 +35,7 @@ pub enum MinigameState {
 #[derive(Default, Debug, Clone, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
 pub struct MinigameInstanceVerifiable {
     pub state: MinigameState,
-    pub players: HashMap<Identity, Player>,
+    pub players: BTreeMap<Identity, Player>,
 }
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
@@ -234,7 +234,7 @@ impl GameState {
                     exec_ctx
                         .is_in_callee_blobs(&self.board_contract, expected_board_blob)
                         .map_err(|_| {
-                            anyhow!("Missing board game EndMinigame action in transaction")
+                            anyhow!("Missing or incorrect board game StartMinigame action in transaction",)
                         })?;
                 }
 
@@ -354,9 +354,9 @@ impl GameState {
 
                     // When ending the minigame, verify that the board game is being updated with the correct data
                     exec_ctx
-                        .is_in_callee_blobs(&self.board_contract, expected_board_blob)
+                        .is_in_callee_blobs(&self.board_contract, expected_board_blob.clone())
                         .map_err(|_| {
-                            anyhow!("Missing board game EndMinigame action in transaction")
+                            anyhow!("Missing board game EndMinigame action in transaction, expected: {:?}", expected_board_blob)
                         })?;
                 }
 

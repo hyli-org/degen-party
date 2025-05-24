@@ -88,7 +88,11 @@ boardGameService.onStateUpdated = (payload) => {
     }
     if (!payload?.events) return;
     for (const e of payload.events) {
-        if (typeof e === "object" && "WheelSpun" in e) {
+        if (typeof e === "object" && "GameInitialized" in e) {
+            // Reset the animation state when a new game is initialized
+            animState.currentRoundIndex = 0;
+            animState.eventHistory = reactive({});
+        } else if (typeof e === "object" && "WheelSpun" in e) {
             const roundNum = e.WheelSpun.round;
             let roundEntry = animState.eventHistory[roundNum];
             if (!roundEntry) {
@@ -140,8 +144,6 @@ export function markAnimationPlayedIn(id: string, delay: number, cb?: () => void
 watch(
     () => animState.currentRoundIndex,
     () => {
-        console.log("Round changed, cleaning up animations");
-        console.log("From round", animState.currentRoundIndex);
         // Clear all scheduled timers
         for (const timer of Object.values(scheduledAnimationTimers)) {
             clearTimeout(timer);

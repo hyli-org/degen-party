@@ -1,13 +1,21 @@
 <script setup lang="ts">
-import { ref, computed } from "vue";
+import { ref, computed, watch } from "vue";
 import { boardGameService, gameState } from "../game_data/game_data";
 import { walletState } from "../utils/wallet";
 
 const playerName = ref("Player");
 const playerCount = ref(4);
 const hasJoined = ref(false);
-
 const status = ref("");
+
+watch(
+    () => walletState.sessionKey,
+    (newSessionKey) => {
+        if (newSessionKey && playerName.value === "Player") {
+            playerName.value = walletState.wallet.username;
+        }
+    },
+);
 
 const canStartGame = computed(() => {
     if (!gameState.game) return false;

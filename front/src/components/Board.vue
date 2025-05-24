@@ -20,6 +20,10 @@ const playersSorted = computed(() => {
     return [...currentGame.value.players].sort((a, b) => b.coins - a.coins || a.name.localeCompare(b.name));
 });
 const winner = computed(() => playersSorted.value[0]);
+const allLost = computed(() => {
+    if (!currentGame.value) return false;
+    return currentGame.value.players.every((p) => p.coins === 0);
+});
 </script>
 
 <template>
@@ -31,12 +35,16 @@ const winner = computed(() => playersSorted.value[0]);
         </div>
 
         <BettingPhase v-if="currentGame" />
+
         <div v-if="showGameOver" class="absolute inset-0 flex flex-col items-center justify-center bg-black/60 z-50">
             <div
                 class="bg-white rounded-3xl shadow-2xl p-12 flex flex-col items-center gap-8 min-w-[350px] max-w-[90vw]"
             >
                 <div class="text-5xl font-extrabold text-[#FFD700] drop-shadow-lg mb-2">GAME ENDED</div>
-                <div class="text-2xl font-bold text-[#8B0000] mb-4">
+                <div v-if="allLost" class="text-2xl font-bold text-[#8B0000] mb-4">
+                    Everyone lost! No one has any coins left. 😵
+                </div>
+                <div v-else class="text-2xl font-bold text-[#8B0000] mb-4">
                     Winner: <span class="text-green-600">{{ winner?.name }}</span> 🏆 (+100 coins!)
                 </div>
                 <div class="w-full">
@@ -45,11 +53,14 @@ const winner = computed(() => playersSorted.value[0]);
                         <li v-for="(player, idx) in playersSorted" :key="player.id" class="flex items-center gap-3">
                             <span
                                 class="font-bold text-xl"
-                                :class="{ 'text-green-600': idx === 0, 'text-gray-500': idx !== 0 }"
+                                :class="{
+                                    'text-green-600': idx === 0 && !allLost,
+                                    'text-gray-500': idx !== 0 || allLost,
+                                }"
                                 >{{ player.name }}</span
                             >
                             <span class="text-lg">- {{ player.coins }} 🪙</span>
-                            <span v-if="idx === 0" class="ml-2 text-2xl">🏆</span>
+                            <span v-if="idx === 0 && !allLost" class="ml-2 text-2xl">🏆</span>
                         </li>
                     </ol>
                 </div>

@@ -23,10 +23,16 @@ interface EventMarker {
     rel: number; // relative shift from current round
 }
 
+function easeInOutS(t: number): number {
+    // Smoothstep S-curve: 3t^2 - 2t^3
+    return t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t);
+}
+
 const percentTravelled = computed(() => {
     if (!currentGame.value) return 0;
     if (!isAnimationPlayed("SpinWheel")) return 0;
-    return Math.min(1, (animState.timeInRound - getAnimationPlayedTime("SpinWheel")) / 3);
+    const linear = Math.min(1, (animState.timeInRound - getAnimationPlayedTime("SpinWheel")) / 3);
+    return easeInOutS(linear);
 });
 
 function outcomeIcon(outcome: number) {
@@ -82,6 +88,37 @@ const eventMarkers = computed<EventMarker[]>(() => {
 const containerShift = computed(() => ({
     transform: `translateY(${(animState.currentRoundIndex + percentTravelled.value) * TRAIL_HEIGHT}px)`,
 }));
+
+// Spiral positioning for avatars
+function getSpiralPosition(idx: number, total: number) {
+    // Spiral parameters
+    const centerX = 50; // percent
+    const centerY = 50; // percent
+    const spiralTurns = 1.5; // how many turns in the spiral
+    const minRadius = 8; // px
+    const maxRadius = 16; // px, will scale down if more players
+    const scale = Math.max(0.5, 1 - (total - 1) * 0.12); // scale down if more players
+    const t = total > 1 ? idx / (total - 1) : 0.5;
+    const angle = 2 * Math.PI * spiralTurns * t - Math.PI / 2;
+    const radius = minRadius + (maxRadius - minRadius) * t * scale;
+    const trailComponent = (animState.currentRoundIndex + percentTravelled.value) * TRAIL_HEIGHT;
+
+    // Special case: 2 players side-by-side
+    if (total === 2) {
+        const offset = 16; // px, horizontal offset
+        return {
+            left: `calc(${centerX}% + ${idx === 0 ? -offset : offset}px)`,
+            top: `calc(${centerY}% - ${trailComponent}px)`,
+            scale: scale,
+        };
+    }
+
+    return {
+        left: `calc(${centerX}% + ${Math.cos(angle) * radius}px)`,
+        top: `calc(${centerY}% + ${Math.sin(angle) * radius - trailComponent}px)`,
+        scale: scale,
+    };
+}
 </script>
 
 <template>
@@ -98,12 +135,10 @@ const containerShift = computed(() => ({
             <div
                 v-for="(avatar, idx) in avatars"
                 :key="avatar.id"
-                class="avatar z-50"
-                :style="{
-                    top: `calc(50% - ${(animState.currentRoundIndex + percentTravelled) * TRAIL_HEIGHT}px)`,
-                }"
+                class="avatar z-50 spiral-avatar"
+                :style="getSpiralPosition(idx, avatars.length)"
             >
-                <p class="avatar-sprite" :style="{ backgroundColor: playerColor(avatar.id) }">
+                <p class="avatar-sprite spiral-wiggle" :style="{ backgroundColor: playerColor(avatar.id) }">
                     {{ playerAvatar(avatar.id) }}
                 </p>
             </div>
@@ -241,8 +276,6 @@ const containerShift = computed(() => ({
 }
 .avatar {
     position: absolute;
-    left: 50%;
-    transform: translateX(-50%);
 }
 .avatar-sprite {
     width: 30px;
@@ -251,5 +284,22 @@ const containerShift = computed(() => ({
     border-radius: 50%;
     border: 2px solid #fff5;
     box-shadow: 0 2px 8px #0008;
+}
+.spiral-avatar {
+    transition: transform 0.5s;
+}
+@keyframes spiral-wiggle {
+    0% {
+        transform: translate(-50%, -50%) scale(1) rotate(-7deg);
+    }
+    50% {
+        transform: translate(-50%, -50%) scale(1.05) rotate(7deg);
+    }
+    100% {
+        transform: translate(-50%, -50%) scale(1) rotate(-7deg);
+    }
+}
+.spiral-wiggle {
+    animation: spiral-wiggle 1.2s infinite alternate;
 }
 </style>

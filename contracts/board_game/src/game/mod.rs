@@ -1,11 +1,8 @@
-use anyhow::{anyhow, bail, Result};
+use anyhow::{anyhow, Result};
 use borsh::{BorshDeserialize, BorshSerialize};
 use sdk::{ContractName, Identity, LaneId, StateCommitment};
 use serde::{Deserialize, Serialize};
-use std::{
-    collections::{BTreeMap, HashMap},
-    hash::Hash,
-};
+use std::collections::BTreeMap;
 
 pub mod dice;
 pub mod player;
@@ -260,7 +257,7 @@ impl GameState {
     pub fn process_action(
         &mut self,
         caller: &Identity,
-        uuid: u128,
+        _uuid: u128,
         action: GameAction,
         timestamp: u128,
     ) -> Result<Vec<GameEvent>> {
@@ -407,7 +404,13 @@ impl GameState {
                     for i in 0..self.players.len() {
                         if self.players[i].coins > 0 && !self.bets.contains_key(&self.players[i].id)
                         {
-                            self.update_player_coins(i, -10, &mut events)?;
+                            if self.all_or_nothing {
+                                // In all or nothing mode, they lose everything
+                                self.update_player_coins(i, -self.players[i].coins, &mut events)?;
+                            } else {
+                                // Otherwise, penalize 10 coins
+                                self.update_player_coins(i, -10, &mut events)?;
+                            }
                         }
                     }
                 }

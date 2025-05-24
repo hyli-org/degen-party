@@ -49,7 +49,10 @@
 
             <div class="w-[300px] game-controls card h-full">
                 <div class="flex flex-col items-center justify-center h-full">
-                    <h3 v-if="!isPlayerInGame">You did not bet, so you are missing this round !</h3>
+                    <button v-if="gameEnded" class="action-button next-action" @click="handleActionButton">
+                        <span class="btn-text"> <span class="btn-icon">🎮</span> BACK TO BOARD </span>
+                    </button>
+                    <h3 v-else-if="!isPlayerInGame">You did not bet, so you are missing this round !</h3>
                     <button
                         v-else-if="!gameEnded"
                         :disabled="!gameStarted || hasPlayerCashedOut"
@@ -57,9 +60,6 @@
                         @click="handleActionButton"
                     >
                         <span class="btn-text"> <span class="text-3xl">🚀</span><br />CASH OUT! </span>
-                    </button>
-                    <button v-else-if="gameEnded" class="action-button next-action" @click="handleActionButton">
-                        <span class="btn-text"> <span class="btn-icon">🎮</span> BACK TO BOARD </span>
                     </button>
                 </div>
             </div>
@@ -91,7 +91,7 @@ import ConfettiEffect from "./ConfettiEffect.vue";
 import { crashGameService, crashGameState } from "../game_data/crash";
 import { gameState, getLocalPlayerId } from "../game_data/game_data";
 import { addBackgroundEffects, Cashout, drawFlightPath } from "./CrashGameHelper";
-import { animState } from "./animState";
+import { animState, isAnimationPlayed, markAnimationPlayed } from "./animState";
 import { playSound } from "../utils/audio";
 
 // Define emits for party game integration
@@ -144,9 +144,10 @@ const timeLeftTillStart = ref(0);
 const gameStarted = computed(() => crashGameState.minigame_verifiable?.state != "WaitingForStart");
 const gameEnded = computed(
     () =>
-        gameStarted.value &&
-        (crashGameState.minigame_verifiable?.state == "Crashed" ||
-            crashGameState.minigame_verifiable?.state == "Uninitialized"),
+        isAnimationPlayed("crashGameEnd") ||
+        (gameStarted.value &&
+            (crashGameState.minigame_verifiable?.state == "Crashed" ||
+                crashGameState.minigame_verifiable?.state == "Uninitialized")),
 );
 const currentMultiplier = computed(() => crashGameState.minigame_backend?.current_multiplier ?? 1);
 
@@ -161,22 +162,38 @@ const playerCashedOutAt = computed(() => {
     return crashGameState.minigame_verifiable?.players?.[getLocalPlayerId()]?.cashed_out_at ?? 0;
 });
 
-const cashouts = computed(() => {
-    const cashoutList: Cashout[] = [];
+const cashouts = ref([] as Cashout[]);
+const updateCashouts = () => {
+    cashouts.value = [];
     if (crashGameState.minigame_verifiable?.players) {
         for (const [playerId, bet] of Object.entries(crashGameState.minigame_verifiable.players)) {
             if (bet.cashed_out_at) {
                 const player = gameState.game?.players.find((p) => p.id.toString() === playerId);
-                cashoutList.push({
+                cashouts.value.push({
                     playerId,
                     amount: bet.bet,
                     multiplier: bet.cashed_out_at,
                     playerName: player?.name || "Unknown Player",
                 });
+            } else if (gameEnded.value && bet.bet > 0) {
+                // If game ended and player didn't cash out, add them with multiplier 0
+                const player = gameState.game?.players.find((p) => p.id.toString() === playerId);
+                cashouts.value.push({
+                    playerId,
+                    amount: bet.bet,
+                    multiplier: 0,
+                    playerName: player?.name || "Unknown Player",
+                });
             }
         }
     }
-    return cashoutList;
+};
+// Update until game end
+watchEffect(() => {
+    if (isAnimationPlayed("crashGameEnd")) return;
+    if (crashGameState.minigame_verifiable) {
+        updateCashouts();
+    }
 });
 
 const betAmount = computed(() => {
@@ -330,6 +347,7 @@ const finalResults = ref<FinalResult[]>([]);
 // Watch for game end to show final results
 watch(gameEnded, (newValue) => {
     if (newValue) {
+        markAnimationPlayed("crashGameEnd");
         // Add timeout to show modal after crash animation
         setTimeout(() => {
             // Calculate final results for each player
