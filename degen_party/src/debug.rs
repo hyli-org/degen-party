@@ -139,7 +139,7 @@ impl Module for DebugAnalyzer {
                     self.ui_state.redraw = false;
                 }
             }
-            Ok(true) = async { event::poll(Duration::from_secs(1)) } => {
+            Ok(true) = async { event::poll(Duration::from_secs(0)) } => {
                 if let Event::Key(key) = event::read()? {
                     let transactions = self.collect_sorted_transactions();
                     match key.code {

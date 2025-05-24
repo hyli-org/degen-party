@@ -1178,9 +1178,9 @@ dependencies = [
 
 [[package]]
 name = "cc"
-version = "1.2.23"
+version = "1.2.24"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5f4ac86a9e5bc1e2b3449ab9d7d3a6a405e3d1bb28d7b9be8614f55846ae3766"
+checksum = "16595d3be041c03b09d08d0858631facccee9221e579704070e6e9e4915d3bc7"
 dependencies = [
  "shlex",
 ]
@@ -2478,7 +2478,7 @@ checksum = "df3b46402a9d5adb4c86a0cf463f42e19994e3ee891101b1841f30a545cb49a9"
 [[package]]
 name = "hyle-client-sdk"
 version = "0.13.0-rc.4"
-source = "git+https://github.com/Hyle-org/hyle.git?branch=main#b62835266117baad0e6317d31eac9cf8df023b8c"
+source = "git+https://github.com/Hyle-org/hyle.git?branch=main#31a475d012ff9f0436ab099f6b0c1d8a6bfad3e6"
 dependencies = [
  "anyhow",
  "axum 0.8.4",
@@ -2498,7 +2498,7 @@ dependencies = [
 [[package]]
 name = "hyle-contract-sdk"
 version = "0.13.0-rc.4"
-source = "git+https://github.com/Hyle-org/hyle.git?branch=main#b62835266117baad0e6317d31eac9cf8df023b8c"
+source = "git+https://github.com/Hyle-org/hyle.git?branch=main#31a475d012ff9f0436ab099f6b0c1d8a6bfad3e6"
 dependencies = [
  "borsh",
  "hyle-model",
@@ -2511,7 +2511,7 @@ dependencies = [
 [[package]]
 name = "hyle-crypto"
 version = "0.13.0-rc.4"
-source = "git+https://github.com/Hyle-org/hyle.git?branch=main#b62835266117baad0e6317d31eac9cf8df023b8c"
+source = "git+https://github.com/Hyle-org/hyle.git?branch=main#31a475d012ff9f0436ab099f6b0c1d8a6bfad3e6"
 dependencies = [
  "anyhow",
  "blst",
@@ -2524,7 +2524,7 @@ dependencies = [
 [[package]]
 name = "hyle-model"
 version = "0.13.0-rc.4"
-source = "git+https://github.com/Hyle-org/hyle.git?branch=main#b62835266117baad0e6317d31eac9cf8df023b8c"
+source = "git+https://github.com/Hyle-org/hyle.git?branch=main#31a475d012ff9f0436ab099f6b0c1d8a6bfad3e6"
 dependencies = [
  "anyhow",
  "base64",
@@ -2547,7 +2547,7 @@ dependencies = [
 [[package]]
 name = "hyle-modules"
 version = "0.13.0-rc.4"
-source = "git+https://github.com/Hyle-org/hyle.git?branch=main#b62835266117baad0e6317d31eac9cf8df023b8c"
+source = "git+https://github.com/Hyle-org/hyle.git?branch=main#31a475d012ff9f0436ab099f6b0c1d8a6bfad3e6"
 dependencies = [
  "anyhow",
  "anymap",
@@ -2567,6 +2567,7 @@ dependencies = [
  "rand 0.8.5",
  "serde",
  "serde_json",
+ "sha3",
  "syn 2.0.101",
  "tokio",
  "tokio-util",
@@ -2581,7 +2582,7 @@ dependencies = [
 [[package]]
 name = "hyle-net"
 version = "0.13.0-rc.4"
-source = "git+https://github.com/Hyle-org/hyle.git?branch=main#b62835266117baad0e6317d31eac9cf8df023b8c"
+source = "git+https://github.com/Hyle-org/hyle.git?branch=main#31a475d012ff9f0436ab099f6b0c1d8a6bfad3e6"
 dependencies = [
  "anyhow",
  "axum 0.8.4",
@@ -2607,7 +2608,7 @@ dependencies = [
 [[package]]
 name = "hyle-verifiers"
 version = "0.13.0-rc.4"
-source = "git+https://github.com/Hyle-org/hyle.git?branch=main#b62835266117baad0e6317d31eac9cf8df023b8c"
+source = "git+https://github.com/Hyle-org/hyle.git?branch=main#31a475d012ff9f0436ab099f6b0c1d8a6bfad3e6"
 dependencies = [
  "anyhow",
  "borsh",
@@ -2643,11 +2644,10 @@ dependencies = [
 
 [[package]]
 name = "hyper-rustls"
-version = "0.27.5"
+version = "0.27.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2d191583f3da1305256f22463b9bb0471acad48a4e534a5218b9963e9c1f59b2"
+checksum = "03a01595e11bdcec50946522c32dde3fc6914743000a68b93000965f2f02406d"
 dependencies = [
- "futures-util",
  "http",
  "hyper",
  "hyper-util",
@@ -2656,7 +2656,7 @@ dependencies = [
  "tokio",
  "tokio-rustls",
  "tower-service",
- "webpki-roots 0.26.11",
+ "webpki-roots 1.0.0",
 ]
 
 [[package]]
@@ -4503,9 +4503,9 @@ dependencies = [
 
 [[package]]
 name = "ruint"
-version = "1.14.0"
+version = "1.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "78a46eb779843b2c4f21fac5773e25d6d5b7c8f0922876c91541790d2ca27eef"
+checksum = "11256b5fe8c68f56ac6f39ef0720e592f33d2367a4782740d9c9142e889c7fb4"
 dependencies = [
  "alloy-rlp",
  "ark-ff 0.3.0",
@@ -6460,12 +6460,14 @@ dependencies = [
 
 [[package]]
 name = "uuid"
-version = "1.16.0"
+version = "1.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "458f7a779bf54acc9f347480ac654f68407d3aab21269a6e3c9f922acd9e2da9"
+checksum = "3cf4199d1e5d15ddd86a694e4d0dffa9c323ce759fea589f00fef9d81cc1931d"
 dependencies = [
  "getrandom 0.3.3",
+ "js-sys",
  "serde",
+ "wasm-bindgen",
 ]
 
 [[package]]
