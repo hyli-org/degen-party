@@ -47,21 +47,14 @@ impl std::fmt::Display for GameEvent {
                     winner_id, final_coins
                 )
             }
-            GameEvent::GameInitialized {
-                player_count,
-                random_seed,
-            } => {
-                write!(
-                    f,
-                    "Game initialized with {} players, random seed {}",
-                    player_count, random_seed
-                )
+            GameEvent::GameInitialized { random_seed } => {
+                write!(f, "Game initialized, random seed {}", random_seed)
             }
             GameEvent::PlayerRegistered { name, player_id } => {
                 write!(f, "Player {} registered as {}", name, player_id)
             }
-            GameEvent::GameStarted => {
-                write!(f, "Game started")
+            GameEvent::GameStarted { player_count } => {
+                write!(f, "Game started with {} players", player_count)
             }
             _ => {
                 write!(f, "Unknown game event")

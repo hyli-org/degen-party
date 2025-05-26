@@ -14,6 +14,7 @@ import PlayerBar from "./PlayerBar.vue";
 import { animState, isAnimationPlayed, markAnimationPlayed, markAnimationPlayedIn } from "./animState";
 import SpinningWheel from "./SpinningWheel.vue";
 import { playLoopingSound } from "../utils/audio";
+import Chat from "../utils/Chat.vue";
 
 ////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////
@@ -167,91 +168,103 @@ onUnmounted(() => {
 
 <template>
     <div class="flex flex-col h-full w-full">
-        <div class="flex-1 relative">
-            <Backdrop class="absolute w-full h-full" />
-            <!-- Wheel spin -->
-            <div
-                v-show="!isAnimationPlayed('FinalMinigameRound')"
-                class="absolute top-8 right-8 z-10 bg-white p-8 rounded-[2rem] flex flex-col items-center justify-center gap-6 min-w-[320px]"
-            >
-                <SpinningWheel></SpinningWheel>
-            </div>
-            <!-- Bet Controls & Timer -->
-            <div
-                v-if="betScreenActive"
-                class="absolute bottom-8 right-8 z-10 bg-white p-8 rounded-[2rem] flex flex-col items-center justify-center gap-4 min-w-[320px] mx-auto transition-all transition-duration-500"
-            >
-                <div v-if="!hasBet && timer > 0" class="relative mb-4">
-                    <div class="text-2xl font-bold text-black">Place your bet. Only {{ timer }}s left!</div>
-                    <div
-                        v-if="allOrNothing"
-                        class="text-red-500 font-bold text-lg mt-4 flex justify-between items-center"
-                    >
-                        ALL OR NOTHING!
-                        <button
-                            @click="placeCustomBet"
-                            :disabled="hasBet || placingBet || !validateCustomBet()"
-                            class="px-4 py-2 rounded-xl font-bold text-lg border-4 border-white shadow-md transition-all duration-150 hover:-translate-y-1 hover:shadow-lg focus:outline-none bg-gradient-to-b from-[#FF4D4D] to-[#CC0000] text-white"
+        <div class="flex h-full w-full">
+            <div class="flex-1 relative">
+                <div
+                    class="absolute top-0 w-full z-1000 font-['Luckiest_Guy'] text-[4.5rem] text-[#ffd700] text-center mx-auto text-shadow-[_-2px_-2px_0_#e6a100,_2px_-2px_0_#e6a100,_-2px_2px_0_#e6a100,_2px_2px_0_#e6a100,_4px_4px_0_#b87d00,_6px_6px_0_#8b5e00] rotate-[-2deg] transition-transform duration-300 ease-in-out tracking-wide font-normal antialiased uppercase hover:scale-102 hover:rotate-[-2deg]"
+                >
+                    DEGEN PARTY
+                </div>
+
+                <Backdrop class="absolute w-full h-full" />
+                <!-- Wheel spin -->
+                <div
+                    v-show="!isAnimationPlayed('FinalMinigameRound')"
+                    class="absolute top-8 right-8 z-10 bg-white p-8 rounded-[2rem] flex flex-col items-center justify-center gap-6 min-w-[320px]"
+                >
+                    <SpinningWheel></SpinningWheel>
+                </div>
+                <!-- Bet Controls & Timer -->
+                <div
+                    v-if="betScreenActive"
+                    class="absolute bottom-8 right-8 z-10 bg-white p-8 rounded-[2rem] flex flex-col items-center justify-center gap-4 min-w-[320px] mx-auto transition-all transition-duration-500"
+                >
+                    <div v-if="!hasBet && timer > 0" class="relative mb-4">
+                        <div class="text-2xl font-bold text-black">Place your bet. Only {{ timer }}s left!</div>
+                        <div
+                            v-if="allOrNothing"
+                            class="text-red-500 font-bold text-lg mt-4 flex justify-between items-center"
                         >
-                            Bet {{ localPlayer?.coins }} 💰
-                        </button>
-                    </div>
-                    <template v-else>
-                        <div class="flex items-stretch gap-3">
+                            ALL OR NOTHING!
                             <button
-                                v-for="option in BET_OPTIONS"
-                                :key="option"
-                                :disabled="
-                                    hasBet ||
-                                    placingBet ||
-                                    (localPlayer &&
-                                        (option > localPlayer.coins || (allOrNothing && option !== localPlayer.coins)))
-                                "
-                                @click="setCustomBet(option)"
-                                class="px-6 py-3 rounded-xl font-bold text-lg border-4 border-white shadow-md transition-all duration-150 hover:-translate-y-1 hover:shadow-lg focus:outline-none"
-                                :class="{
-                                    'bg-gradient-to-b from-[#4DAAFF] to-[#0077CC] text-white': !hasBet,
-                                    'bg-gradient-to-b from-[#999999] to-[#666666] text-white opacity-50':
+                                @click="placeCustomBet"
+                                :disabled="hasBet || placingBet || !validateCustomBet()"
+                                class="px-4 py-2 rounded-xl font-bold text-lg border-4 border-white shadow-md transition-all duration-150 hover:-translate-y-1 hover:shadow-lg focus:outline-none bg-gradient-to-b from-[#FF4D4D] to-[#CC0000] text-white"
+                            >
+                                Bet {{ localPlayer?.coins }} 💰
+                            </button>
+                        </div>
+                        <template v-else>
+                            <div class="flex items-stretch gap-3">
+                                <button
+                                    v-for="option in BET_OPTIONS"
+                                    :key="option"
+                                    :disabled="
                                         hasBet ||
                                         placingBet ||
                                         (localPlayer &&
                                             (option > localPlayer.coins ||
-                                                (allOrNothing && option !== localPlayer.coins))),
-                                }"
-                            >
-                                {{ option }} 🪙
-                            </button>
+                                                (allOrNothing && option !== localPlayer.coins)))
+                                    "
+                                    @click="setCustomBet(option)"
+                                    class="px-6 py-3 rounded-xl font-bold text-lg border-4 border-white shadow-md transition-all duration-150 hover:-translate-y-1 hover:shadow-lg focus:outline-none"
+                                    :class="{
+                                        'bg-gradient-to-b from-[#4DAAFF] to-[#0077CC] text-white': !hasBet,
+                                        'bg-gradient-to-b from-[#999999] to-[#666666] text-white opacity-50':
+                                            hasBet ||
+                                            placingBet ||
+                                            (localPlayer &&
+                                                (option > localPlayer.coins ||
+                                                    (allOrNothing && option !== localPlayer.coins))),
+                                    }"
+                                >
+                                    {{ option }} 🪙
+                                </button>
+                            </div>
+                            <div class="flex gap-3 mt-3">
+                                <!-- Custom bet input -->
+                                <input
+                                    v-model="customBet"
+                                    type="number"
+                                    min="1"
+                                    :max="localPlayer?.coins || 1"
+                                    :disabled="hasBet || placingBet || allOrNothing"
+                                    placeholder="Custom"
+                                    class="flex-1 px-3 py-2 rounded-xl border-2 border-[#ffd700] bg-white text-[#8B0000] font-bold text-lg focus:outline-none"
+                                    @input="validateCustomBet"
+                                />
+                                <button
+                                    @click="placeCustomBet"
+                                    :disabled="hasBet || placingBet || !validateCustomBet()"
+                                    class="px-4 py-2 rounded-xl font-bold text-lg border-4 border-white shadow-md transition-all duration-150 hover:-translate-y-1 hover:shadow-lg focus:outline-none bg-gradient-to-b from-[#FF4D4D] to-[#CC0000] text-white disabled:from-[#999999] disabled:to-[#777] disabled:opacity-50"
+                                >
+                                    Bet
+                                </button>
+                            </div>
+                        </template>
+                        <div
+                            v-if="customBetError && !hasBet"
+                            class="text-red-400 text-center font-bold text-sm mb-2 absolute bottom-0 translate-y-[150%] w-full"
+                        >
+                            {{ customBetError }}
                         </div>
-                        <div class="flex gap-3 mt-3">
-                            <!-- Custom bet input -->
-                            <input
-                                v-model="customBet"
-                                type="number"
-                                min="1"
-                                :max="localPlayer?.coins || 1"
-                                :disabled="hasBet || placingBet || allOrNothing"
-                                placeholder="Custom"
-                                class="flex-1 px-3 py-2 rounded-xl border-2 border-[#ffd700] bg-white text-[#8B0000] font-bold text-lg focus:outline-none"
-                                @input="validateCustomBet"
-                            />
-                            <button
-                                @click="placeCustomBet"
-                                :disabled="hasBet || placingBet || !validateCustomBet()"
-                                class="px-4 py-2 rounded-xl font-bold text-lg border-4 border-white shadow-md transition-all duration-150 hover:-translate-y-1 hover:shadow-lg focus:outline-none bg-gradient-to-b from-[#FF4D4D] to-[#CC0000] text-white disabled:from-[#999999] disabled:to-[#777] disabled:opacity-50"
-                            >
-                                Bet
-                            </button>
-                        </div>
-                    </template>
-                    <div
-                        v-if="customBetError && !hasBet"
-                        class="text-red-400 text-center font-bold text-sm mb-2 absolute bottom-0 translate-y-[150%] w-full"
-                    >
-                        {{ customBetError }}
                     </div>
+                    <div v-else-if="hasBet" class="text-green-400 font-bold text-2xl">Bet placed!</div>
+                    <div v-else class="text-red-400 font-bold text-2xl">Time's up! You lost 10 coins.</div>
                 </div>
-                <div v-else-if="hasBet" class="text-green-400 font-bold text-2xl">Bet placed!</div>
-                <div v-else class="text-red-400 font-bold text-2xl">Time's up! You lost 10 coins.</div>
+            </div>
+            <div class="bg-white hidden xl:block">
+                <Chat />
             </div>
         </div>
         <PlayerBar>

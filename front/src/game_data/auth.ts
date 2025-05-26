@@ -3,6 +3,7 @@ import { SHA256 } from "crypto-js";
 import { any } from "three/tsl";
 import { BorshSchema, borshSerialize } from "borsher";
 import { identity } from "@vueuse/core";
+import { walletState } from "../utils/wallet";
 
 const SESSION_KEY_STORAGE_KEY = "blackjack_session_key";
 const PUBLIC_KEY_STORAGE_KEY = "blackjack_public_key";
@@ -127,15 +128,6 @@ const Secp256k1BlobSchema = BorshSchema.Struct({
 });
 
 export async function addIdentityToMessage(blob_tx: any) {
-    const message = "toto";
-    blob_tx.blobs.push({
-        contract_name: "secp256k1",
-        data: Array.from(
-            borshSerialize(Secp256k1BlobSchema, {
-                identity: { 0: blob_tx.identity },
-                ...authService.getBlobData(message),
-            }),
-        ),
-    });
+    blob_tx.blobs.push(...walletState.createIdentityBlobs());
     return blob_tx;
 }

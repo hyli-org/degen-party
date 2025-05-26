@@ -9,6 +9,8 @@ pub mod player;
 pub mod utils;
 
 const ROUNDS: usize = 10;
+const MAX_PLAYERS: usize = 20;
+
 #[derive(Debug, Clone, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
 pub struct GameState {
     pub players: Vec<Player>,
@@ -65,7 +67,6 @@ pub type MinigameSetup = Vec<(Identity, String, u64)>;
 pub enum GameAction {
     EndGame,
     Initialize {
-        player_count: usize,
         minigames: Vec<String>,
         random_seed: u64,
     },
@@ -118,14 +119,15 @@ pub enum GameEvent {
         final_coins: i32,
     },
     GameInitialized {
-        player_count: usize,
         random_seed: u64,
     },
     PlayerRegistered {
         name: String,
         player_id: Identity,
     },
-    GameStarted,
+    GameStarted {
+        player_count: usize,
+    },
     BetPlaced {
         player_id: Identity,
         amount: u64,
@@ -151,7 +153,7 @@ impl GameState {
         Self {
             players: Vec::new(),
             phase: GamePhase::GameOver,
-            max_players: 4,
+            max_players: MAX_PLAYERS,
             minigames: Vec::new(),
             dice: dice::Dice::new(1, 10, 0),
             round_started_at: 0,
@@ -165,11 +167,11 @@ impl GameState {
         }
     }
 
-    pub fn reset(&mut self, player_count: usize, minigames: Vec<ContractName>, random_seed: u64) {
+    pub fn reset(&mut self, minigames: Vec<ContractName>, random_seed: u64) {
         *self = Self {
-            players: Vec::with_capacity(player_count),
+            players: Vec::with_capacity(MAX_PLAYERS),
             phase: GamePhase::GameOver,
-            max_players: player_count,
+            max_players: MAX_PLAYERS,
             minigames,
             dice: dice::Dice::new(1, 10, random_seed),
             round_started_at: 0,
@@ -271,7 +273,7 @@ impl GameState {
                         winner_id: Identity::default(),
                         final_coins: 0,
                     });
-                    self.reset(4, self.minigames.clone(), self.dice.seed);
+                    self.reset(self.minigames.clone(), self.dice.seed);
                 } else {
                     return Err(anyhow!("Only the backend can end the game"));
                 }
@@ -279,7 +281,6 @@ impl GameState {
             (
                 GamePhase::GameOver,
                 GameAction::Initialize {
-                    player_count,
                     minigames,
                     random_seed,
                 },
@@ -288,15 +289,11 @@ impl GameState {
                     return Err(anyhow!("Minigames cannot be empty"));
                 }
                 self.reset(
-                    player_count,
                     minigames.into_iter().map(|x| x.into()).collect::<Vec<_>>(),
                     random_seed,
                 );
                 self.phase = GamePhase::Registration;
-                events.push(GameEvent::GameInitialized {
-                    player_count,
-                    random_seed,
-                });
+                events.push(GameEvent::GameInitialized { random_seed });
             }
 
             // Registration Phase
@@ -333,7 +330,7 @@ impl GameState {
             (GamePhase::Registration, GameAction::StartGame) => {
                 let is_full = self.players.len() == self.max_players;
                 let registration_period_done =
-                    self.last_interaction_time.saturating_add(2 * 60 * 1000) < timestamp;
+                    self.last_interaction_time.saturating_add(55 * 1000) < timestamp;
                 if !is_full && !registration_period_done {
                     return Err(anyhow!(
                         "Game is not full and registration period is not over"
@@ -343,7 +340,9 @@ impl GameState {
                 self.phase = GamePhase::Betting;
                 self.round_started_at = timestamp;
                 self.round = 0;
-                events.push(GameEvent::GameStarted);
+                events.push(GameEvent::GameStarted {
+                    player_count: self.players.len(),
+                });
             }
 
             // Betting Phase

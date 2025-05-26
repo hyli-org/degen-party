@@ -217,16 +217,11 @@ impl GameStateModule {
                 self.bus.send(tx)?;
                 return Ok(());
             }
-            GameAction::Initialize {
-                player_count,
-                minigames,
-                random_seed,
-            } => {
+            GameAction::Initialize { .. } => {
                 blobs.push(
                     GameActionBlob(
                         uuid_128,
                         GameAction::Initialize {
-                            player_count: *player_count,
                             minigames: vec![self.crash_game.clone().0],
                             random_seed: uuid_128 as u64,
                         },

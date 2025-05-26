@@ -1,25 +1,14 @@
 <script setup lang="ts">
-import {
-    isCurrentPlayer,
-    gameState,
-    DEFAULT_PLAYERS,
-    playerColor,
-    playerAvatar,
-    getLocalPlayerId,
-} from "./game_data/game_data";
+import { gameState, DEFAULT_PLAYERS } from "./game_data/game_data";
 import { ref, computed } from "vue";
 import { useRoute } from "vue-router";
-import Lobby from "./components/Lobby.vue";
 import { wsState } from "./utils/shared-websocket";
 
-import { addIdentityToMessage } from "./game_data/auth";
 import { HyliWalletElement } from "wallet-wrapper";
-import { TestnetChatElement } from "hyli-testnet-chat";
 import { watchEffect } from "vue";
 import { animState } from "./components/animState";
 import { onWalletReady, walletConfig, sessionKeyConfig } from "./utils/wallet";
 
-customElements.define("testnet-chat", TestnetChatElement);
 customElements.define("hyli-wallet", HyliWalletElement);
 
 const route = useRoute();
@@ -28,14 +17,6 @@ watchEffect(() => {
     console.log("Route changed:", route.fullPath);
     routeFullPath.value = route.fullPath;
 });
-
-const showChat = ref(false);
-const toggleChat = () => {
-    showChat.value = !showChat.value;
-};
-const nodeUrl = window.location.hostname === "localhost" ? "http://localhost:4321" : "https://node.testnet.hyli.org";
-const indexerUrl =
-    window.location.hostname === "localhost" ? "http://localhost:4321" : "https://indexer.testnet.hyli.org";
 
 const players = computed(() => {
     if (!gameState?.game?.players?.length) return DEFAULT_PLAYERS;
@@ -62,7 +43,7 @@ const connectionStatusColor = computed(() => {
 </script>
 
 <template>
-    <div class="relative flex h-screen w-full flex-col overflow-hidden">
+    <div class="relative flex w-full flex-col">
         <header
             class="relative z-10 flex items-center justify-between border-b-[5px] border-white px-6 py-3 shadow-lg"
             style="background: linear-gradient(to bottom, #ff7a7a, var(--mario-red))"
@@ -76,13 +57,6 @@ const connectionStatusColor = computed(() => {
             </div>
 
             <div class="flex items-center gap-4">
-                <button
-                    @click="toggleChat"
-                    class="px-4 py-2 rounded-full border-3 border-white bg-black/20 font-bold text-white hover:bg-black/30 transition-colors"
-                >
-                    <span v-if="showChat">Hide Chat</span>
-                    <span v-else>Show Chat</span>
-                </button>
                 <hyli-wallet
                     :config="walletConfig"
                     :sessionKeyConfig="sessionKeyConfig"
@@ -119,15 +93,6 @@ const connectionStatusColor = computed(() => {
             </div>
         </header>
 
-        <testnet-chat
-            v-if="showChat"
-            class="fixed top-[5rem] right-0 bg-white rounded-[20px]"
-            :nickname="getLocalPlayerId()"
-            :processBlobTx="addIdentityToMessage"
-            :node_url="nodeUrl"
-            :indexer_url="indexerUrl"
-        ></testnet-chat>
-
         <RouterView :key="routeFullPath" />
     </div>
 </template>
@@ -162,9 +127,6 @@ body {
     background: var(--main-bg);
     color: #333;
     font-family: "Fredoka", sans-serif;
-    height: 100vh;
-    width: 100vw;
-    overflow: hidden;
     line-height: 1.6;
 }
 

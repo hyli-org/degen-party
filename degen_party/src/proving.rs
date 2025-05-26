@@ -8,7 +8,7 @@ use hyle_modules::modules::{
     prover::{AutoProver, AutoProverCtx},
     ModulesHandler,
 };
-use sdk::{utils::as_hyle_output, BlockHeight, RegisterContractEffect, ZkContract};
+use sdk::{utils::as_hyle_output, RegisterContractEffect, ZkContract};
 use sp1_sdk::Prover;
 use sp1_sdk::SP1ProvingKey;
 use tracing::info;
@@ -105,7 +105,6 @@ pub async fn setup_auto_provers(
         .build_module::<AutoProver<BoardGameExecutor>>(
             AutoProverCtx {
                 data_directory: ctx.data_directory.clone(),
-                start_height: BlockHeight(0),
                 prover: board_game_prover,
                 contract_name: ctx.board_game.clone(),
                 node: ctx.client.clone(),
@@ -147,7 +146,6 @@ pub async fn setup_auto_provers(
     handler
         .build_module::<AutoProver<CrashGameExecutor>>(Arc::new(AutoProverCtx {
             data_directory: ctx.data_directory.clone(),
-            start_height: BlockHeight(0),
             prover: crash_game_prover,
             contract_name: ctx.crash_game.clone(),
             node: ctx.client.clone(),

@@ -2,7 +2,7 @@
     <div class="crash-game">
         <div class="game-title">CRASH GAME</div>
 
-        <div class="flex gap-8">
+        <div class="flex gap-8 justify-center items-stretch">
             <div class="game-container card relative">
                 <canvas ref="gameCanvas" class="game-canvas"></canvas>
 
@@ -47,8 +47,8 @@
                 </div>
             </div>
 
-            <div class="w-[300px] game-controls card h-full">
-                <div class="flex flex-col items-center justify-center h-full">
+            <div class="game-controls card flex flex-col items-center justify-center">
+                <div class="">
                     <button v-if="gameEnded" class="action-button next-action" @click="handleActionButton">
                         <span class="btn-text"> <span class="btn-icon">🎮</span> BACK TO BOARD </span>
                     </button>
@@ -62,6 +62,7 @@
                         <span class="btn-text"> <span class="text-3xl">🚀</span><br />CASH OUT! </span>
                     </button>
                 </div>
+                <Chat class="hidden xl:block" />
             </div>
         </div>
         <ConfettiEffect :active="showConfetti" :duration="3000" />
@@ -93,6 +94,7 @@ import { gameState, getLocalPlayerId } from "../game_data/game_data";
 import { addBackgroundEffects, Cashout, drawFlightPath } from "./CrashGameHelper";
 import { animState, isAnimationPlayed, markAnimationPlayed } from "./animState";
 import { playSound } from "../utils/audio";
+import Chat from "../utils/Chat.vue";
 
 // Define emits for party game integration
 const emits = defineEmits(["win", "lose"]);
@@ -389,10 +391,8 @@ watch(gameEnded, (newValue) => {
     display: flex;
     flex-direction: column;
     gap: 1.5rem;
-    width: 100%;
-    max-width: 1200px;
     margin: 0 auto;
-    height: 100%;
+    width: 100%;
     padding: 1rem;
     position: relative;
 }
@@ -438,7 +438,7 @@ watch(gameEnded, (newValue) => {
 /* Game Container */
 .game-container {
     position: relative;
-    width: 100%;
+    height: calc(100vh - 300px);
     aspect-ratio: 4/3;
     overflow: hidden;
 }
@@ -642,7 +642,6 @@ watch(gameEnded, (newValue) => {
     border-radius: 20px;
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
     padding: 1.2rem;
-    margin-bottom: 1.5rem;
 }
 
 /* Bet Controls */

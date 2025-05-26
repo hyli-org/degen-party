@@ -9,7 +9,6 @@ use hyle_modules::{
         da_listener::{DAListener, DAListenerConf},
         ModulesHandler,
     },
-    utils::logger::setup_tracing,
 };
 use sdk::ContractName;
 use secp256k1::{PublicKey, Secp256k1, SecretKey};

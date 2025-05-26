@@ -5,21 +5,18 @@ use std::sync::Arc;
 use std::{cmp::Ordering, collections::HashMap};
 
 use anyhow::Result;
-use client_sdk::rest_client::{NodeApiClient, NodeApiHttpClient};
 use crossterm::{
     event::{self, Event, KeyCode, KeyModifiers},
     execute, terminal,
 };
 use hyle_modules::{
-    bus::BusClientSender, bus::SharedMessageBus, module_bus_client, module_handle_messages,
-    modules::Module,
+    bus::SharedMessageBus, module_bus_client, module_handle_messages, modules::Module,
 };
 use ratatui::{
     prelude::*,
     widgets::{Block as TuiBlock, *},
 };
 use sdk::{BlobTransaction, Block, ContractName, NodeStateEvent, TransactionData, TxId};
-use tokio::sync::mpsc;
 use tokio::time::MissedTickBehavior;
 use tracing::{error, info, warn};
 
@@ -71,7 +68,6 @@ pub struct DebugAnalyzerUiState {
 
 pub struct DebugAnalyzer {
     bus: DebugAnalyzerBusClient,
-    hyle_client: Arc<NodeApiHttpClient>,
     board_game: ContractName,
     crash_game: ContractName,
     board_game_txs: BTreeMap<TransactionKey, BlobTransaction>,
@@ -85,13 +81,10 @@ impl Module for DebugAnalyzer {
     type Context = Arc<crate::Context>;
 
     async fn build(bus: SharedMessageBus, ctx: Self::Context) -> Result<Self> {
-        let hyle_client = ctx.client.clone();
-
         Ok(Self {
             bus: DebugAnalyzerBusClient::new_from_bus(bus.new_handle()).await,
             board_game: ctx.board_game.clone(),
             crash_game: ctx.crash_game.clone(),
-            hyle_client,
             board_game_txs: BTreeMap::new(),
             crash_game_txs: BTreeMap::new(),
             tx_status: HashMap::new(),
@@ -122,12 +115,11 @@ impl Module for DebugAnalyzer {
         module_handle_messages! {
             on_bus self.bus,
             listen<NodeStateEvent> msg => {
-                if let NodeStateEvent::NewBlock(block) = msg {
-                    if let Err(e) = self.process_block(block).await {
-                        error!("Error processing transaction: {:?}", e);
-                    }
-                    self.ui_state.redraw = true;
+                let NodeStateEvent::NewBlock(block) = msg;
+                if let Err(e) = self.process_block(block).await {
+                    error!("Error processing transaction: {:?}", e);
                 }
+                self.ui_state.redraw = true;
             }
             _ = interval.tick() => {
                 if self.ui_state.should_quit {

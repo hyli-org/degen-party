@@ -42,7 +42,6 @@ export type GameAction =
     | { EndGame: null }
     | {
           Initialize: {
-              player_count: number;
               minigames: string[];
               random_seed: number;
           };
@@ -64,9 +63,9 @@ export type GameEvent =
     | { MinigameEnded: { result: MinigameResult } }
     | { TurnEnded: { next_player: string } }
     | { GameEnded: { winner_id: string; final_coins: number } }
-    | { GameInitialized: { player_count: number; random_seed: number } }
+    | { GameInitialized: { random_seed: number } }
     | { PlayerRegistered: { name: string; player_id: string } }
-    | { GameStarted: null }
+    | { GameStarted: { player_count: number } }
     | { BetPlaced: { player_id: string; amount: number } }
     | { WheelSpun: { round: number; outcome: number } };
 
@@ -104,7 +103,7 @@ export interface GameState {
     round: number;
     bets: Record<string, number>;
     backend_identity: string;
-    last_interaction_time: bigint;
+    last_interaction_time: number;
     lane_id: string;
     all_or_nothing?: boolean;
 }
@@ -200,7 +199,7 @@ class BoardGameService extends BaseWebSocketService {
         );
     }
 
-    async initGame(config: { playerCount: number }) {
+    async initGame() {
         await this.send(
             {
                 type: "GameState",
@@ -209,7 +208,6 @@ class BoardGameService extends BaseWebSocketService {
                     payload: {
                         action: {
                             Initialize: {
-                                player_count: +config.playerCount,
                                 minigames: [], // will be overwritten by the server
                                 random_seed: 7, // will be overwritten by the server
                             },

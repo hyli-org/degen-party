@@ -1,12 +1,20 @@
 <script setup lang="ts">
-import { ref, computed, watch } from "vue";
+import { ref, computed, watch, watchEffect, onMounted, onBeforeUnmount } from "vue";
 import { boardGameService, gameState } from "../game_data/game_data";
 import { walletState } from "../utils/wallet";
+import Chat from "../utils/Chat.vue";
 
-const playerName = ref("Player");
-const playerCount = ref(4);
+const playerName = ref(walletState?.wallet?.username ?? "Player");
 const hasJoined = ref(false);
 const status = ref("");
+
+const lastInteractionTime = computed(() => {
+    return gameState.game?.last_interaction_time || 0;
+});
+
+watchEffect(() => {
+    hasJoined.value = !!gameState.game?.players.find((player) => player.name === walletState?.wallet?.username);
+});
 
 watch(
     () => walletState.sessionKey,
@@ -17,9 +25,25 @@ watch(
     },
 );
 
+const gameIsOngoing = computed(() => {
+    return gameState.game && gameState.game.phase !== "GameOver" && gameState.game.phase !== "Registration";
+});
+
+const timeLeft = ref(60);
+let ticker;
+onMounted(() => {
+    timeLeft.value = Math.max(0, Math.round(60 - (Date.now() - lastInteractionTime.value) / 1000));
+    ticker = setInterval(() => {
+        timeLeft.value = Math.max(0, Math.round(60 - (Date.now() - lastInteractionTime.value) / 1000));
+    }, 1000);
+});
+onBeforeUnmount(() => {
+    clearInterval(ticker);
+});
+
 const canStartGame = computed(() => {
     if (!gameState.game) return false;
-    return gameState.game.phase === "Registration";
+    return (slotsRemaining.value === 0 || timeLeft.value === 0) && gameState.game.phase === "Registration";
 });
 
 const registeredPlayers = computed(() => {
@@ -42,9 +66,7 @@ const initAndJoinGame = async () => {
 
     status.value = "game";
     // Create the game.
-    await boardGameService.initGame({
-        playerCount: playerCount.value,
-    });
+    await boardGameService.initGame();
 
     // Wait a bit for game to be created
     await new Promise((resolve) => setTimeout(resolve, 200));
@@ -90,50 +112,14 @@ const reset = async () => {
 </script>
 
 <template>
-    <div class="flex flex-col items-center justify-center min-h-screen bg-[#1A0C3B] text-white p-8">
-        <div class="w-full max-w-md bg-[#2A1C4B] rounded-xl p-8 border-6 border-[#FFC636] shadow-2xl">
-            <div v-if="!walletState.sessionKey">
-                <h1 class="text-3xl font-bold text-[#FFC636]">Connect your wallet</h1>
-                <p class="text-gray-400">Please connect your wallet to play the game.</p>
-            </div>
-            <div v-else-if="!gameState.game || gameState.game.phase === 'GameOver'" class="space-y-6">
-                <div class="space-y-2">
-                    <label class="block text-[#FFC636]">Your Name</label>
-                    <input
-                        v-model="playerName"
-                        type="text"
-                        class="w-full px-4 py-2 rounded-lg bg-[#1A0C3B] border-2 border-[#FFC636] text-white"
-                        placeholder="Enter your name"
-                    />
+    <div class="w-screen h-screen bg-[#1A0C3B] flex">
+        <div class="flex items-center justify-center w-full h-full">
+            <div class="w-full max-w-md bg-[#2A1C4B] rounded-xl p-8 border-6 border-[#FFC636] shadow-2xl">
+                <div v-if="!walletState.sessionKey">
+                    <h1 class="text-3xl font-bold text-[#FFC636]">Connect your wallet</h1>
+                    <p class="text-gray-400">Please connect your wallet to play the game.</p>
                 </div>
-
-                <div class="space-y-2">
-                    <label class="block text-[#FFC636]">Number of Players</label>
-                    <select
-                        v-model="playerCount"
-                        class="w-full px-4 py-2 rounded-lg bg-[#1A0C3B] border-2 border-[#FFC636] text-white"
-                    >
-                        <option value="1">1 Player</option>
-                        <option value="2">2 Players</option>
-                        <option value="3">3 Players</option>
-                        <option value="4">4 Players</option>
-                    </select>
-                </div>
-
-                <button
-                    @click="initAndJoinGame"
-                    :disabled="status !== ''"
-                    class="w-full py-3 rounded-lg bg-[#FFC636] text-[#1A0C3B] font-bold hover:bg-[#FFD666] transition-colors disabled:opacity-50"
-                >
-                    Create & Join Game
-                </button>
-
-                <p v-if="status === 'game'" class="text-red-500">Creating game...</p>
-                <p v-if="status === 'register'" class="text-red-500">Registering player...</p>
-            </div>
-
-            <div v-else class="space-y-6">
-                <div v-if="!hasJoined && slotsRemaining > 0" class="space-y-4">
+                <div v-else-if="!gameIsOngoing && gameState.game?.phase === 'GameOver'" class="space-y-6">
                     <div class="space-y-2">
                         <label class="block text-[#FFC636]">Your Name</label>
                         <input
@@ -145,19 +131,66 @@ const reset = async () => {
                     </div>
 
                     <button
-                        @click="joinGame"
-                        :disabled="!playerName || status !== ''"
+                        @click="initAndJoinGame"
+                        :disabled="status !== ''"
                         class="w-full py-3 rounded-lg bg-[#FFC636] text-[#1A0C3B] font-bold hover:bg-[#FFD666] transition-colors disabled:opacity-50"
                     >
-                        Join Game
+                        Create & Join Game
                     </button>
 
                     <p v-if="status === 'game'" class="text-red-500">Creating game...</p>
                     <p v-if="status === 'register'" class="text-red-500">Registering player...</p>
                 </div>
 
-                <div class="space-y-4">
-                    <h2 class="text-2xl font-bold text-[#FFC636]">Players ({{ slotsRemaining }} slots remaining)</h2>
+                <div v-else-if="!gameIsOngoing" class="space-y-6">
+                    <div v-if="!hasJoined && slotsRemaining > 0" class="space-y-4">
+                        <div class="space-y-2">
+                            <label class="block text-[#FFC636]">Your Name</label>
+                            <input
+                                v-model="playerName"
+                                type="text"
+                                class="w-full px-4 py-2 rounded-lg bg-[#1A0C3B] border-2 border-[#FFC636] text-white"
+                                placeholder="Enter your name"
+                            />
+                        </div>
+
+                        <button
+                            @click="joinGame"
+                            :disabled="!playerName || status !== ''"
+                            class="w-full py-3 rounded-lg bg-[#FFC636] text-[#1A0C3B] font-bold hover:bg-[#FFD666] transition-colors disabled:opacity-50"
+                        >
+                            Join Game
+                        </button>
+
+                        <p v-if="status === 'game'" class="text-red-500">Creating game...</p>
+                        <p v-if="status === 'register'" class="text-red-500">Registering player...</p>
+                    </div>
+
+                    <div class="space-y-4">
+                        <h2 class="text-2xl font-bold text-[#FFC636]">Players (Up to {{ slotsRemaining }} can join)</h2>
+                        <ul class="space-y-2">
+                            <li
+                                v-for="player in registeredPlayers"
+                                :key="player.id"
+                                class="px-4 py-2 bg-[#1A0C3B] rounded-lg flex items-center justify-between"
+                            >
+                                <span>{{ player.name }}</span>
+                                <span class="text-[#FFC636]">Ready!</span>
+                            </li>
+                        </ul>
+
+                        <button
+                            v-if="hasJoined"
+                            @click="startGame"
+                            :disabled="!canStartGame"
+                            class="w-full py-3 rounded-lg bg-[#FFC636] text-[#1A0C3B] font-bold hover:bg-[#FFD666] transition-colors disabled:opacity-50"
+                        >
+                            {{ canStartGame ? "Start Game!" : `Waiting ${timeLeft}s for more players` }}
+                        </button>
+                    </div>
+                </div>
+                <div v-else-if="gameIsOngoing">
+                    <h2 class="text-2xl font-bold text-[#FFC636]">Current players</h2>
                     <ul class="space-y-2">
                         <li
                             v-for="player in registeredPlayers"
@@ -165,28 +198,21 @@ const reset = async () => {
                             class="px-4 py-2 bg-[#1A0C3B] rounded-lg flex items-center justify-between"
                         >
                             <span>{{ player.name }}</span>
-                            <span class="text-[#FFC636]">Ready!</span>
                         </li>
                     </ul>
 
                     <button
-                        v-if="hasJoined"
-                        @click="startGame"
-                        :disabled="!canStartGame"
-                        class="w-full py-3 rounded-lg bg-[#FFC636] text-[#1A0C3B] font-bold hover:bg-[#FFD666] transition-colors disabled:opacity-50"
-                    >
-                        {{ canStartGame ? "Start Game!" : "Waiting for players..." }}
-                    </button>
-                    <button
-                        v-else
                         @click="reset"
                         :disabled="!playerName"
-                        class="w-full py-3 rounded-lg bg-[#36C6FF] text-[#1A0C3B] font-bold hover:bg-[#D666FF] transition-colors disabled:opacity-50"
+                        class="w-full mt-8 py-3 rounded-lg bg-[#36C6FF] text-[#1A0C3B] font-bold hover:bg-[#D666FF] transition-colors disabled:opacity-50"
                     >
                         Start a new game
                     </button>
                 </div>
             </div>
+        </div>
+        <div class="flex items-center justify-center h-full p-8 text-white">
+            <Chat class="bg-[#2A1C4B] rounded-xl shadow-2xl min-h-[calc(min(600px,100vh))]" />
         </div>
     </div>
 </template>
