@@ -40,7 +40,7 @@ export const walletConfig =
 export const sessionKeyConfig = computed(() => {
     let ret = {
         duration: 60 * 60 * 24 * 7 * 1000,
-        whitelist: [gameState.board_game_contract, gameState.crash_game_contract],
+        whitelist: ["testnet_chat", gameState.board_game_contract, gameState.crash_game_contract],
     };
     return ret;
 });

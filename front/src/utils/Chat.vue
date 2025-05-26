@@ -20,10 +20,11 @@ const indexerUrl =
     ></testnet-chat>
 </template>
 
-<style>
-.chat-container,
-.chat-container * {
+<style scoped>
+:deep(.chat-container) {
     border: none !important;
-    box-shadow: none !important;
+}
+:deep(.messages-list) {
+    border-color: black !important;
 }
 </style>
