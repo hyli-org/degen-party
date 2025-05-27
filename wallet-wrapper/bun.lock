@@ -4,13 +4,13 @@
     "": {
       "name": "wallet-wrapper",
       "dependencies": {
-        "hyli-wallet": "^0.2.10",
+        "hyli-wallet": "^0.2.12",
         "react": "^19.1.0",
         "react-dom": "^19.1.0",
       },
       "devDependencies": {
         "@eslint/js": "^9.27.0",
-        "@types/react": "^19.1.5",
+        "@types/react": "^19.1.6",
         "@types/react-dom": "^19.1.5",
         "@vitejs/plugin-react": "^4.5.0",
         "eslint": "^9.27.0",
@@ -229,7 +229,7 @@
 
     "@types/node": ["@types/node@22.15.21", "", { "dependencies": { "undici-types": "~6.21.0" } }, "sha512-EV/37Td6c+MgKAbkcLG6vqZ2zEYHD7bvSrzqqs2RIhbA6w3x+Dqz8MZM3sP6kGTeLrdoOgKZe+Xja7tUB2DNkQ=="],
 
-    "@types/react": ["@types/react@19.1.5", "", { "dependencies": { "csstype": "^3.0.2" } }, "sha512-piErsCVVbpMMT2r7wbawdZsq4xMvIAhQuac2gedQHysu1TZYEigE6pnFfgZT+/jQnrRuF5r+SHzuehFjfRjr4g=="],
+    "@types/react": ["@types/react@19.1.6", "", { "dependencies": { "csstype": "^3.0.2" } }, "sha512-JeG0rEWak0N6Itr6QUx+X60uQmN+5t3j9r/OVDtWzFXKaj6kD1BwJzOksD0FF6iWxZlbE1kB0q9vtnU2ekqa1Q=="],
 
     "@types/react-dom": ["@types/react-dom@19.1.5", "", { "peerDependencies": { "@types/react": "^19.0.0" } }, "sha512-CMCjrWucUBZvohgZxkjd6S9h0nZxXjzus6yDfUb+xLxYM7VvjKNH1tQrE9GWLql1XoOP4/Ds3bwFqShHUYraGg=="],
 
@@ -363,7 +363,7 @@
 
     "hyli-check-secret": ["hyli-check-secret@0.3.4", "", { "dependencies": { "hyli": "^0.3.0" }, "peerDependencies": { "@aztec/bb.js": "0.82.2", "@noir-lang/noir_js": "1.0.0-beta.2", "@noir-lang/noir_wasm": "1.0.0-beta.2" } }, "sha512-RdS6FH08K3BwJZhIeOxcVpAnff6GWgn7fCA9KimMl+KQzXdo3INGYWTYS2SaPbBMdW5JivrgadmEE+g3u+Gdvw=="],
 
-    "hyli-wallet": ["hyli-wallet@0.2.10", "", { "dependencies": { "@types/crypto-js": "^4.2.2", "@types/elliptic": "^6.4.18", "@types/react-router-dom": "^5.3.3", "crypto-js": "^4.2.0", "elliptic": "^6.6.1", "hyli": "^0.3.0" }, "peerDependencies": { "hyli-check-secret": "^0.3.4", "react": "^19.1.0", "react-dom": "^19.1.0", "react-router-dom": "^7.6.0" } }, "sha512-1fu0Hcxl8cWBKwn8g2EOl7Enw3tU+OGDIwDPrynMO/x5w8GYK8Nmd0kAWsgwuYqn/Y9Hev92HH2RiMH6mL9pvg=="],
+    "hyli-wallet": ["hyli-wallet@0.2.12", "", { "dependencies": { "@types/crypto-js": "^4.2.2", "@types/elliptic": "^6.4.18", "@types/react-router-dom": "^5.3.3", "crypto-js": "^4.2.0", "elliptic": "^6.6.1", "hyli": "^0.3.0" }, "peerDependencies": { "hyli-check-secret": "^0.3.4", "react": "^19.1.0", "react-dom": "^19.1.0", "react-router-dom": "^7.6.0" } }, "sha512-dofPLvBQBOekTVP9kRUylzvzI9boAaW6p+F5jaKI9i1JO5/wYaR3dv5PetXQqgkYZF2SiyS6RrqGaJhxhJml6A=="],
 
     "ieee754": ["ieee754@1.2.1", "", {}, "sha512-dcyqhDvX1C46lXZcVqCpK+FtMRQVdIMN6/Df5js2zouUsqG7I6sFxitIC+7KYK29KdXOLHdu9zL4sFnoVQnqaA=="],
 
@@ -506,5 +506,9 @@
     "@eslint/eslintrc/globals": ["globals@14.0.0", "", {}, "sha512-oahGvuMGQlPw/ivIYBjVSrWAfWLBeku5tpPE2fOPLi+WHffIWbuh2tCjhyQhTBPMf5E9jDEH4FOmTYgYwbKwtQ=="],
 
     "@humanfs/node/@humanwhocodes/retry": ["@humanwhocodes/retry@0.3.1", "", {}, "sha512-JBxkERygn7Bv/GbN5Rv8Ul6LVknS+5Bp6RgDC/O8gEBU/yeH5Ui5C/OlWrTb6qct7LjjfT6Re2NxB0ln0yYybA=="],
+
+    "@types/react-router/@types/react": ["@types/react@19.1.5", "", { "dependencies": { "csstype": "^3.0.2" } }, "sha512-piErsCVVbpMMT2r7wbawdZsq4xMvIAhQuac2gedQHysu1TZYEigE6pnFfgZT+/jQnrRuF5r+SHzuehFjfRjr4g=="],
+
+    "@types/react-router-dom/@types/react": ["@types/react@19.1.5", "", { "dependencies": { "csstype": "^3.0.2" } }, "sha512-piErsCVVbpMMT2r7wbawdZsq4xMvIAhQuac2gedQHysu1TZYEigE6pnFfgZT+/jQnrRuF5r+SHzuehFjfRjr4g=="],
   }
 }
