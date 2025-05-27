@@ -12,6 +12,7 @@ pub mod ensure_registration;
 pub mod fake_lane_manager;
 pub mod game_state;
 pub mod proving;
+pub mod rollup_execution;
 
 pub struct CryptoContext {
     pub secp: secp256k1::Secp256k1<secp256k1::All>,
