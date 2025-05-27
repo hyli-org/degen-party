@@ -3,9 +3,12 @@ use clap::{command, Parser};
 use client_sdk::rest_client::NodeApiHttpClient;
 use config::{Config, Environment, File};
 use degen_party::{
-    crash_game::CrashGameModule, ensure_registration::EnsureRegistration,
-    fake_lane_manager::FakeLaneManager, game_state::GameStateModule, AuthenticatedMessage,
-    InboundWebsocketMessage, OutboundWebsocketMessage,
+    crash_game::CrashGameModule,
+    ensure_registration::EnsureRegistration,
+    fake_lane_manager::FakeLaneManager,
+    game_state::GameStateModule,
+    rollup_execution::{RollupExecutor, RollupExecutorCtx},
+    AuthenticatedMessage, InboundWebsocketMessage, OutboundWebsocketMessage,
 };
 use hyle_modules::{
     bus::{metrics::BusMetrics, SharedMessageBus},
@@ -134,6 +137,14 @@ async fn main() -> Result<()> {
         )
         .await?;
     handler.build_module::<FakeLaneManager>(ctx.clone()).await?;
+
+    handler
+        .build_module::<RollupExecutor>(RollupExecutorCtx {
+            data_directory: config.data_directory.clone(),
+            validator_lane_id: todo!(),
+            contract_deserializer: todo!(),
+        })
+        .await?;
 
     handler
         .build_module::<DAListener>(DAListenerConf {

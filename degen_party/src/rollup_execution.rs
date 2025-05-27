@@ -141,7 +141,7 @@ pub struct DeserRollupExecutorStore {
 
 pub struct RollupExecutorCtx {
     pub data_directory: PathBuf,
-    pub contract_name: ContractName,
+    pub initial_contracts: HashMap<ContractName, ContractBox>,
     pub validator_lane_id: ValidatorPublicKey,
     pub contract_deserializer: fn(Vec<u8>, &ContractName) -> ContractBox,
 }
@@ -176,17 +176,23 @@ impl Module for RollupExecutor {
         let bus = RollupExecutorBusClient::new_from_bus(bus.new_handle()).await;
 
         let data_directory = ctx.data_directory.clone();
-        let file =
-            data_directory.join(format!("rollup_executor_{}.bin", ctx.contract_name).as_str());
+        let file = data_directory.join("rollup_executor.bin");
 
         let store = match Self::load_from_disk::<DeserRollupExecutorStore>(file.as_path()) {
             Some(store) => RollupExecutorStore::deser_with(store, ctx.contract_deserializer),
-            None => RollupExecutorStore {
-                contracts: HashMap::new(),
-                state_history: HashMap::new(),
-                unsettled_txs: Vec::new(),
-                validator_lane_id: ctx.validator_lane_id.clone(),
-            },
+            None => {
+                let state_history = ctx
+                    .initial_contracts
+                    .keys()
+                    .map(|k| (k.clone(), Vec::new()))
+                    .collect();
+                RollupExecutorStore {
+                    contracts: ctx.initial_contracts,
+                    state_history,
+                    unsettled_txs: Vec::new(),
+                    validator_lane_id: ctx.validator_lane_id.clone(),
+                }
+            }
         };
 
         Ok(RollupExecutor {
@@ -240,7 +246,6 @@ impl RollupExecutor {
                     let mut contract_states = vec![];
                     for blob in &blob_tx.blobs {
                         if let Some(contract) = self.contracts.get(&blob.contract_name) {
-                            // TODO: This will panic if clone_typed is required. For now, use clone if available.
                             contract_states.push((blob.contract_name.clone(), contract.clone()));
                         }
                     }
@@ -261,11 +266,10 @@ impl RollupExecutor {
                 });
                 if let TransactionData::Blob(blob_tx) = tx.transaction_data {
                     let hyle_outputs = self.execute_blob_tx(&blob_tx, tx_ctx)?;
-                    // For all contracts in the tx, send their state
+                    // For all contracts in the tx that we care about, send their state
                     let mut contract_states = vec![];
                     for blob in &blob_tx.blobs {
                         if let Some(contract) = self.contracts.get(&blob.contract_name) {
-                            // TODO: This will panic if clone_typed is required. For now, use clone if available.
                             contract_states.push((blob.contract_name.clone(), contract.clone()));
                         }
                     }
@@ -328,21 +332,18 @@ impl RollupExecutorStore {
                 contract_snapshots.insert(blob.contract_name.clone(), contract.clone());
             }
         }
+        if contract_snapshots.is_empty() {
+            // we don't care about this TX, ignore.
+            return Ok(vec![]);
+        }
         let mut hyle_outputs = vec![];
         let mut affected_contracts = vec![];
         // 2. Execute all blobs, mutating the correct contract in the map
         for (blob_index, blob) in blob_tx.blobs.iter().enumerate() {
-            let contract = self
-                .contracts
-                .entry(blob.contract_name.clone())
-                .or_insert_with(|| {
-                    // If contract doesn't exist, use a default (should be provided elsewhere)
-                    // For now, panic to catch missing default
-                    panic!(
-                        "Missing default state for contract: {:?}",
-                        blob.contract_name
-                    )
-                });
+            let Some(contract) = self.contracts.get_mut(&blob.contract_name) else {
+                continue;
+            };
+
             let calldata = Calldata {
                 identity: blob_tx.identity.clone(),
                 tx_hash: blob_tx.hashed(),
