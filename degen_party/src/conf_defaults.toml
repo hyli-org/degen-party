@@ -7,8 +7,8 @@ da_read_from = "127.0.0.1:4141"
 start_block = 0
 
 [contracts]
-board_game = "board_game_2"
-crash_game = "crash_game_2"
+board_game = "board_game"
+crash_game = "crash_game"
 
 [websocket]
 port = 8082

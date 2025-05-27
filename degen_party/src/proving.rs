@@ -15,8 +15,8 @@ use hyle_modules::modules::{
     ModulesHandler,
 };
 use sdk::{
-    utils::as_hyle_output, ContractName, RegisterContractEffect, StructuredBlobData,
-    ValidatorPublicKey, ZkContract,
+    utils::as_hyle_output, ContractName, Identity, RegisterContractEffect, StructuredBlobData,
+    ZkContract,
 };
 use sp1_sdk::Prover;
 use sp1_sdk::SP1ProvingKey;
@@ -124,22 +124,15 @@ pub async fn setup_auto_provers(
     handler: &mut ModulesHandler,
 ) -> Result<()> {
     let board_game_executor = BoardGameExecutor {
-        state: borsh::from_slice(
-            &ctx.client
-                .get_contract(ctx.board_game.clone())
-                .await?
-                .state
-                .0,
-        )?,
+        state: board_game::game::GameState::new(Identity::new(format!(
+            "{}@secp256k1",
+            ctx.crypto.public_key
+        ))),
     };
-    let crash_game_state: crash_game::GameState = borsh::from_slice(&{
-        // We expect the game to not be running, so we go through the default init path
-        ctx.client
-            .get_contract(ctx.crash_game.clone())
-            .await?
-            .state
-            .0
-    })?;
+    let crash_game_state: crash_game::GameState = crash_game::GameState::new(
+        ctx.board_game.clone(),
+        Identity::new(format!("{}@secp256k1", ctx.crypto.public_key,)),
+    );
     let crash_game_executor = CrashGameExecutor {
         state: crash_game_state,
     };
@@ -160,6 +153,12 @@ pub async fn setup_auto_provers(
                 (
                     ContractName::new("wallet"),
                     ContractBox::new(wallet::Wallet::default()),
+                ),
+                (
+                    ContractName::new("secp256k1"),
+                    ContractBox::new(
+                        hyle_modules::utils::native_verifier_handler::NativeVerifierHandler,
+                    ),
                 ),
             ]
             .into_iter()

@@ -1,9 +1,6 @@
 use ::crash_game::ChainEvent;
-use anyhow::{bail, Context as AnyhowContext, Result};
-use board_game::{
-    game::{GameAction as BoardGameAction, GameEvent, GamePhase},
-    GameActionBlob,
-};
+use anyhow::Result;
+use board_game::game::GameEvent;
 use borsh::{BorshDeserialize, BorshSerialize};
 use client_sdk::transaction_builder::TxExecutorHandler;
 use crash_game::CrashGameEvent;
@@ -17,12 +14,9 @@ use hyle_modules::{
     },
 };
 use sdk::{
-    hyle_model_utils::TimestampMs, verifiers::Secp256k1Blob, Blob, BlobIndex, BlobTransaction,
-    Calldata, ContractAction, ContractName, Hashed, HyleOutput, Identity, LaneId,
-    MempoolStatusEvent, NodeStateEvent, TransactionData, TxContext, TxHash, TxId,
+    hyle_model_utils::TimestampMs, BlobTransaction, Calldata, ContractName, Hashed, HyleOutput,
+    LaneId, MempoolStatusEvent, NodeStateEvent, TransactionData, TxContext, TxHash, TxId,
 };
-use secp256k1::Message;
-use sha2::{Digest, Sha256};
 use std::fmt;
 use std::{
     any::TypeId,
@@ -164,7 +158,7 @@ impl BorshSerialize for ContractBox {
 pub struct RollupExecutorStore {
     unsettled_txs: Vec<(BlobTransaction, TxContext)>,
     contracts: HashMap<ContractName, ContractBox>,
-    state_history: HashMap<ContractName, Vec<(TxHash, ContractBox)>>,
+    settled_state: HashMap<ContractName, ContractBox>,
     board_game: ContractName,
     crash_game: ContractName,
 }
@@ -173,7 +167,7 @@ pub struct RollupExecutorStore {
 pub struct DeserRollupExecutorStore {
     unsettled_txs: Vec<(BlobTransaction, TxContext)>,
     contracts: HashMap<ContractName, Vec<u8>>,
-    state_history: HashMap<ContractName, Vec<(TxHash, Vec<u8>)>>,
+    settled_state: HashMap<ContractName, Vec<u8>>,
     board_game: ContractName,
     crash_game: ContractName,
 }
@@ -184,25 +178,9 @@ pub struct RollupExecutorCtx {
     pub contract_deserializer: Box<dyn Fn(Vec<u8>, &ContractName) -> ContractBox + Send + Sync>,
 }
 
-#[derive(Debug, Clone)]
-pub enum RollupExecutorEvent {
-    /// Event sent when a blob is executed as successfully
-    #[allow(dead_code)]
-    TxExecutionSuccess(
-        BlobTransaction,
-        Vec<(ContractName, ContractBox)>,
-        Vec<HyleOutput>,
-    ),
-    /// Event sent when a blob is reverted
-    /// After a revert, the contract state is recalculated
-    #[allow(dead_code)]
-    RevertedTx(BlobTransaction, Vec<(ContractName, ContractBox)>),
-}
-
 module_bus_client! {
 #[derive(Debug)]
 pub struct RollupExecutorBusClient {
-    sender(RollupExecutorEvent),
     sender(BlobTransaction),
     sender(WsBroadcastMessage<OutboundWebsocketMessage>),
     receiver(WsInMessage<AuthenticatedMessage<InboundWebsocketMessage>>),
@@ -222,20 +200,13 @@ impl Module for RollupExecutor {
 
         let store = match Self::load_from_disk::<DeserRollupExecutorStore>(file.as_path()) {
             Some(store) => RollupExecutorStore::deser_with(store, ctx.contract_deserializer),
-            None => {
-                let state_history = ctx
-                    .initial_contracts
-                    .keys()
-                    .map(|k| (k.clone(), Vec::new()))
-                    .collect();
-                RollupExecutorStore {
-                    contracts: ctx.initial_contracts,
-                    state_history,
-                    unsettled_txs: Vec::new(),
-                    board_game: ctx.common.board_game.clone(),
-                    crash_game: ctx.common.crash_game.clone(),
-                }
-            }
+            None => RollupExecutorStore {
+                contracts: ctx.initial_contracts.clone(),
+                settled_state: ctx.initial_contracts,
+                unsettled_txs: Vec::new(),
+                board_game: ctx.common.board_game.clone(),
+                crash_game: ctx.common.crash_game.clone(),
+            },
         };
 
         Ok(RollupExecutor {
@@ -275,7 +246,7 @@ impl Module for RollupExecutor {
                 _ = log_error!(self.handle_mempool_status_event(event).await, "handle mempool status event")
             }
             listen<ConfirmedBlobTransaction> event => {
-                _ = log_error!(self.handle_optimistic_tx(event.0, event.1).await, "handle optimistic tx");
+                _ = log_error!(self.handle_optimistic_tx(event.0, event.1, None).await, "handle optimistic tx");
             }
             _ = update_interval.tick() => {
                 self.board_game_on_tick().await?;
@@ -302,16 +273,23 @@ impl RollupExecutor {
     async fn handle_node_state_event(&mut self, event: NodeStateEvent) -> Result<()> {
         match event {
             NodeStateEvent::NewBlock(block) => {
+                if !block.txs.is_empty()
+                    || !block.timed_out_txs.is_empty()
+                    || !block.failed_txs.is_empty()
+                {
+                    tracing::debug!("Handling new block {}", block.block_height);
+                }
                 for (TxId(_, tx_hash), tx) in block.txs.iter() {
                     if let TransactionData::Blob(blob_tx) = &tx.transaction_data {
                         if let Err(e) = self
                             .handle_optimistic_tx(
                                 block.lane_ids.get(tx_hash).cloned().unwrap_or_default(),
                                 blob_tx.clone(),
+                                block.build_tx_ctx(tx_hash).ok(),
                             )
                             .await
                         {
-                            tracing::warn!("Error handling optimistic tx: {:?}", e);
+                            tracing::debug!("Error handling optimistic tx: {:?}", e);
                         }
                     }
                 }
@@ -323,16 +301,7 @@ impl RollupExecutor {
                     .cloned()
                     .collect();
                 for tx_hash in merged_set.iter() {
-                    let blob_tx = self.cancel_tx(tx_hash)?;
-                    // For all contracts in the tx, send their state
-                    let mut contract_states = vec![];
-                    for blob in &blob_tx.blobs {
-                        if let Some(contract) = self.contracts.get(&blob.contract_name) {
-                            contract_states.push((blob.contract_name.clone(), contract.clone()));
-                        }
-                    }
-                    self.bus
-                        .send(RollupExecutorEvent::RevertedTx(blob_tx, contract_states))?;
+                    self.cancel_tx(tx_hash)?;
                 }
                 Ok(())
             }
@@ -341,8 +310,11 @@ impl RollupExecutor {
     async fn handle_mempool_status_event(&mut self, event: MempoolStatusEvent) -> Result<()> {
         if let MempoolStatusEvent::WaitingDissemination { tx, .. } = event {
             if let TransactionData::Blob(blob_tx) = tx.transaction_data {
-                if let Err(e) = self.handle_optimistic_tx(LaneId::default(), blob_tx).await {
-                    tracing::warn!("Error handling optimistic tx: {:?}", e);
+                if let Err(e) = self
+                    .handle_optimistic_tx(LaneId::default(), blob_tx, None)
+                    .await
+                {
+                    tracing::debug!("Error handling optimistic tx: {:?}", e);
                 }
             }
         }
@@ -353,6 +325,7 @@ impl RollupExecutor {
         &mut self,
         lane_id: LaneId,
         blob_tx: BlobTransaction,
+        tx_ctx: Option<TxContext>,
     ) -> Result<()> {
         if self
             .unsettled_txs
@@ -366,12 +339,30 @@ impl RollupExecutor {
             return Ok(());
         }
 
-        let tx_ctx = Some(TxContext {
+        let tx_ctx = tx_ctx.unwrap_or(TxContext {
             lane_id,
             timestamp: TimestampMs(SystemTime::now().duration_since(UNIX_EPOCH)?.as_millis()),
             ..Default::default()
         });
-        let hyle_outputs = self.execute_blob_tx(&blob_tx, tx_ctx)?;
+
+        let hyle_outputs = RollupExecutorStore::execute_blob_tx(
+            &mut self.contracts,
+            &blob_tx,
+            Some(tx_ctx.clone()),
+            false,
+        );
+
+        // If we have a success and the outputs are empty, then we ignored.
+        if hyle_outputs.as_ref().map(|x| x.is_empty()).unwrap_or(false) {
+            return Ok(());
+        }
+
+        // Always insert it in the list of unsettled TXs, even if we fail to execute it, as it might be a valid TX
+        // depending on the fact that some future TX will e.g. timeout.
+        self.unsettled_txs.push((blob_tx.clone(), tx_ctx));
+
+        let hyle_outputs = hyle_outputs?;
+
         // Special for degen-party: process events and send updates to WS
         for (hyle_output, contract_name) in &hyle_outputs {
             if contract_name == &self.board_game {
@@ -400,6 +391,8 @@ impl RollupExecutor {
             }
         }
 
+        tracing::debug!("Optimistically executed transaction {}", blob_tx.hashed(),);
+
         Ok(())
     }
 }
@@ -417,49 +410,65 @@ impl RollupExecutorStore {
                 (name, c)
             })
             .collect();
-        let state_history = deser_store
-            .state_history
+        let settled_state = deser_store
+            .settled_state
             .into_iter()
-            .map(|(name, history)| {
-                let h = history
-                    .into_iter()
-                    .map(|(tx_hash, state)| (tx_hash, contract_deserializer(state, &name)))
-                    .collect();
-                (name, h)
+            .map(|(name, data)| {
+                let c = contract_deserializer(data, &name);
+                (name, c)
             })
             .collect();
         Self {
             unsettled_txs: deser_store.unsettled_txs,
             contracts,
-            state_history,
+            settled_state,
             board_game: deser_store.board_game,
             crash_game: deser_store.crash_game,
         }
     }
 
     /// This function executes the blob transaction and returns the outputs of the contract.
-    /// It also keeps track of the transaction as unsettled and the state history.
+    /// Errors on unknown blobs (if we care about the TX at all) or unsuccessful outputs.
     pub fn execute_blob_tx(
-        &mut self,
+        contracts: &mut HashMap<ContractName, ContractBox>,
         blob_tx: &BlobTransaction,
         tx_ctx: Option<TxContext>,
+        process_partial: bool,
     ) -> anyhow::Result<Vec<(HyleOutput, ContractName)>> {
-        // 1. Snapshot all involved contracts' state
-        let mut contract_snapshots: BTreeMap<ContractName, ContractBox> = BTreeMap::new();
+        // 1. Clone all involved contracts' state
+        let mut temp_contracts: BTreeMap<ContractName, ContractBox> = BTreeMap::new();
+        let mut skipped_contracts = 0;
         for blob in &blob_tx.blobs {
-            if let Some(contract) = self.contracts.get(&blob.contract_name) {
-                contract_snapshots.insert(blob.contract_name.clone(), contract.clone());
+            if let Some(contract) = contracts.get(&blob.contract_name) {
+                temp_contracts.insert(blob.contract_name.clone(), contract.clone());
+            // Ignore check secret - we can't verify it but we'll assume it's OK for now.
+            } else if &blob.contract_name.0 != "check_secret" {
+                skipped_contracts += 1;
             }
         }
-        if contract_snapshots.is_empty() {
+        if temp_contracts.is_empty() {
             // we don't care about this TX, ignore.
             return Ok(vec![]);
         }
+        if skipped_contracts > 0 {
+            if process_partial {
+                tracing::debug!(
+                    "Processing partial blob transaction {} with {} skipped contracts",
+                    blob_tx.hashed(),
+                    skipped_contracts
+                );
+            } else {
+                anyhow::bail!(
+                    "Tried to execute blob transaction {} but we cannot handle some blobs, {} skipped",
+                    blob_tx.hashed(),
+                    skipped_contracts
+                );
+            }
+        }
         let mut hyle_outputs = vec![];
-        let mut affected_contracts = vec![];
         // 2. Execute all blobs, mutating the correct contract in the map
         for (blob_index, blob) in blob_tx.blobs.iter().enumerate() {
-            let Some(contract) = self.contracts.get_mut(&blob.contract_name) else {
+            let Some(contract) = temp_contracts.get_mut(&blob.contract_name) else {
                 continue;
             };
 
@@ -474,10 +483,6 @@ impl RollupExecutorStore {
             };
             match contract.handle(&calldata) {
                 Err(e) => {
-                    // Revert all affected contracts to their snapshot
-                    for (name, snapshot) in contract_snapshots.iter() {
-                        self.contracts.insert(name.clone(), snapshot.clone());
-                    }
                     anyhow::bail!(
                         "Error while executing tx {} on blob index {} for {}: {e}",
                         blob_tx.hashed(),
@@ -488,71 +493,56 @@ impl RollupExecutorStore {
                 Ok(hyle_output) => {
                     if !hyle_output.success {
                         anyhow::bail!(
-                            "Hyle output for tx {} on blob index {} for {} is not successful: {:?}, {:?}",
+                            "Hyle output for tx {} on blob index {} for {} is not successful: {:?}",
                             blob_tx.hashed(),
                             calldata.index,
                             blob.contract_name,
-                            String::from_utf8(hyle_output.program_outputs.clone()),
-                            hyle_output
+                            String::from_utf8(hyle_output.program_outputs.clone())
+                                .unwrap_or(hex::encode(&hyle_output.program_outputs)),
                         );
                     }
                     hyle_outputs.push((hyle_output, blob.contract_name.clone()));
-                    if !affected_contracts.contains(&blob.contract_name) {
-                        affected_contracts.push(blob.contract_name.clone());
-                    }
                 }
             }
         }
-        // 3. Blobs execution went fine. Track as unsettled
-        self.unsettled_txs
-            .push((blob_tx.clone(), tx_ctx.clone().unwrap()));
-        // 4. Update state history for all affected contracts
-        for contract_name in affected_contracts {
-            let contract = self.contracts.get(&contract_name).unwrap().clone();
-            self.state_history
-                .entry(contract_name)
-                .or_default()
-                .push((blob_tx.hashed(), contract));
+        // 3. Blobs execution went fine. Update actual contracts.
+        for (contract_name, contract) in temp_contracts {
+            contracts.insert(contract_name, contract);
         }
         Ok(hyle_outputs)
     }
 
     /// This function is called when the transaction is confirmed as failed.
     /// It reverts the state and reexecutes all unsettled transaction after this one.
-    pub fn cancel_tx(&mut self, tx_hash: &TxHash) -> anyhow::Result<BlobTransaction> {
-        let tx_pos = self
+    pub fn cancel_tx(&mut self, tx_hash: &TxHash) -> anyhow::Result<Option<BlobTransaction>> {
+        let Some(tx_pos) = self
             .unsettled_txs
             .iter()
             .position(|(blob_tx, _)| blob_tx.hashed() == *tx_hash)
-            .ok_or(anyhow::anyhow!(
-                "Transaction not found in unsettled transactions"
-            ))?;
-        let (poped_tx, _) = self.unsettled_txs.remove(tx_pos);
+        else {
+            return Ok(None);
+        };
+        tracing::debug!("Cancelling transaction {} at position {}", tx_hash, tx_pos);
+        let (popped_tx, _) = self.unsettled_txs.remove(tx_pos);
         // 1. Find all contracts affected by this tx
         let mut affected_contracts = vec![];
-        for blob in &poped_tx.blobs {
+        for blob in &popped_tx.blobs {
             if self.contracts.contains_key(&blob.contract_name) {
                 affected_contracts.push(blob.contract_name.clone());
             }
         }
-        // 2. Revert each contract to the state before this tx
+        // 2. Revert each contract to the settled state.
         for contract_name in &affected_contracts {
-            if let Some(history) = self.state_history.get_mut(contract_name) {
-                if let Some((_, state)) = history.get(tx_pos) {
-                    self.contracts.insert(contract_name.clone(), state.clone());
-                    history.truncate(tx_pos);
-                } else {
-                    anyhow::bail!("State history not found for the cancelled transaction");
-                }
+            if let Some(state) = self.settled_state.get(contract_name) {
+                self.contracts.insert(contract_name.clone(), state.clone());
             }
         }
-        // 3. Re-execute all unsettled transactions after the cancelled one
-        let reexecute_txs: Vec<(BlobTransaction, TxContext)> =
-            self.unsettled_txs.drain(tx_pos..).collect();
-        for (blob_tx, tx_ctx) in reexecute_txs.iter() {
-            let _ = self.execute_blob_tx(blob_tx, Some(tx_ctx.clone()))?;
+        // 3. Re-execute all unsettled transactions from that safe state - ignore errors.
+        for (blob_tx, tx_ctx) in &self.unsettled_txs {
+            let _ =
+                Self::execute_blob_tx(&mut self.contracts, blob_tx, Some(tx_ctx.clone()), false);
         }
-        Ok(poped_tx)
+        Ok(Some(popped_tx))
     }
 
     fn handle_successful_transactions(&mut self, successful_txs: Vec<TxHash>) {
@@ -563,15 +553,21 @@ impl RollupExecutorStore {
                 .iter()
                 .position(|(tx, _)| tx.hashed() == tx_hash)
             {
-                let (blob_tx, _) = self.unsettled_txs.remove(pos);
-                // For each contract in the tx, update state history
-                for blob in &blob_tx.blobs {
-                    if let Some(contract) = self.contracts.get(&blob.contract_name) {
-                        self.state_history
-                            .entry(blob.contract_name.clone())
-                            .or_default()
-                            .push((tx_hash.clone(), contract.clone()));
-                    }
+                let (blob_tx, tx_ctx) = self.unsettled_txs.remove(pos);
+                tracing::debug!(
+                    "Transaction {} is successful, removing from unsettled",
+                    tx_hash
+                );
+                if let Err(e) =
+                    Self::execute_blob_tx(&mut self.settled_state, &blob_tx, Some(tx_ctx), true)
+                {
+                    // This _really_ should not happen, as we are executing a successful transaction on settled state.
+                    // Probably indicates misconfiguration or desync from the chain.
+                    tracing::error!(
+                        "Error while executing settled transaction {}: {:?}",
+                        tx_hash,
+                        e
+                    );
                 }
             }
         }
