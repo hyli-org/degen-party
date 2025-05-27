@@ -13,6 +13,7 @@ client-sdk = { git = "https://github.com/Hyle-org/hyle.git", branch = "main", de
 hyle-modules = { git = "https://github.com/Hyle-org/hyle.git", branch = "main", package = "hyle-modules" }
 hyle-hyllar = { git = "https://github.com/Hyle-org/hyle.git", branch = "main", default-features = false, package = "hyle-hyllar" }
 hyle-hydentity = { git = "https://github.com/Hyle-org/hyle.git", branch = "main", package = "hyle-hydentity" }
+wallet = { git = "https://github.com/hyli-org/wallet.git", branch = "main", package = "wallet", default-features = false }
 
 contracts = { path = "contracts", default-features = false, package = "contracts" }
 board_game = { path = "contracts/board_game", package = "board_game" }

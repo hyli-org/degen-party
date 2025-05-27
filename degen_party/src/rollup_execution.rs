@@ -1,28 +1,57 @@
-use anyhow::Result;
+use ::crash_game::ChainEvent;
+use anyhow::{bail, Context as AnyhowContext, Result};
+use board_game::{
+    game::{GameAction as BoardGameAction, GameEvent, GamePhase},
+    GameActionBlob,
+};
 use borsh::{BorshDeserialize, BorshSerialize};
 use client_sdk::transaction_builder::TxExecutorHandler;
+use crash_game::CrashGameEvent;
+use game_state::GameStateEvent;
 use hyle_modules::{
     bus::{BusClientSender, SharedMessageBus},
     log_error, module_bus_client, module_handle_messages,
-    modules::Module,
+    modules::{
+        websocket::{WsBroadcastMessage, WsInMessage},
+        Module,
+    },
 };
 use sdk::{
-    BlobTransaction, Calldata, ContractName, Hashed, HyleOutput, LaneId, MempoolStatusEvent,
-    NodeStateEvent, TransactionData, TxContext, TxHash, ValidatorPublicKey,
+    hyle_model_utils::TimestampMs, verifiers::Secp256k1Blob, Blob, BlobIndex, BlobTransaction,
+    Calldata, ContractAction, ContractName, Hashed, HyleOutput, Identity, LaneId,
+    MempoolStatusEvent, NodeStateEvent, TransactionData, TxContext, TxHash, TxId,
 };
-use std::any::TypeId;
-use std::collections::{BTreeMap, HashMap, HashSet};
+use secp256k1::Message;
+use sha2::{Digest, Sha256};
 use std::fmt;
+use std::{
+    any::TypeId,
+    time::{SystemTime, UNIX_EPOCH},
+};
+use std::{
+    collections::{BTreeMap, HashMap, HashSet},
+    sync::Arc,
+};
 use std::{
     fmt::Debug,
     ops::{Deref, DerefMut},
     path::PathBuf,
     vec,
 };
+use tokio::time;
+
+use crate::{
+    fake_lane_manager::ConfirmedBlobTransaction, AuthenticatedMessage, Context, CryptoContext,
+    InboundWebsocketMessage, OutboundWebsocketMessage,
+};
+
+pub mod crash_game;
+pub mod game_state;
 
 pub struct RollupExecutor {
     bus: RollupExecutorBusClient,
     data_directory: PathBuf,
+    crypto: Arc<CryptoContext>,
     store: RollupExecutorStore,
 }
 
@@ -41,6 +70,8 @@ impl DerefMut for RollupExecutor {
 pub trait RollupContract: TxExecutorHandler + Debug + Send + Sync {
     fn clone_box(&self) -> Box<dyn RollupContract>;
     fn borsh_serialize_box(&self) -> Result<Vec<u8>, std::io::Error>;
+    fn as_any(&self) -> &dyn std::any::Any;
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any;
 }
 
 impl<T> RollupContract for T
@@ -59,6 +90,12 @@ where
     }
     fn borsh_serialize_box(&self) -> Result<Vec<u8>, std::io::Error> {
         borsh::to_vec(self)
+    }
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
     }
 }
 
@@ -125,25 +162,26 @@ impl BorshSerialize for ContractBox {
 
 #[derive(BorshSerialize)]
 pub struct RollupExecutorStore {
-    validator_lane_id: ValidatorPublicKey,
     unsettled_txs: Vec<(BlobTransaction, TxContext)>,
     contracts: HashMap<ContractName, ContractBox>,
     state_history: HashMap<ContractName, Vec<(TxHash, ContractBox)>>,
+    board_game: ContractName,
+    crash_game: ContractName,
 }
 
 #[derive(Default, BorshDeserialize)]
 pub struct DeserRollupExecutorStore {
-    validator_lane_id: ValidatorPublicKey,
     unsettled_txs: Vec<(BlobTransaction, TxContext)>,
     contracts: HashMap<ContractName, Vec<u8>>,
     state_history: HashMap<ContractName, Vec<(TxHash, Vec<u8>)>>,
+    board_game: ContractName,
+    crash_game: ContractName,
 }
 
 pub struct RollupExecutorCtx {
-    pub data_directory: PathBuf,
+    pub common: Arc<Context>,
     pub initial_contracts: HashMap<ContractName, ContractBox>,
-    pub validator_lane_id: ValidatorPublicKey,
-    pub contract_deserializer: fn(Vec<u8>, &ContractName) -> ContractBox,
+    pub contract_deserializer: Box<dyn Fn(Vec<u8>, &ContractName) -> ContractBox + Send + Sync>,
 }
 
 #[derive(Debug, Clone)]
@@ -165,8 +203,12 @@ module_bus_client! {
 #[derive(Debug)]
 pub struct RollupExecutorBusClient {
     sender(RollupExecutorEvent),
+    sender(BlobTransaction),
+    sender(WsBroadcastMessage<OutboundWebsocketMessage>),
+    receiver(WsInMessage<AuthenticatedMessage<InboundWebsocketMessage>>),
     receiver(NodeStateEvent),
     receiver(MempoolStatusEvent),
+    receiver(ConfirmedBlobTransaction),
 }
 }
 impl Module for RollupExecutor {
@@ -175,7 +217,7 @@ impl Module for RollupExecutor {
     async fn build(bus: SharedMessageBus, ctx: Self::Context) -> Result<Self> {
         let bus = RollupExecutorBusClient::new_from_bus(bus.new_handle()).await;
 
-        let data_directory = ctx.data_directory.clone();
+        let data_directory = ctx.common.data_directory.clone();
         let file = data_directory.join("rollup_executor.bin");
 
         let store = match Self::load_from_disk::<DeserRollupExecutorStore>(file.as_path()) {
@@ -190,7 +232,8 @@ impl Module for RollupExecutor {
                     contracts: ctx.initial_contracts,
                     state_history,
                     unsettled_txs: Vec::new(),
-                    validator_lane_id: ctx.validator_lane_id.clone(),
+                    board_game: ctx.common.board_game.clone(),
+                    crash_game: ctx.common.crash_game.clone(),
                 }
             }
         };
@@ -199,18 +242,44 @@ impl Module for RollupExecutor {
             bus,
             store,
             data_directory,
+            crypto: ctx.common.crypto.clone(),
         })
     }
 
     async fn run(&mut self) -> Result<()> {
+        let mut update_interval = time::interval(std::time::Duration::from_millis(50));
+
         module_handle_messages! {
             on_bus self.bus,
+            listen<WsInMessage<AuthenticatedMessage<InboundWebsocketMessage>>> msg => {
+                let AuthenticatedMessage {
+                    message,
+                    identity,
+                    uuid,
+                    identity_blobs
+                } = msg.message;
+                if let InboundWebsocketMessage::GameState(event) = message {
+                    if let Err(e) = self.handle_user_message(event, identity, &uuid, identity_blobs).await {
+                        tracing::warn!("Error handling event: {:?}", e);
+                    }
+                 } else if let InboundWebsocketMessage::CrashGame(event) = message {
+                    if let Err(e) = self.handle_player_message(event, identity, &uuid, identity_blobs).await {
+                        tracing::warn!("Error handling player message: {:?}", e);
+                    }
+                }
+            }
             listen<NodeStateEvent> event => {
                 _ = log_error!(self.handle_node_state_event(event).await, "handle note state event")
             }
-
             listen<MempoolStatusEvent> event => {
-                _ = log_error!(self.handle_mempool_status_event(event).await, "handle mempool status event");
+                _ = log_error!(self.handle_mempool_status_event(event).await, "handle mempool status event")
+            }
+            listen<ConfirmedBlobTransaction> event => {
+                _ = log_error!(self.handle_optimistic_tx(event.0, event.1).await, "handle optimistic tx");
+            }
+            _ = update_interval.tick() => {
+                self.board_game_on_tick().await?;
+                self.crash_game_on_tick().await?;
             }
         };
 
@@ -233,6 +302,19 @@ impl RollupExecutor {
     async fn handle_node_state_event(&mut self, event: NodeStateEvent) -> Result<()> {
         match event {
             NodeStateEvent::NewBlock(block) => {
+                for (TxId(_, tx_hash), tx) in block.txs.iter() {
+                    if let TransactionData::Blob(blob_tx) = &tx.transaction_data {
+                        if let Err(e) = self
+                            .handle_optimistic_tx(
+                                block.lane_ids.get(tx_hash).cloned().unwrap_or_default(),
+                                blob_tx.clone(),
+                            )
+                            .await
+                        {
+                            tracing::warn!("Error handling optimistic tx: {:?}", e);
+                        }
+                    }
+                }
                 self.handle_successful_transactions(block.successful_txs);
                 let merged_set: HashSet<_> = block
                     .timed_out_txs
@@ -256,40 +338,76 @@ impl RollupExecutor {
             }
         }
     }
-
     async fn handle_mempool_status_event(&mut self, event: MempoolStatusEvent) -> Result<()> {
-        match event {
-            MempoolStatusEvent::WaitingDissemination { tx, .. } => {
-                let tx_ctx = Some(TxContext {
-                    lane_id: LaneId(self.validator_lane_id.clone()),
-                    ..Default::default()
-                });
-                if let TransactionData::Blob(blob_tx) = tx.transaction_data {
-                    let hyle_outputs = self.execute_blob_tx(&blob_tx, tx_ctx)?;
-                    // For all contracts in the tx that we care about, send their state
-                    let mut contract_states = vec![];
-                    for blob in &blob_tx.blobs {
-                        if let Some(contract) = self.contracts.get(&blob.contract_name) {
-                            contract_states.push((blob.contract_name.clone(), contract.clone()));
-                        }
-                    }
-                    self.bus.send(RollupExecutorEvent::TxExecutionSuccess(
-                        blob_tx,
-                        contract_states,
-                        hyle_outputs,
-                    ))?;
+        if let MempoolStatusEvent::WaitingDissemination { tx, .. } = event {
+            if let TransactionData::Blob(blob_tx) = tx.transaction_data {
+                if let Err(e) = self.handle_optimistic_tx(LaneId::default(), blob_tx).await {
+                    tracing::warn!("Error handling optimistic tx: {:?}", e);
                 }
-                Ok(())
             }
-            _ => Ok(()),
         }
+        Ok(())
+    }
+
+    async fn handle_optimistic_tx(
+        &mut self,
+        lane_id: LaneId,
+        blob_tx: BlobTransaction,
+    ) -> Result<()> {
+        if self
+            .unsettled_txs
+            .iter()
+            .any(|(tx, _)| tx.hashed() == blob_tx.hashed())
+        {
+            tracing::debug!(
+                "Transaction {} is already in the unsettled transactions",
+                blob_tx.hashed()
+            );
+            return Ok(());
+        }
+
+        let tx_ctx = Some(TxContext {
+            lane_id,
+            timestamp: TimestampMs(SystemTime::now().duration_since(UNIX_EPOCH)?.as_millis()),
+            ..Default::default()
+        });
+        let hyle_outputs = self.execute_blob_tx(&blob_tx, tx_ctx)?;
+        // Special for degen-party: process events and send updates to WS
+        for (hyle_output, contract_name) in &hyle_outputs {
+            if contract_name == &self.board_game {
+                let events: Vec<GameEvent> =
+                    borsh::from_slice(&hyle_output.program_outputs).unwrap();
+                self.bus.send(WsBroadcastMessage {
+                    message: OutboundWebsocketMessage::GameStateEvent(
+                        GameStateEvent::StateUpdated {
+                            state: Some(self.get_board_game().clone()),
+                            events,
+                            board_game: self.board_game.clone(),
+                            crash_game: self.crash_game.clone(),
+                        },
+                    ),
+                })?;
+            } else if contract_name == &self.crash_game {
+                let events: Vec<ChainEvent> =
+                    borsh::from_slice(&hyle_output.program_outputs).unwrap();
+                let state = Some(self.get_crash_game().clone());
+                self.bus.send(WsBroadcastMessage {
+                    message: OutboundWebsocketMessage::CrashGame(CrashGameEvent::StateUpdated {
+                        state,
+                        events,
+                    }),
+                })?;
+            }
+        }
+
+        Ok(())
     }
 }
 
 impl RollupExecutorStore {
     fn deser_with(
         deser_store: DeserRollupExecutorStore,
-        contract_deserializer: fn(Vec<u8>, &ContractName) -> ContractBox,
+        contract_deserializer: impl Fn(Vec<u8>, &ContractName) -> ContractBox,
     ) -> Self {
         let contracts = deser_store
             .contracts
@@ -311,10 +429,11 @@ impl RollupExecutorStore {
             })
             .collect();
         Self {
-            validator_lane_id: deser_store.validator_lane_id,
             unsettled_txs: deser_store.unsettled_txs,
             contracts,
             state_history,
+            board_game: deser_store.board_game,
+            crash_game: deser_store.crash_game,
         }
     }
 
@@ -324,7 +443,7 @@ impl RollupExecutorStore {
         &mut self,
         blob_tx: &BlobTransaction,
         tx_ctx: Option<TxContext>,
-    ) -> anyhow::Result<Vec<HyleOutput>> {
+    ) -> anyhow::Result<Vec<(HyleOutput, ContractName)>> {
         // 1. Snapshot all involved contracts' state
         let mut contract_snapshots: BTreeMap<ContractName, ContractBox> = BTreeMap::new();
         for blob in &blob_tx.blobs {
@@ -367,7 +486,17 @@ impl RollupExecutorStore {
                     );
                 }
                 Ok(hyle_output) => {
-                    hyle_outputs.push(hyle_output);
+                    if !hyle_output.success {
+                        anyhow::bail!(
+                            "Hyle output for tx {} on blob index {} for {} is not successful: {:?}, {:?}",
+                            blob_tx.hashed(),
+                            calldata.index,
+                            blob.contract_name,
+                            String::from_utf8(hyle_output.program_outputs.clone()),
+                            hyle_output
+                        );
+                    }
+                    hyle_outputs.push((hyle_output, blob.contract_name.clone()));
                     if !affected_contracts.contains(&blob.contract_name) {
                         affected_contracts.push(blob.contract_name.clone());
                     }

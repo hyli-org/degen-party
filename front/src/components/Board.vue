@@ -23,7 +23,7 @@ const allLost = computed(() => {
 </script>
 
 <template>
-    <div class="relative w-full h-full">
+    <div class="relative w-full flex flex-1">
         <BettingPhase v-if="currentGame" />
 
         <div v-if="showGameOver" class="absolute inset-0 flex flex-col items-center justify-center bg-black/60 z-50">

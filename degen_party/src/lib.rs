@@ -1,16 +1,14 @@
 use std::{path::PathBuf, sync::Arc};
 
 use client_sdk::rest_client::NodeApiHttpClient;
-use crash_game::{CrashGameCommand, CrashGameEvent};
-use game_state::{GameStateCommand, GameStateEvent};
+use rollup_execution::crash_game::{CrashGameCommand, CrashGameEvent};
+use rollup_execution::game_state::{GameStateCommand, GameStateEvent};
 use sdk::{Blob, ContractName, Identity};
 use serde::{Deserialize, Serialize};
 
-pub mod crash_game;
 pub mod debug;
 pub mod ensure_registration;
 pub mod fake_lane_manager;
-pub mod game_state;
 pub mod proving;
 pub mod rollup_execution;
 

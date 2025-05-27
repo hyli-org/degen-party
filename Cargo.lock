@@ -1717,6 +1717,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "uuid",
+ "wallet",
 ]
 
 [[package]]
@@ -2479,7 +2480,7 @@ checksum = "df3b46402a9d5adb4c86a0cf463f42e19994e3ee891101b1841f30a545cb49a9"
 [[package]]
 name = "hyle-client-sdk"
 version = "0.13.0-rc.4"
-source = "git+https://github.com/Hyle-org/hyle.git?branch=main#94bcb3c5a85e2f7df65c1ea5540fe2611645bf0f"
+source = "git+https://github.com/Hyle-org/hyle.git?branch=main#0a66684860fa446952e7fc3c579f9f2f0816b381"
 dependencies = [
  "anyhow",
  "axum 0.8.4",
@@ -2499,7 +2500,7 @@ dependencies = [
 [[package]]
 name = "hyle-contract-sdk"
 version = "0.13.0-rc.4"
-source = "git+https://github.com/Hyle-org/hyle.git?branch=main#94bcb3c5a85e2f7df65c1ea5540fe2611645bf0f"
+source = "git+https://github.com/Hyle-org/hyle.git?branch=main#0a66684860fa446952e7fc3c579f9f2f0816b381"
 dependencies = [
  "borsh",
  "hyle-model",
@@ -2512,7 +2513,7 @@ dependencies = [
 [[package]]
 name = "hyle-crypto"
 version = "0.13.0-rc.4"
-source = "git+https://github.com/Hyle-org/hyle.git?branch=main#94bcb3c5a85e2f7df65c1ea5540fe2611645bf0f"
+source = "git+https://github.com/Hyle-org/hyle.git?branch=main#0a66684860fa446952e7fc3c579f9f2f0816b381"
 dependencies = [
  "anyhow",
  "blst",
@@ -2525,7 +2526,7 @@ dependencies = [
 [[package]]
 name = "hyle-model"
 version = "0.13.0-rc.4"
-source = "git+https://github.com/Hyle-org/hyle.git?branch=main#94bcb3c5a85e2f7df65c1ea5540fe2611645bf0f"
+source = "git+https://github.com/Hyle-org/hyle.git?branch=main#0a66684860fa446952e7fc3c579f9f2f0816b381"
 dependencies = [
  "anyhow",
  "base64",
@@ -2548,7 +2549,7 @@ dependencies = [
 [[package]]
 name = "hyle-modules"
 version = "0.13.0-rc.4"
-source = "git+https://github.com/Hyle-org/hyle.git?branch=main#94bcb3c5a85e2f7df65c1ea5540fe2611645bf0f"
+source = "git+https://github.com/Hyle-org/hyle.git?branch=main#0a66684860fa446952e7fc3c579f9f2f0816b381"
 dependencies = [
  "anyhow",
  "anymap",
@@ -2582,7 +2583,7 @@ dependencies = [
 [[package]]
 name = "hyle-net"
 version = "0.13.0-rc.4"
-source = "git+https://github.com/Hyle-org/hyle.git?branch=main#94bcb3c5a85e2f7df65c1ea5540fe2611645bf0f"
+source = "git+https://github.com/Hyle-org/hyle.git?branch=main#0a66684860fa446952e7fc3c579f9f2f0816b381"
 dependencies = [
  "anyhow",
  "axum 0.8.4",
@@ -2608,7 +2609,7 @@ dependencies = [
 [[package]]
 name = "hyle-verifiers"
 version = "0.13.0-rc.4"
-source = "git+https://github.com/Hyle-org/hyle.git?branch=main#94bcb3c5a85e2f7df65c1ea5540fe2611645bf0f"
+source = "git+https://github.com/Hyle-org/hyle.git?branch=main#0a66684860fa446952e7fc3c579f9f2f0816b381"
 dependencies = [
  "anyhow",
  "borsh",
@@ -3047,9 +3048,9 @@ checksum = "d750af042f7ef4f724306de029d18836c26c1765a54a6a3f094cbd23a7267ffa"
 
 [[package]]
 name = "libloading"
-version = "0.8.7"
+version = "0.8.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6a793df0d7afeac54f95b471d3af7f0d4fb975699f972341a4b76988d49cdf0c"
+checksum = "07033963ba89ebaf1584d767badaa2e8fcec21aedea6b8c0346d487d49c28667"
 dependencies = [
  "cfg-if",
  "windows-targets 0.53.0",
@@ -6517,6 +6518,19 @@ checksum = "29790946404f91d9c5d06f9874efddea1dc06c5efe94541a7d6863108e3a5e4b"
 dependencies = [
  "same-file",
  "winapi-util",
+]
+
+[[package]]
+name = "wallet"
+version = "0.0.0"
+source = "git+https://github.com/hyli-org/wallet.git?branch=main#b9e34e5e199f43f5a314d50823e6f87c45a6c357"
+dependencies = [
+ "anyhow",
+ "borsh",
+ "hex",
+ "hyle-client-sdk",
+ "hyle-contract-sdk",
+ "serde",
 ]
 
 [[package]]

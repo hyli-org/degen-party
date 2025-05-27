@@ -3,11 +3,7 @@ use clap::{command, Parser};
 use client_sdk::rest_client::NodeApiHttpClient;
 use config::{Config, Environment, File};
 use degen_party::{
-    crash_game::CrashGameModule,
-    ensure_registration::EnsureRegistration,
-    fake_lane_manager::FakeLaneManager,
-    game_state::GameStateModule,
-    rollup_execution::{RollupExecutor, RollupExecutorCtx},
+    ensure_registration::EnsureRegistration, fake_lane_manager::FakeLaneManager,
     AuthenticatedMessage, InboundWebsocketMessage, OutboundWebsocketMessage,
 };
 use hyle_modules::{
@@ -22,7 +18,7 @@ use hyle_modules::{
 use sdk::ContractName;
 use secp256k1::{PublicKey, Secp256k1, SecretKey};
 use serde::{Deserialize, Serialize};
-use std::{env, path::PathBuf, sync::Arc};
+use std::{collections::HashMap, env, path::PathBuf, sync::Arc};
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -129,22 +125,12 @@ async fn main() -> Result<()> {
         .build_module::<EnsureRegistration>(ctx.clone())
         .await?;
 
-    handler.build_module::<GameStateModule>(ctx.clone()).await?;
-    handler.build_module::<CrashGameModule>(ctx.clone()).await?;
     handler
         .build_module::<WebSocketModule<AuthenticatedMessage<InboundWebsocketMessage>, OutboundWebsocketMessage>>(
             config.websocket.clone(),
         )
         .await?;
     handler.build_module::<FakeLaneManager>(ctx.clone()).await?;
-
-    handler
-        .build_module::<RollupExecutor>(RollupExecutorCtx {
-            data_directory: config.data_directory.clone(),
-            validator_lane_id: todo!(),
-            contract_deserializer: todo!(),
-        })
-        .await?;
 
     handler
         .build_module::<DAListener>(DAListenerConf {

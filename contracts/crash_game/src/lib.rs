@@ -97,7 +97,6 @@ pub enum ChainEvent {
 #[derive(Debug, Clone)]
 pub enum ServerAction {
     Update { current_time: u64 },
-    GetEndResults,
 }
 
 // Server-side events for UI updates
@@ -179,11 +178,7 @@ impl ZkContract for GameState {
 
         self.last_interaction_time = ctx.timestamp.0;
 
-        let chain_events = events
-            .iter()
-            .map(|event| event.to_string())
-            .collect::<Vec<String>>();
-        Ok((chain_events.join("\n").into_bytes(), exec_ctx, vec![]))
+        Ok((borsh::to_vec(&events).unwrap(), exec_ctx, vec![]))
     }
 
     fn commit(&self) -> StateCommitment {
@@ -387,14 +382,6 @@ impl GameState {
                     multiplier: new_multiplier,
                 });
             }
-
-            ServerAction::GetEndResults => {
-                if self.minigame_verifiable.state != MinigameState::Crashed {
-                    return Err(anyhow!("Game is still running"));
-                }
-                let final_results = self.final_results();
-                events.push(ServerEvent::MinigameEnded { final_results });
-            }
         }
 
         Ok(events)
@@ -407,6 +394,13 @@ impl GameState {
 
     fn calculate_winnings(bet_amount: u64, multiplier: f64) -> u64 {
         (bet_amount as f64 * multiplier) as u64
+    }
+
+    pub fn get_end_results(&self) -> Result<Vec<(Identity, i32)>> {
+        if self.minigame_verifiable.state != MinigameState::Crashed {
+            return Err(anyhow!("Game is still running"));
+        }
+        Ok(self.final_results())
     }
 
     pub fn final_results(&self) -> Vec<(Identity, i32)> {

@@ -18,6 +18,7 @@ use sdk::{
 use secp256k1::Message;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
+use std::ops::DerefMut;
 use std::{
     sync::Arc,
     time::{Duration, SystemTime, UNIX_EPOCH},
@@ -26,10 +27,7 @@ use tokio::time;
 use tracing::info;
 use uuid;
 
-use crate::{
-    game_state::GameStateCommand, AuthenticatedMessage, CryptoContext, InboundWebsocketMessage,
-    OutboundWebsocketMessage,
-};
+use crate::{proving::CrashGameExecutor, OutboundWebsocketMessage};
 
 // Message types
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -48,31 +46,21 @@ pub enum CrashGameEvent {
     },
 }
 
-// Bus client definition
-module_bus_client! {
-pub struct CrashGameBusClient {
-    sender(CrashGameCommand),
-    sender(GameStateCommand),
-    sender(WsBroadcastMessage<OutboundWebsocketMessage>),
-    sender(BlobTransaction),
-    receiver(CrashGameCommand),
-    receiver(WsInMessage<AuthenticatedMessage<InboundWebsocketMessage>>),
-    receiver(BlobTransaction),
-}
-}
+impl super::RollupExecutor {
+    pub(super) fn get_crash_game(&mut self) -> &mut GameState {
+        let bg = self.crash_game.clone();
+        &mut self
+            .contracts
+            .get_mut(&bg)
+            .expect("Crash game not initialized")
+            .deref_mut()
+            .as_any_mut()
+            .downcast_mut::<CrashGameExecutor>()
+            .expect("Crash game state is not of the expected type")
+            .state
+    }
 
-pub struct CrashGameModule {
-    bus: CrashGameBusClient,
-    crypto: Arc<CryptoContext>,
-    board_game: ContractName,
-    crash_game: ContractName,
-    update_interval: Duration,
-
-    state: Option<GameState>,
-}
-
-impl CrashGameModule {
-    async fn handle_player_message(
+    pub(super) async fn handle_player_message(
         &mut self,
         event: CrashGameCommand,
         identity: Identity,
@@ -96,14 +84,8 @@ impl CrashGameModule {
     // Pre-chain validation and transaction submission
     async fn handle_cash_out(&mut self, uuid_128: u128, player_id: Identity) -> Result<Vec<Blob>> {
         // Pre-chain validation
-        let current_multiplier = self
-            .state
-            .as_ref()
-            .map(|state| state.minigame_backend.current_multiplier);
+        let multiplier = self.get_crash_game().minigame_backend.current_multiplier;
 
-        let Some(multiplier) = current_multiplier else {
-            bail!("Game not initialized");
-        };
         Ok(vec![ChainActionBlob(
             uuid_128,
             ChainAction::CashOut {
@@ -116,24 +98,12 @@ impl CrashGameModule {
 
     async fn handle_end(&mut self, uuid_128: u128) -> Result<Vec<Blob>> {
         // Pre-chain validation
-        match &self.state {
-            Some(state) => {
-                if state.minigame_verifiable.state != MinigameState::Crashed {
-                    bail!("Game is still running");
-                }
-            }
-            None => bail!("Game not initialized"),
+        if self.get_crash_game().minigame_verifiable.state != MinigameState::Crashed {
+            bail!("Game is still running");
         }
 
         // Get end results from server-side state
-        let events = self
-            .state
-            .as_mut()
-            .unwrap()
-            .process_server_action(ServerAction::GetEndResults)?;
-        let Some(ServerEvent::MinigameEnded { final_results }) = events.last() else {
-            bail!("No minigame ended event");
-        };
+        let final_results = self.get_crash_game().get_end_results()?;
 
         Ok(vec![
             ChainActionBlob(uuid_128, ChainAction::Done).as_blob(
@@ -180,7 +150,7 @@ impl CrashGameModule {
     }
 
     // Server-side state management
-    fn create_backend_tx(&self, action: ChainAction) -> Result<BlobTransaction> {
+    fn create_crash_backend_tx(&self, action: ChainAction) -> Result<BlobTransaction> {
         let uuid = uuid::Uuid::new_v4();
         let identity = Identity::new(format!("{}@secp256k1", self.crypto.public_key));
         let identity_blob = self.create_backend_identity_blob(
@@ -204,16 +174,15 @@ impl CrashGameModule {
         ))
     }
 
-    async fn handle_update(&mut self) -> Result<()> {
-        let Some(state) = &mut self.state else {
-            return Ok(());
-        };
+    pub(super) async fn crash_game_on_tick(&mut self) -> Result<()> {
+        let state = self.get_crash_game();
 
         if state.minigame_verifiable.state == MinigameState::WaitingForStart {
             // After a while start
             let now = SystemTime::now().duration_since(UNIX_EPOCH)?.as_millis();
             if now.saturating_sub(state.minigame_backend.game_setup_time.unwrap()) > 10_000 {
-                self.bus.send(self.create_backend_tx(ChainAction::Start)?)?;
+                self.bus
+                    .send(self.create_crash_backend_tx(ChainAction::Start)?)?;
                 return Ok(());
             }
         } else if state.minigame_verifiable.state == MinigameState::Crashed {
@@ -259,59 +228,13 @@ impl CrashGameModule {
         let state = state.clone();
 
         if rand::random::<f64>() < crash_probability {
-            self.bus.send(self.create_backend_tx(ChainAction::Crash {
-                final_multiplier: state.minigame_backend.current_multiplier,
-            })?)?;
+            self.bus
+                .send(self.create_crash_backend_tx(ChainAction::Crash {
+                    final_multiplier: state.minigame_backend.current_multiplier,
+                })?)?;
         }
 
         self.broadcast_state_update(state, vec![])?;
-        Ok(())
-    }
-
-    // Chain event processing
-    async fn handle_tx(&mut self, tx: BlobTransaction) -> Result<()> {
-        for blob in &tx.blobs {
-            if blob.contract_name != self.crash_game.clone() {
-                continue;
-            }
-
-            if let Ok(StructuredBlobData::<ChainActionBlob> { parameters, .. }) =
-                StructuredBlobData::<ChainActionBlob>::try_from(blob.data.clone())
-            {
-                tracing::warn!("Received ChainActionBlob: {:?}", parameters);
-                if let ChainAction::InitMinigame { .. } = parameters.1 {
-                    let mut state = GameState::new(
-                        self.board_game.clone(),
-                        Identity::new(format!("{}@secp256k1", self.crypto.public_key)),
-                    );
-                    state.minigame_backend.game_setup_time =
-                        Some(SystemTime::now().duration_since(UNIX_EPOCH)?.as_millis());
-                    state.minigame_backend.current_time = state.minigame_backend.game_setup_time;
-                    self.state = Some(state);
-                } else if let ChainAction::Start = parameters.1 {
-                    if let Some(state) = &mut self.state {
-                        state.minigame_backend.game_start_time =
-                            Some(SystemTime::now().duration_since(UNIX_EPOCH)?.as_millis());
-                        state.minigame_backend.current_time =
-                            state.minigame_backend.game_start_time;
-                    }
-                }
-
-                // rust makes this so bad
-                let mut events = None;
-                if let Some(state) = &mut self.state {
-                    // TODO: this is actually unsafe if the transactions between both contracts don't match...
-                    events = Some(state.process_chain_action(&tx.identity, &parameters.1, None)?);
-                }
-                if let Some(state) = &self.state {
-                    if let Some(events) = events {
-                        self.broadcast_state_update(state.clone(), events)?;
-                    }
-                }
-            } else {
-                tracing::warn!("Failed to parse blob as ChainActionBlob");
-            }
-        }
         Ok(())
     }
 
@@ -323,56 +246,6 @@ impl CrashGameModule {
                 events,
             }),
         })?;
-        Ok(())
-    }
-}
-
-impl Module for CrashGameModule {
-    type Context = Arc<crate::Context>;
-
-    async fn build(bus: SharedMessageBus, ctx: Self::Context) -> Result<Self> {
-        let bus = CrashGameBusClient::new_from_bus(bus.new_handle()).await;
-
-        Ok(Self {
-            bus,
-            state: None,
-            update_interval: Duration::from_millis(50),
-            crypto: ctx.crypto.clone(),
-            board_game: ctx.board_game.clone(),
-            crash_game: ctx.crash_game.clone(),
-        })
-    }
-
-    async fn run(&mut self) -> Result<()> {
-        let mut update_interval = time::interval(self.update_interval);
-
-        module_handle_messages! {
-            on_bus self.bus,
-            listen<WsInMessage<AuthenticatedMessage<InboundWebsocketMessage>>> msg => {
-                let AuthenticatedMessage {
-                    message,
-                    identity,
-                    uuid,
-                    identity_blobs,
-                } = msg.message;
-                if let InboundWebsocketMessage::CrashGame(event) = message {
-                    if let Err(e) = self.handle_player_message(event, identity, &uuid, identity_blobs).await {
-                        tracing::warn!("Error handling player message: {:?}", e);
-                    }
-                }
-            }
-            listen<BlobTransaction> tx => {
-                if let Err(e) = self.handle_tx(tx).await {
-                    tracing::warn!("Error handling tx: {:?}", e);
-                }
-            }
-            _ = update_interval.tick() => {
-                if let Err(e) = self.handle_update().await {
-                    tracing::warn!("Error handling update: {:?}", e);
-                }
-            }
-        };
-
         Ok(())
     }
 }

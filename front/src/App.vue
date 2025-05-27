@@ -43,7 +43,7 @@ const connectionStatusColor = computed(() => {
 </script>
 
 <template>
-    <div class="relative flex w-full flex-col">
+    <div class="relative flex w-full min-h-[100vh] flex-col">
         <header
             class="relative z-10 flex items-center justify-between border-b-[5px] border-white px-6 py-3 shadow-lg"
             style="background: linear-gradient(to bottom, #ff7a7a, var(--mario-red))"

@@ -167,7 +167,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-    <div class="flex flex-col h-full w-full">
+    <div class="flex flex-col w-full">
         <div class="flex h-full w-full">
             <div class="flex-1 relative">
                 <div

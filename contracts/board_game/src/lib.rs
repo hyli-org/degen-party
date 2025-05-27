@@ -69,7 +69,6 @@ impl ZkContract for GameState {
         } else if self.lane_id != ctx.lane_id {
             return Err("Invalid lane ID".into());
         }
-
         let events = self
             .process_action(
                 &contract_input.identity,
@@ -81,11 +80,7 @@ impl ZkContract for GameState {
 
         self.last_interaction_time = ctx.timestamp.0;
 
-        let game_events = events
-            .iter()
-            .map(|event| event.to_string())
-            .collect::<Vec<String>>();
-        Ok((game_events.join("\n").into_bytes(), exec_ctx, vec![]))
+        Ok((borsh::to_vec(&events).unwrap(), exec_ctx, vec![]))
     }
 
     fn commit(&self) -> StateCommitment {

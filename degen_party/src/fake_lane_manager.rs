@@ -6,11 +6,11 @@ use hyle_modules::{
     bus::BusClientSender, bus::SharedMessageBus, module_bus_client, module_handle_messages,
     modules::Module,
 };
-use sdk::BlobTransaction;
+use sdk::{BlobTransaction, LaneId};
 use tracing::{error, info};
 
 #[derive(Debug, Clone)]
-pub struct ConfirmedBlobTransaction(pub BlobTransaction);
+pub struct ConfirmedBlobTransaction(pub LaneId, pub BlobTransaction);
 
 module_bus_client! {
 #[derive(Debug)]
@@ -24,6 +24,7 @@ pub struct FakeLaneManagerBusClient {
 pub struct FakeLaneManager {
     bus: FakeLaneManagerBusClient,
     hyle_client: Arc<NodeApiHttpClient>,
+    lane_id: LaneId,
 }
 
 impl Module for FakeLaneManager {
@@ -35,6 +36,13 @@ impl Module for FakeLaneManager {
 
         Ok(Self {
             bus: FakeLaneManagerBusClient::new_from_bus(bus.new_handle()).await,
+            lane_id: LaneId(
+                hyle_client
+                    .get_node_info()
+                    .await?
+                    .pubkey
+                    .expect("Should connect to a validator"),
+            ),
             hyle_client,
         })
     }
@@ -63,7 +71,8 @@ impl FakeLaneManager {
             "Transaction successfully sent to the blockchain. Hash: {}",
             tx_hash
         );
-        self.bus.send(ConfirmedBlobTransaction(tx))?;
+        self.bus
+            .send(ConfirmedBlobTransaction(self.lane_id.clone(), tx))?;
         Ok(())
     }
 }

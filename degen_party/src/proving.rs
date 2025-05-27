@@ -1,21 +1,32 @@
-use std::{path::Path, sync::Arc};
+use std::{
+    collections::HashMap,
+    path::Path,
+    sync::Arc,
+    time::{SystemTime, UNIX_EPOCH},
+};
 
 use anyhow::Result;
 use borsh::{BorshDeserialize, BorshSerialize};
 use client_sdk::rest_client::NodeApiClient;
 use client_sdk::transaction_builder::TxExecutorHandler;
+use crash_game::{ChainAction, ChainActionBlob};
 use hyle_modules::modules::{
     prover::{AutoProver, AutoProverCtx},
     ModulesHandler,
 };
-use sdk::{utils::as_hyle_output, RegisterContractEffect, ZkContract};
+use sdk::{
+    utils::as_hyle_output, ContractName, RegisterContractEffect, StructuredBlobData,
+    ValidatorPublicKey, ZkContract,
+};
 use sp1_sdk::Prover;
 use sp1_sdk::SP1ProvingKey;
 use tracing::info;
 
+use crate::rollup_execution::{ContractBox, RollupExecutor, RollupExecutorCtx};
+
 #[derive(Debug, BorshSerialize, BorshDeserialize, Clone)]
 pub struct BoardGameExecutor {
-    state: board_game::game::GameState,
+    pub state: board_game::game::GameState,
 }
 
 impl TxExecutorHandler for BoardGameExecutor {
@@ -50,13 +61,37 @@ impl TxExecutorHandler for BoardGameExecutor {
 
 #[derive(Debug, BorshSerialize, BorshDeserialize, Clone)]
 pub struct CrashGameExecutor {
-    state: crash_game::GameState,
+    pub state: crash_game::GameState,
 }
 
 impl TxExecutorHandler for CrashGameExecutor {
     fn handle(&mut self, calldata: &sdk::Calldata) -> Result<sdk::HyleOutput> {
         let initial_state_commitment = self.state.commit();
         let mut res = self.state.execute(calldata);
+
+        if let Ok(StructuredBlobData::<ChainActionBlob> { parameters, .. }) =
+            StructuredBlobData::<ChainActionBlob>::try_from(
+                calldata.blobs.get(&calldata.index).unwrap().data.clone(),
+            )
+        {
+            tracing::warn!("Received ChainActionBlob: {:?}", parameters);
+            if let ChainAction::InitMinigame { .. } = parameters.1 {
+                /*let mut state = GameState::new(
+                    self.board_game.clone(),
+                    Identity::new(format!("{}@secp256k1", self.crypto.public_key)),
+                );
+                */
+                self.state.minigame_backend.game_setup_time =
+                    Some(SystemTime::now().duration_since(UNIX_EPOCH)?.as_millis());
+                self.state.minigame_backend.current_time =
+                    self.state.minigame_backend.game_setup_time;
+            } else if let ChainAction::Start = parameters.1 {
+                let t = SystemTime::now().duration_since(UNIX_EPOCH)?.as_millis();
+                self.state.minigame_backend.game_start_time = Some(t);
+                self.state.minigame_backend.current_time = Some(t);
+            }
+        }
+
         Ok(as_hyle_output(
             initial_state_commitment,
             self.state.commit(),
@@ -88,6 +123,63 @@ pub async fn setup_auto_provers(
     ctx: Arc<crate::Context>,
     handler: &mut ModulesHandler,
 ) -> Result<()> {
+    let board_game_executor = BoardGameExecutor {
+        state: borsh::from_slice(
+            &ctx.client
+                .get_contract(ctx.board_game.clone())
+                .await?
+                .state
+                .0,
+        )?,
+    };
+    let crash_game_state: crash_game::GameState = borsh::from_slice(&{
+        // We expect the game to not be running, so we go through the default init path
+        ctx.client
+            .get_contract(ctx.crash_game.clone())
+            .await?
+            .state
+            .0
+    })?;
+    let crash_game_executor = CrashGameExecutor {
+        state: crash_game_state,
+    };
+    let board_game = ctx.board_game.clone();
+    let crash_game = ctx.crash_game.clone();
+    handler
+        .build_module::<RollupExecutor>(RollupExecutorCtx {
+            common: ctx.clone(),
+            initial_contracts: [
+                (
+                    ctx.board_game.clone(),
+                    ContractBox::new(board_game_executor.clone()),
+                ),
+                (
+                    ctx.crash_game.clone(),
+                    ContractBox::new(crash_game_executor.clone()),
+                ),
+                (
+                    ContractName::new("wallet"),
+                    ContractBox::new(wallet::Wallet::default()),
+                ),
+            ]
+            .into_iter()
+            .collect::<HashMap<_, _>>(),
+            contract_deserializer: Box::new(move |data, contract_name| {
+                if contract_name == &board_game {
+                    ContractBox::new(
+                        borsh::from_slice::<BoardGameExecutor>(&data).expect("Bad serialized data"),
+                    )
+                } else if contract_name == &crash_game {
+                    ContractBox::new(
+                        borsh::from_slice::<CrashGameExecutor>(&data).expect("Bad serialized data"),
+                    )
+                } else {
+                    panic!("Unknown contract name: {}", contract_name);
+                }
+            }),
+        })
+        .await?;
+
     #[cfg(not(feature = "fake_proofs"))]
     let board_game_prover = {
         let pk = load_pk(
@@ -108,28 +200,12 @@ pub async fn setup_auto_provers(
                 prover: board_game_prover,
                 contract_name: ctx.board_game.clone(),
                 node: ctx.client.clone(),
-                default_state: BoardGameExecutor {
-                    state: borsh::from_slice(
-                        &ctx.client
-                            .get_contract(ctx.board_game.clone())
-                            .await?
-                            .state
-                            .0,
-                    )?,
-                },
+                default_state: board_game_executor,
             }
             .into(),
         )
         .await?;
 
-    let crash_game_state: crash_game::GameState = borsh::from_slice(&{
-        // We expect the game to not be running, so we go through the default init path
-        ctx.client
-            .get_contract(ctx.crash_game.clone())
-            .await?
-            .state
-            .0
-    })?;
     #[cfg(not(feature = "fake_proofs"))]
     let crash_game_prover = {
         let pk = load_pk(
@@ -149,9 +225,7 @@ pub async fn setup_auto_provers(
             prover: crash_game_prover,
             contract_name: ctx.crash_game.clone(),
             node: ctx.client.clone(),
-            default_state: CrashGameExecutor {
-                state: crash_game_state,
-            },
+            default_state: crash_game_executor,
         }))
         .await?;
 
