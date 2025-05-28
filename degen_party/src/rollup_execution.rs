@@ -249,8 +249,8 @@ impl Module for RollupExecutor {
                 _ = log_error!(self.handle_optimistic_tx(event.0, event.1, None).await, "handle optimistic tx");
             }
             _ = update_interval.tick() => {
-                self.board_game_on_tick().await?;
-                self.crash_game_on_tick().await?;
+                _ = log_error!(self.board_game_on_tick().await, "board game on tick");
+                _ = log_error!(self.crash_game_on_tick().await, "crash game on tick");
             }
         };
 
@@ -418,6 +418,8 @@ impl RollupExecutorStore {
                 (name, c)
             })
             .collect();
+        tracing::warn!("Deserialized contracts: {:?}", contracts);
+        tracing::warn!("Deserialized settled_state: {:?}", settled_state);
         Self {
             unsettled_txs: deser_store.unsettled_txs,
             contracts,

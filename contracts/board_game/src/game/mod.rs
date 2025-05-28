@@ -347,7 +347,7 @@ impl GameState {
 
             // Betting Phase
             (GamePhase::Betting, GameAction::PlaceBet { amount }) => {
-                if timestamp - self.round_started_at > 30_000 {
+                if timestamp.saturating_sub(self.round_started_at) > 30_000 {
                     return Err(anyhow!("Betting time is over"));
                 }
                 if self.bets.contains_key(caller) {
@@ -396,7 +396,7 @@ impl GameState {
             | (GamePhase::Betting, GameAction::SpinWheel) => {
                 if self.phase == GamePhase::Betting {
                     // Check we're over the timeout
-                    if timestamp - self.round_started_at < 30_000 {
+                    if timestamp.saturating_sub(self.round_started_at) < 30_000 {
                         return Err(anyhow!("Not enough time has passed"));
                     }
                     // Only penalize players with coins > 0 who haven't bet

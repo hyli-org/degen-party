@@ -18,7 +18,7 @@ use hyle_modules::{
 use sdk::ContractName;
 use secp256k1::{PublicKey, Secp256k1, SecretKey};
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, env, path::PathBuf, sync::Arc};
+use std::{env, path::PathBuf, sync::Arc};
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -83,6 +83,14 @@ async fn main() -> Result<()> {
     let config = Conf::new(args.config_file).context("Failed to load config")?;
 
     setup_tracing(&config.log_format, "degen_party".to_string()).context("setting up tracing")?;
+
+    // Ensure the data directory exists
+    if !config.data_directory.exists() {
+        std::fs::create_dir_all(&config.data_directory).context(format!(
+            "Failed to create data directory: {}",
+            config.data_directory.display()
+        ))?;
+    }
 
     tracing::info!("Starting app with config: {:?}", &config);
     let config = Arc::new(config);

@@ -1,31 +1,19 @@
-use anyhow::{bail, Context, Result};
+use anyhow::{bail, Result};
 use board_game::{
     game::{GameAction as BoardGameAction, GameEvent, GamePhase, GameState},
     GameActionBlob,
 };
 use crash_game::ChainActionBlob;
-use hyle_modules::{
-    bus::BusClientSender,
-    modules::websocket::{WsBroadcastMessage, WsInMessage},
-};
+use hyle_modules::{bus::BusClientSender, modules::websocket::WsBroadcastMessage};
 use sdk::{
-    hyle_model_utils::TimestampMs, verifiers::Secp256k1Blob, Blob, BlobIndex, BlobTransaction,
-    ContractAction, ContractName, Identity,
+    verifiers::Secp256k1Blob, Blob, BlobIndex, BlobTransaction, ContractAction, ContractName,
+    Identity,
 };
 use secp256k1::Message;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::time::{SystemTime, UNIX_EPOCH};
-use std::{
-    collections::{BTreeMap, HashMap, HashSet},
-    sync::Arc,
-};
-use std::{
-    fmt::Debug,
-    ops::{Deref, DerefMut},
-    path::PathBuf,
-    vec,
-};
+use std::{fmt::Debug, ops::Deref, vec};
 
 use crate::{proving::BoardGameExecutor, OutboundWebsocketMessage};
 

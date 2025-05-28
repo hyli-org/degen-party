@@ -7,7 +7,6 @@ use std::{
 
 use anyhow::Result;
 use borsh::{BorshDeserialize, BorshSerialize};
-use client_sdk::rest_client::NodeApiClient;
 use client_sdk::transaction_builder::TxExecutorHandler;
 use crash_game::{ChainAction, ChainActionBlob};
 use hyle_modules::modules::{
@@ -171,6 +170,14 @@ pub async fn setup_auto_provers(
                 } else if contract_name == &crash_game {
                     ContractBox::new(
                         borsh::from_slice::<CrashGameExecutor>(&data).expect("Bad serialized data"),
+                    )
+                } else if contract_name == &ContractName::new("wallet") {
+                    ContractBox::new(
+                        borsh::from_slice::<wallet::Wallet>(&data).expect("Bad serialized data"),
+                    )
+                } else if contract_name == &ContractName::new("secp256k1") {
+                    ContractBox::new(
+                        hyle_modules::utils::native_verifier_handler::NativeVerifierHandler,
                     )
                 } else {
                     panic!("Unknown contract name: {}", contract_name);
