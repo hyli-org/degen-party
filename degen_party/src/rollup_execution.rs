@@ -10,12 +10,12 @@ use hyle_modules::{
     log_error, module_bus_client, module_handle_messages,
     modules::{
         websocket::{WsBroadcastMessage, WsInMessage},
-        Module,
+        Module, ModulesHandler,
     },
 };
 use sdk::{
     hyle_model_utils::TimestampMs, BlobTransaction, Calldata, ContractName, Hashed, HyleOutput,
-    LaneId, MempoolStatusEvent, NodeStateEvent, TransactionData, TxContext, TxHash, TxId,
+    Identity, LaneId, MempoolStatusEvent, NodeStateEvent, TransactionData, TxContext, TxHash, TxId,
 };
 use std::fmt;
 use std::{
@@ -35,8 +35,10 @@ use std::{
 use tokio::time;
 
 use crate::{
-    fake_lane_manager::ConfirmedBlobTransaction, AuthenticatedMessage, Context, CryptoContext,
-    InboundWebsocketMessage, OutboundWebsocketMessage,
+    fake_lane_manager::ConfirmedBlobTransaction,
+    proving::{BoardGameExecutor, CrashGameExecutor},
+    AuthenticatedMessage, Context, CryptoContext, InboundWebsocketMessage,
+    OutboundWebsocketMessage,
 };
 
 pub mod crash_game;
@@ -154,11 +156,17 @@ impl BorshSerialize for ContractBox {
     }
 }
 
-#[derive(BorshSerialize)]
+enum DataQuality {
+    Internal,
+    Mempool,
+    Consensus,
+}
+
+#[derive(Clone, BorshSerialize)]
 pub struct RollupExecutorStore {
     unsettled_txs: Vec<(BlobTransaction, TxContext)>,
-    contracts: HashMap<ContractName, ContractBox>,
-    settled_state: HashMap<ContractName, ContractBox>,
+    pub contracts: HashMap<ContractName, ContractBox>,
+    pub settled_state: HashMap<ContractName, ContractBox>,
     board_game: ContractName,
     crash_game: ContractName,
 }
@@ -246,7 +254,7 @@ impl Module for RollupExecutor {
                 _ = log_error!(self.handle_mempool_status_event(event).await, "handle mempool status event")
             }
             listen<ConfirmedBlobTransaction> event => {
-                _ = log_error!(self.handle_optimistic_tx(event.0, event.1, None).await, "handle optimistic tx");
+                _ = log_error!(self.handle_optimistic_tx(event.0, event.1, None, DataQuality::Internal).await, "handle optimistic tx");
             }
             _ = update_interval.tick() => {
                 _ = log_error!(self.board_game_on_tick().await, "board game on tick");
@@ -277,7 +285,7 @@ impl RollupExecutor {
                     || !block.timed_out_txs.is_empty()
                     || !block.failed_txs.is_empty()
                 {
-                    tracing::debug!("Handling new block {}", block.block_height);
+                    tracing::info!("Handling new block {}", block.block_height);
                 }
                 for (TxId(_, tx_hash), tx) in block.txs.iter() {
                     if let TransactionData::Blob(blob_tx) = &tx.transaction_data {
@@ -286,10 +294,11 @@ impl RollupExecutor {
                                 block.lane_ids.get(tx_hash).cloned().unwrap_or_default(),
                                 blob_tx.clone(),
                                 block.build_tx_ctx(tx_hash).ok(),
+                                DataQuality::Consensus,
                             )
                             .await
                         {
-                            tracing::debug!("Error handling optimistic tx: {:?}", e);
+                            tracing::info!("Error handling optimistic tx: {:?}", e);
                         }
                     }
                 }
@@ -300,9 +309,7 @@ impl RollupExecutor {
                     .chain(block.failed_txs.iter())
                     .cloned()
                     .collect();
-                for tx_hash in merged_set.iter() {
-                    self.cancel_tx(tx_hash)?;
-                }
+                self.cancel_tx(merged_set)?;
                 Ok(())
             }
         }
@@ -311,10 +318,10 @@ impl RollupExecutor {
         if let MempoolStatusEvent::WaitingDissemination { tx, .. } = event {
             if let TransactionData::Blob(blob_tx) = tx.transaction_data {
                 if let Err(e) = self
-                    .handle_optimistic_tx(LaneId::default(), blob_tx, None)
+                    .handle_optimistic_tx(LaneId::default(), blob_tx, None, DataQuality::Mempool)
                     .await
                 {
-                    tracing::debug!("Error handling optimistic tx: {:?}", e);
+                    tracing::info!("Error handling optimistic tx: {:?}", e);
                 }
             }
         }
@@ -326,13 +333,22 @@ impl RollupExecutor {
         lane_id: LaneId,
         blob_tx: BlobTransaction,
         tx_ctx: Option<TxContext>,
+        quality: DataQuality,
     ) -> Result<()> {
-        if self
+        if let Some((tx, ctx)) = self
             .unsettled_txs
-            .iter()
-            .any(|(tx, _)| tx.hashed() == blob_tx.hashed())
+            .iter_mut()
+            .find(|(tx, _)| tx.hashed() == blob_tx.hashed())
         {
-            tracing::debug!(
+            if matches!(quality, DataQuality::Consensus) {
+                *tx = blob_tx;
+                if let Some(tx_ctx) = tx_ctx {
+                    *ctx = tx_ctx;
+                }
+                self.rerun_from_settled();
+                return Ok(());
+            }
+            tracing::info!(
                 "Transaction {} is already in the unsettled transactions",
                 blob_tx.hashed()
             );
@@ -391,7 +407,7 @@ impl RollupExecutor {
             }
         }
 
-        tracing::debug!("Optimistically executed transaction {}", blob_tx.hashed(),);
+        tracing::info!("Optimistically executed transaction {}", blob_tx.hashed(),);
 
         Ok(())
     }
@@ -418,8 +434,6 @@ impl RollupExecutorStore {
                 (name, c)
             })
             .collect();
-        tracing::warn!("Deserialized contracts: {:?}", contracts);
-        tracing::warn!("Deserialized settled_state: {:?}", settled_state);
         Self {
             unsettled_txs: deser_store.unsettled_txs,
             contracts,
@@ -514,37 +528,34 @@ impl RollupExecutorStore {
         Ok(hyle_outputs)
     }
 
-    /// This function is called when the transaction is confirmed as failed.
-    /// It reverts the state and reexecutes all unsettled transaction after this one.
-    pub fn cancel_tx(&mut self, tx_hash: &TxHash) -> anyhow::Result<Option<BlobTransaction>> {
-        let Some(tx_pos) = self
-            .unsettled_txs
-            .iter()
-            .position(|(blob_tx, _)| blob_tx.hashed() == *tx_hash)
-        else {
-            return Ok(None);
-        };
-        tracing::debug!("Cancelling transaction {} at position {}", tx_hash, tx_pos);
-        let (popped_tx, _) = self.unsettled_txs.remove(tx_pos);
-        // 1. Find all contracts affected by this tx
-        let mut affected_contracts = vec![];
-        for blob in &popped_tx.blobs {
-            if self.contracts.contains_key(&blob.contract_name) {
-                affected_contracts.push(blob.contract_name.clone());
-            }
+    pub fn rerun_from_settled(&mut self) {
+        // Revert each contract to the settled state.
+        for (contract_name, state) in &self.settled_state {
+            self.contracts.insert(contract_name.clone(), state.clone());
         }
-        // 2. Revert each contract to the settled state.
-        for contract_name in &affected_contracts {
-            if let Some(state) = self.settled_state.get(contract_name) {
-                self.contracts.insert(contract_name.clone(), state.clone());
-            }
-        }
-        // 3. Re-execute all unsettled transactions from that safe state - ignore errors.
+        // Re-execute all unsettled transactions from that safe state - ignore errors.
         for (blob_tx, tx_ctx) in &self.unsettled_txs {
             let _ =
                 Self::execute_blob_tx(&mut self.contracts, blob_tx, Some(tx_ctx.clone()), false);
         }
-        Ok(Some(popped_tx))
+    }
+
+    /// This function is called when the transaction is confirmed as failed.
+    /// It reverts the state and reexecutes all unsettled transaction after this one.
+    pub fn cancel_tx(&mut self, tx_hashes: HashSet<TxHash>) -> anyhow::Result<()> {
+        for tx_hash in tx_hashes {
+            let Some(tx_pos) = self
+                .unsettled_txs
+                .iter()
+                .position(|(blob_tx, _)| blob_tx.hashed() == tx_hash)
+            else {
+                return Ok(());
+            };
+            tracing::warn!("Cancelling transaction {} at position {}", tx_hash, tx_pos);
+            let _ = self.unsettled_txs.remove(tx_pos);
+        }
+        self.rerun_from_settled();
+        Ok(())
     }
 
     fn handle_successful_transactions(&mut self, successful_txs: Vec<TxHash>) {
@@ -573,5 +584,99 @@ impl RollupExecutorStore {
                 }
             }
         }
+        self.rerun_from_settled();
     }
+}
+
+impl RollupExecutorStore {
+    pub fn new(
+        contracts: &[(ContractName, ContractBox)],
+        board_game: ContractName,
+        crash_game: ContractName,
+    ) -> Self {
+        Self {
+            unsettled_txs: Vec::new(),
+            contracts: contracts
+                .iter()
+                .map(|(name, contract)| (name.clone(), contract.clone()))
+                .collect(),
+            settled_state: contracts
+                .iter()
+                .map(|(name, contract)| (name.clone(), contract.clone()))
+                .collect(),
+            board_game,
+            crash_game,
+        }
+    }
+}
+
+pub async fn setup_rollup_execution(
+    ctx: Arc<crate::Context>,
+    handler: &mut ModulesHandler,
+) -> Result<()> {
+    let board_game_executor = BoardGameExecutor {
+        state: board_game::game::GameState::new(Identity::new(format!(
+            "{}@secp256k1",
+            ctx.crypto.public_key
+        ))),
+    };
+    let crash_game_state: ::crash_game::GameState = ::crash_game::GameState::new(
+        ctx.board_game.clone(),
+        Identity::new(format!("{}@secp256k1", ctx.crypto.public_key,)),
+    );
+    let crash_game_executor = CrashGameExecutor {
+        state: crash_game_state,
+    };
+    let board_game = ctx.board_game.clone();
+    let crash_game = ctx.crash_game.clone();
+    handler
+        .build_module::<RollupExecutor>(RollupExecutorCtx {
+            common: ctx.clone(),
+            initial_contracts: [
+                (
+                    ctx.board_game.clone(),
+                    ContractBox::new(board_game_executor.clone()),
+                ),
+                (
+                    ctx.crash_game.clone(),
+                    ContractBox::new(crash_game_executor.clone()),
+                ),
+                (
+                    ContractName::new("wallet"),
+                    ContractBox::new(wallet::Wallet::default()),
+                ),
+                (
+                    ContractName::new("secp256k1"),
+                    ContractBox::new(
+                        hyle_modules::utils::native_verifier_handler::NativeVerifierHandler,
+                    ),
+                ),
+            ]
+            .into_iter()
+            .collect::<HashMap<_, _>>(),
+            contract_deserializer: Box::new(move |data, contract_name| {
+                if contract_name == &board_game {
+                    ContractBox::new(
+                        borsh::from_slice::<BoardGameExecutor>(&data).expect("Bad serialized data"),
+                    )
+                } else if contract_name == &crash_game {
+                    ContractBox::new(
+                        borsh::from_slice::<CrashGameExecutor>(&data).expect("Bad serialized data"),
+                    )
+                } else if contract_name == &ContractName::new("wallet") {
+                    ContractBox::new(
+                        borsh::from_slice::<wallet::Wallet>(&data).expect("Bad serialized data"),
+                    )
+                } else if contract_name == &ContractName::new("secp256k1") {
+                    ContractBox::new(
+                        hyle_modules::utils::native_verifier_handler::NativeVerifierHandler,
+                    )
+                } else {
+                    panic!("Unknown contract name: {}", contract_name);
+                }
+            }),
+        })
+        .await?;
+
+    Ok(())
 }

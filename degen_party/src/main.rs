@@ -148,6 +148,7 @@ async fn main() -> Result<()> {
         })
         .await?;
 
+    degen_party::rollup_execution::setup_rollup_execution(ctx.clone(), &mut handler).await?;
     degen_party::proving::setup_auto_provers(ctx.clone(), &mut handler).await?;
 
     tracing::info!("Starting modules");

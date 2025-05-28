@@ -1,5 +1,4 @@
 use std::{
-    collections::HashMap,
     path::Path,
     sync::Arc,
     time::{SystemTime, UNIX_EPOCH},
@@ -14,14 +13,11 @@ use hyle_modules::modules::{
     ModulesHandler,
 };
 use sdk::{
-    utils::as_hyle_output, ContractName, Identity, RegisterContractEffect, StructuredBlobData,
-    ZkContract,
+    utils::as_hyle_output, Identity, RegisterContractEffect, StructuredBlobData, ZkContract,
 };
 use sp1_sdk::Prover;
 use sp1_sdk::SP1ProvingKey;
 use tracing::info;
-
-use crate::rollup_execution::{ContractBox, RollupExecutor, RollupExecutorCtx};
 
 #[derive(Debug, BorshSerialize, BorshDeserialize, Clone)]
 pub struct BoardGameExecutor {
@@ -135,57 +131,6 @@ pub async fn setup_auto_provers(
     let crash_game_executor = CrashGameExecutor {
         state: crash_game_state,
     };
-    let board_game = ctx.board_game.clone();
-    let crash_game = ctx.crash_game.clone();
-    handler
-        .build_module::<RollupExecutor>(RollupExecutorCtx {
-            common: ctx.clone(),
-            initial_contracts: [
-                (
-                    ctx.board_game.clone(),
-                    ContractBox::new(board_game_executor.clone()),
-                ),
-                (
-                    ctx.crash_game.clone(),
-                    ContractBox::new(crash_game_executor.clone()),
-                ),
-                (
-                    ContractName::new("wallet"),
-                    ContractBox::new(wallet::Wallet::default()),
-                ),
-                (
-                    ContractName::new("secp256k1"),
-                    ContractBox::new(
-                        hyle_modules::utils::native_verifier_handler::NativeVerifierHandler,
-                    ),
-                ),
-            ]
-            .into_iter()
-            .collect::<HashMap<_, _>>(),
-            contract_deserializer: Box::new(move |data, contract_name| {
-                if contract_name == &board_game {
-                    ContractBox::new(
-                        borsh::from_slice::<BoardGameExecutor>(&data).expect("Bad serialized data"),
-                    )
-                } else if contract_name == &crash_game {
-                    ContractBox::new(
-                        borsh::from_slice::<CrashGameExecutor>(&data).expect("Bad serialized data"),
-                    )
-                } else if contract_name == &ContractName::new("wallet") {
-                    ContractBox::new(
-                        borsh::from_slice::<wallet::Wallet>(&data).expect("Bad serialized data"),
-                    )
-                } else if contract_name == &ContractName::new("secp256k1") {
-                    ContractBox::new(
-                        hyle_modules::utils::native_verifier_handler::NativeVerifierHandler,
-                    )
-                } else {
-                    panic!("Unknown contract name: {}", contract_name);
-                }
-            }),
-        })
-        .await?;
-
     #[cfg(not(feature = "fake_proofs"))]
     let board_game_prover = {
         let pk = load_pk(

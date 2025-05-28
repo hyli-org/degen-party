@@ -2,18 +2,21 @@ use anyhow::{Context, Result};
 use clap::{command, Parser};
 use client_sdk::rest_client::NodeApiHttpClient;
 use config::{Config, Environment, File};
-use degen_party::debug::DebugAnalyzer;
+use degen_party::{debug::DebugAnalyzer, rollup_execution::setup_rollup_execution};
 use hyle_modules::{
     bus::{metrics::BusMetrics, SharedMessageBus},
     modules::{
         da_listener::{DAListener, DAListenerConf},
         ModulesHandler,
     },
+    utils::logger::setup_tracing,
 };
 use sdk::ContractName;
 use secp256k1::{PublicKey, Secp256k1, SecretKey};
 use serde::{Deserialize, Serialize};
-use std::{path::PathBuf, sync::Arc};
+use std::{env, path::PathBuf, sync::Arc};
+use tracing::level_filters::LevelFilter;
+use tracing_subscriber::{layer::SubscriberExt, EnvFilter};
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -70,12 +73,32 @@ impl Conf {
     }
 }
 
+use tracing_subscriber::util::SubscriberInitExt;
+use tracing_subscriber::Layer;
+
 #[tokio::main]
 async fn main() -> Result<()> {
     let args = Args::parse();
     let config = Conf::new(args.config_file).context("Failed to load config")?;
-    // Don't setup tracing, as we render a custom UI
-    //setup_tracing(&config.log_format, "degen_party".to_string()).context("setting up tracing")?;
+    // Set up tracing to print to a file
+    let log_file_writer = std::fs::OpenOptions::new()
+        .create(true)
+        .write(true)
+        .truncate(true)
+        .open("debug_analyzer.log")
+        .context("Failed to open log file")?;
+    let mut filter = EnvFilter::builder()
+        .with_default_directive(LevelFilter::DEBUG.into())
+        .from_env()?;
+    tracing_subscriber::registry()
+        .with(
+            tracing_subscriber::fmt::layer()
+                .with_ansi(false)
+                .compact()
+                .with_writer(log_file_writer)
+                .with_filter(filter),
+        )
+        .init();
 
     tracing::info!("Starting debug analyzer with config: {:?}", &config);
     let config = Arc::new(config);
@@ -84,7 +107,12 @@ async fn main() -> Result<()> {
     let client = Arc::new(NodeApiHttpClient::new(config.node_api.clone())?);
 
     let secp = Secp256k1::new();
-    let secret_key = SecretKey::from_slice(&[1; 32]).expect("32 bytes, within curve order");
+    let secret_key =
+        hex::decode(env::var("DEGEN_PARTY_BACKEND_PKEY").unwrap_or(
+            "0000000000000001000000000000000100000000000000010000000000000001".to_string(),
+        ))
+        .expect("DEGEN_PARTY_BACKEND_PKEY must be a hex string");
+    let secret_key = SecretKey::from_slice(&secret_key).expect("32 bytes, within curve order");
     let public_key = PublicKey::from_secret_key(&secp, &secret_key);
 
     let ctx = Arc::new(degen_party::Context {
@@ -104,6 +132,10 @@ async fn main() -> Result<()> {
 
     // Initialize modules
     let mut handler = ModulesHandler::new(&bus).await;
+
+    //setup_rollup_execution(ctx.clone(), &mut handler)
+    //    .await
+    //    .expect("Failed to setup rollup execution");
 
     handler.build_module::<DebugAnalyzer>(ctx.clone()).await?;
     handler
