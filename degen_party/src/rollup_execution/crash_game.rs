@@ -178,6 +178,7 @@ impl super::RollupExecutor {
                 return Ok(());
             }
         } else if state.minigame_verifiable.state == MinigameState::Crashed {
+            /*
             // Auto-end the game after a while to unstuck players
             let now = SystemTime::now().duration_since(UNIX_EPOCH)?.as_millis();
             if now.saturating_sub(state.minigame_backend.game_start_time.unwrap()) > 60_000 {
@@ -188,6 +189,7 @@ impl super::RollupExecutor {
                 self.bus.send(BlobTransaction::new(identity, blobs))?;
                 return Ok(());
             }
+             */
             return Ok(());
         }
 
