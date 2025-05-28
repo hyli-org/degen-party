@@ -543,6 +543,7 @@ impl RollupExecutorStore {
     /// This function is called when the transaction is confirmed as failed.
     /// It reverts the state and reexecutes all unsettled transaction after this one.
     pub fn cancel_tx(&mut self, tx_hashes: HashSet<TxHash>) -> anyhow::Result<()> {
+        let mut removed = 0;
         for tx_hash in tx_hashes {
             let Some(tx_pos) = self
                 .unsettled_txs
@@ -553,12 +554,16 @@ impl RollupExecutorStore {
             };
             tracing::warn!("Cancelling transaction {} at position {}", tx_hash, tx_pos);
             let _ = self.unsettled_txs.remove(tx_pos);
+            removed += 1;
         }
-        self.rerun_from_settled();
+        if removed > 0 {
+            self.rerun_from_settled();
+        }
         Ok(())
     }
 
     fn handle_successful_transactions(&mut self, successful_txs: Vec<TxHash>) {
+        let mut successful = 0;
         for tx_hash in successful_txs {
             // Remove the transaction from unsettled transactions
             if let Some(pos) = self
@@ -571,6 +576,7 @@ impl RollupExecutorStore {
                     "Transaction {} is successful, removing from unsettled",
                     tx_hash
                 );
+                successful += 1;
                 if let Err(e) =
                     Self::execute_blob_tx(&mut self.settled_state, &blob_tx, Some(tx_ctx), true)
                 {
@@ -584,7 +590,9 @@ impl RollupExecutorStore {
                 }
             }
         }
-        self.rerun_from_settled();
+        if successful > 0 {
+            self.rerun_from_settled();
+        }
     }
 }
 
