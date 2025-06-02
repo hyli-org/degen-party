@@ -343,6 +343,11 @@ impl RollupExecutor {
             if matches!(quality, DataQuality::Consensus) {
                 *tx = blob_tx;
                 if let Some(tx_ctx) = tx_ctx {
+                    tracing::info!(
+                        "Transaction {} is already in the unsettled transactions, updating context",
+                        tx.hashed()
+                    );
+                    tracing::debug!("Updating context: {:?} -> {:?}", ctx, tx_ctx);
                     *ctx = tx_ctx;
                 }
                 self.rerun_from_settled();

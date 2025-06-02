@@ -113,6 +113,8 @@ impl super::RollupExecutor {
                                 uuid_128,
                                 crash_game::ChainAction::InitMinigame {
                                     players: self.get_board_game().get_minigame_setup(),
+                                    time: SystemTime::now().duration_since(UNIX_EPOCH)?.as_millis()
+                                        as u64,
                                 },
                             )
                             .as_blob(

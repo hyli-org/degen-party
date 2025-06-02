@@ -1,8 +1,4 @@
-use std::{
-    path::Path,
-    sync::Arc,
-    time::{SystemTime, UNIX_EPOCH},
-};
+use std::{path::Path, sync::Arc};
 
 use anyhow::Result;
 use borsh::{BorshDeserialize, BorshSerialize};
@@ -70,20 +66,17 @@ impl TxExecutorHandler for CrashGameExecutor {
             )
         {
             tracing::warn!("Received ChainActionBlob: {:?}", parameters);
-            if let ChainAction::InitMinigame { .. } = parameters.1 {
+            if let ChainAction::InitMinigame { time, .. } = parameters.1 {
                 /*let mut state = GameState::new(
                     self.board_game.clone(),
                     Identity::new(format!("{}@secp256k1", self.crypto.public_key)),
                 );
                 */
-                self.state.minigame_backend.game_setup_time =
-                    Some(SystemTime::now().duration_since(UNIX_EPOCH)?.as_millis());
-                self.state.minigame_backend.current_time =
-                    self.state.minigame_backend.game_setup_time;
-            } else if let ChainAction::Start = parameters.1 {
-                let t = SystemTime::now().duration_since(UNIX_EPOCH)?.as_millis();
-                self.state.minigame_backend.game_start_time = Some(t);
-                self.state.minigame_backend.current_time = Some(t);
+                self.state.minigame_backend.game_setup_time = Some(time as u128);
+                self.state.minigame_backend.current_time = Some(time as u128);
+            } else if let ChainAction::Start { time } = parameters.1 {
+                self.state.minigame_backend.game_start_time = Some(time as u128);
+                self.state.minigame_backend.current_time = Some(time as u128);
             }
         }
 

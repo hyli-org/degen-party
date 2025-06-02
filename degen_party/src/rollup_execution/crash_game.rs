@@ -148,7 +148,7 @@ impl super::RollupExecutor {
         let identity_blob = self.create_backend_identity_blob(
             uuid,
             match action {
-                ChainAction::Start => "Start",
+                ChainAction::Start { .. } => "Start",
                 ChainAction::Crash { .. } => "Crash",
                 _ => unreachable!(),
             },
@@ -174,7 +174,7 @@ impl super::RollupExecutor {
             let now = SystemTime::now().duration_since(UNIX_EPOCH)?.as_millis();
             if now.saturating_sub(state.minigame_backend.game_setup_time.unwrap()) > 10_000 {
                 self.bus
-                    .send(self.create_crash_backend_tx(ChainAction::Start)?)?;
+                    .send(self.create_crash_backend_tx(ChainAction::Start { time: now as u64 })?)?;
                 return Ok(());
             }
         } else if state.minigame_verifiable.state == MinigameState::Crashed {

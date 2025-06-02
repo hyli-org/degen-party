@@ -61,8 +61,11 @@ pub struct GameState {
 pub enum ChainAction {
     InitMinigame {
         players: Vec<(Identity, String, u64)>,
+        time: u64,
     },
-    Start,
+    Start {
+        time: u64,
+    },
     CashOut {
         player_id: Identity,
         multiplier: f64,
@@ -210,7 +213,7 @@ impl GameState {
         let mut events = Vec::new();
 
         match action {
-            ChainAction::InitMinigame { players } => {
+            ChainAction::InitMinigame { players, .. } => {
                 if self.minigame_verifiable.state != MinigameState::Uninitialized {
                     return Err(anyhow!("Game is already in progress"));
                 }
@@ -254,7 +257,7 @@ impl GameState {
                 events.push(ChainEvent::MinigameInitialized { player_count });
             }
 
-            ChainAction::Start => {
+            ChainAction::Start { .. } => {
                 if identity != &self.backend_identity {
                     return Err(anyhow!(
                         "Only the backend can start the game: {} vs {}",
