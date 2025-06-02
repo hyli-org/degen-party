@@ -2480,7 +2480,7 @@ checksum = "df3b46402a9d5adb4c86a0cf463f42e19994e3ee891101b1841f30a545cb49a9"
 [[package]]
 name = "hyle-client-sdk"
 version = "0.13.0-rc.4"
-source = "git+https://github.com/Hyle-org/hyle.git?branch=main#d6a19d911b05de2536960d372c288718ed767e7b"
+source = "git+https://github.com/Hyle-org/hyle.git?branch=main#47a5fe33513c400d68fc91da24a15c9cd66c0139"
 dependencies = [
  "anyhow",
  "axum 0.8.4",
@@ -2500,7 +2500,7 @@ dependencies = [
 [[package]]
 name = "hyle-contract-sdk"
 version = "0.13.0-rc.4"
-source = "git+https://github.com/Hyle-org/hyle.git?branch=main#d6a19d911b05de2536960d372c288718ed767e7b"
+source = "git+https://github.com/Hyle-org/hyle.git?branch=main#47a5fe33513c400d68fc91da24a15c9cd66c0139"
 dependencies = [
  "borsh",
  "hyle-model",
@@ -2513,7 +2513,7 @@ dependencies = [
 [[package]]
 name = "hyle-crypto"
 version = "0.13.0-rc.4"
-source = "git+https://github.com/Hyle-org/hyle.git?branch=main#d6a19d911b05de2536960d372c288718ed767e7b"
+source = "git+https://github.com/Hyle-org/hyle.git?branch=main#47a5fe33513c400d68fc91da24a15c9cd66c0139"
 dependencies = [
  "anyhow",
  "blst",
@@ -2526,7 +2526,7 @@ dependencies = [
 [[package]]
 name = "hyle-model"
 version = "0.13.0-rc.4"
-source = "git+https://github.com/Hyle-org/hyle.git?branch=main#d6a19d911b05de2536960d372c288718ed767e7b"
+source = "git+https://github.com/Hyle-org/hyle.git?branch=main#47a5fe33513c400d68fc91da24a15c9cd66c0139"
 dependencies = [
  "anyhow",
  "base64",
@@ -2549,7 +2549,7 @@ dependencies = [
 [[package]]
 name = "hyle-modules"
 version = "0.13.0-rc.4"
-source = "git+https://github.com/Hyle-org/hyle.git?branch=main#d6a19d911b05de2536960d372c288718ed767e7b"
+source = "git+https://github.com/Hyle-org/hyle.git?branch=main#47a5fe33513c400d68fc91da24a15c9cd66c0139"
 dependencies = [
  "anyhow",
  "anymap",
@@ -2583,7 +2583,7 @@ dependencies = [
 [[package]]
 name = "hyle-net"
 version = "0.13.0-rc.4"
-source = "git+https://github.com/Hyle-org/hyle.git?branch=main#d6a19d911b05de2536960d372c288718ed767e7b"
+source = "git+https://github.com/Hyle-org/hyle.git?branch=main#47a5fe33513c400d68fc91da24a15c9cd66c0139"
 dependencies = [
  "anyhow",
  "axum 0.8.4",
@@ -2609,7 +2609,7 @@ dependencies = [
 [[package]]
 name = "hyle-verifiers"
 version = "0.13.0-rc.4"
-source = "git+https://github.com/Hyle-org/hyle.git?branch=main#d6a19d911b05de2536960d372c288718ed767e7b"
+source = "git+https://github.com/Hyle-org/hyle.git?branch=main#47a5fe33513c400d68fc91da24a15c9cd66c0139"
 dependencies = [
  "anyhow",
  "borsh",
@@ -6539,7 +6539,7 @@ dependencies = [
 [[package]]
 name = "wallet"
 version = "0.0.0"
-source = "git+https://github.com/hyli-org/wallet.git?branch=main#75281090af6cefbb9d204ccc093efbb566012d1b"
+source = "git+https://github.com/hyli-org/wallet.git?branch=main#ec331c1d9276917ae701d0c524f8390779462ee8"
 dependencies = [
  "anyhow",
  "borsh",
