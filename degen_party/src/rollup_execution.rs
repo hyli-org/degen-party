@@ -251,7 +251,8 @@ impl Module for RollupExecutor {
                 _ = log_error!(self.handle_node_state_event(event).await, "handle note state event")
             }
             listen<MempoolStatusEvent> event => {
-                _ = log_error!(self.handle_mempool_status_event(event).await, "handle mempool status event")
+                // Temporarily off.
+                //_ = log_error!(self.handle_mempool_status_event(event).await, "handle mempool status event")
             }
             listen<ConfirmedBlobTransaction> event => {
                 _ = log_error!(self.handle_optimistic_tx(event.0, event.1, None, DataQuality::Internal).await, "handle optimistic tx");
@@ -321,7 +322,7 @@ impl RollupExecutor {
                     .handle_optimistic_tx(LaneId::default(), blob_tx, None, DataQuality::Mempool)
                     .await
                 {
-                    tracing::info!("Error handling optimistic tx: {:?}", e);
+                    tracing::info!("Error handling optimistic tx in mempool: {:?}", e);
                 }
             }
         }
