@@ -145,6 +145,8 @@ pub async fn setup_auto_provers(
                 contract_name: ctx.board_game.clone(),
                 node: ctx.client.clone(),
                 default_state: board_game_executor,
+                buffer_blocks: 1,
+                buffer_max_txs: 10,
             }
             .into(),
         )
@@ -170,6 +172,8 @@ pub async fn setup_auto_provers(
             contract_name: ctx.crash_game.clone(),
             node: ctx.client.clone(),
             default_state: crash_game_executor,
+            buffer_blocks: 1,
+            buffer_max_txs: 10,
         }))
         .await?;
 
