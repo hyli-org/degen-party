@@ -166,9 +166,6 @@ impl Module for DebugAnalyzer {
             on_bus self.bus,
             listen<NodeStateEvent> msg => {
                 let NodeStateEvent::NewBlock(block) = msg;
-                if block.block_height.0 > 1574 {
-                    continue;
-                }
                 if let Err(e) = self.process_block(block).await {
                     error!("Error processing transaction: {:?}", e);
                 }
@@ -255,6 +252,9 @@ impl DebugAnalyzer {
             .collect::<Vec<_>>();
         txs.dedup_by(|a, b| a.1 == b.1);
         for (k, tx, tx_ctx, which) in txs {
+            if self.tx_status.get(&k.tx_id) == Some(&TxStatus::TimedOut) {
+                continue; // Skip timed out transactions
+            }
             self.ui_state.last_exec_result = Some(
                 RollupExecutorStore::execute_blob_tx(
                     &mut rse.settled_state,

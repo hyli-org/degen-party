@@ -61,7 +61,7 @@ const connectionStatusColor = computed(() => {
                     :config="walletConfig"
                     :sessionKeyConfig="sessionKeyConfig"
                     :providers="['password', 'google']"
-                    :toto="sessionKeyConfig?.whitelist?.[0]"
+                    :forceSessionKey="true"
                     @walletUpdate="onWalletReady"
                 ></hyli-wallet>
                 <div

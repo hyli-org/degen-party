@@ -17,12 +17,20 @@ export class HyliWalletElement extends HTMLElement {
     providers: ProviderOption[] = ["password" as ProviderOption];
     config!: WalletProviderProps["config"];
     sessionKeyConfig: WalletProviderProps["sessionKeyConfig"] | undefined;
+    forceSessionKey: WalletProviderProps["forceSessionKey"] | undefined;
     onWalletEvent: WalletProviderProps["onWalletEvent"] | undefined;
     onError: WalletProviderProps["onError"] | undefined;
 
     constructor() {
         super();
-        const reactiveProps = ["providers", "config", "sessionKeyConfig", "onWalletEvent", "onError"] as const;
+        const reactiveProps = [
+            "providers",
+            "config",
+            "sessionKeyConfig",
+            "forceSessionKey",
+            "onWalletEvent",
+            "onError",
+        ] as const;
         for (const prop of reactiveProps) {
             const priv = `__${prop}`;
             Object.defineProperty(this, priv, {
@@ -67,13 +75,13 @@ export class HyliWalletElement extends HTMLElement {
                 }) as WalletUpdateEvent
             );
         };
-        console.log("Rendering with ", this.sessionKeyConfig);
         this.root!.render(
             React.createElement(
                 WalletProvider,
                 {
                     config: this.config,
                     sessionKeyConfig: this.sessionKeyConfig,
+                    forceSessionKey: this.forceSessionKey,
                     onWalletEvent: this.onWalletEvent,
                     onError: this.onError,
                 },
