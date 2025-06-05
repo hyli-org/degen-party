@@ -49,9 +49,7 @@
 
             <div class="game-controls card flex flex-col items-center justify-center">
                 <div class="">
-                    <button v-if="gameEnded" class="action-button next-action" @click="handleActionButton">
-                        <span class="btn-text"> <span class="btn-icon">🎮</span> BACK TO BOARD </span>
-                    </button>
+                    <span v-if="gameEnded"> </span>
                     <h3 v-else-if="!isPlayerInGame">You did not bet, so you are missing this round !</h3>
                     <button
                         v-else-if="!gameEnded"
