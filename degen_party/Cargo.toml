@@ -2,6 +2,7 @@
 name = "degen_party"
 version = "0.1.0"
 edition = "2021"
+default-run = "degen_party"
 
 [[bin]]
 name = "degen_party"
@@ -11,6 +12,10 @@ path = "src/main.rs"
 name = "debug"
 path = "src/bin/debug.rs"
 required-features = ["ui"]
+
+[[bin]]
+name = "prover"
+path = "src/bin/prover.rs"
 
 [dependencies]
 board_game = { workspace = true }

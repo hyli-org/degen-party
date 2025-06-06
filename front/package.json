@@ -18,7 +18,7 @@
         "elliptic": "^6.6.1",
         "gsap": "^3.13.0",
         "hyli-testnet-chat": "^0.2.0",
-        "hyli-wallet": "^0.2.16",
+        "hyli-wallet": "^0.2.19",
         "three": "^0.174.0",
         "uuid": "^11.1.0",
         "vue": "^3.5.16",

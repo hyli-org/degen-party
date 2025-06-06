@@ -80,6 +80,7 @@ use tracing_subscriber::Layer;
 async fn main() -> Result<()> {
     let args = Args::parse();
     let config = Conf::new(args.config_file).context("Failed to load config")?;
+
     // Set up tracing to print to a file
     let log_file_writer = std::fs::OpenOptions::new()
         .create(true)

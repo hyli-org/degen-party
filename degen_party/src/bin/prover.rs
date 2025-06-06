@@ -1,15 +1,11 @@
 use anyhow::{Context, Result};
 use clap::{command, Parser};
 use client_sdk::rest_client::NodeApiHttpClient;
-use degen_party::{
-    ensure_registration::EnsureRegistration, fake_lane_manager::FakeLaneManager,
-    AuthenticatedMessage, Conf, InboundWebsocketMessage, OutboundWebsocketMessage,
-};
+use degen_party::Conf;
 use hyle_modules::{
     bus::{metrics::BusMetrics, SharedMessageBus},
     modules::{
         da_listener::{DAListener, DAListenerConf},
-        websocket::WebSocketModule,
         ModulesHandler,
     },
     utils::logger::setup_tracing,
@@ -40,10 +36,10 @@ async fn main() -> Result<()> {
         ))?;
     }
 
-    tracing::info!("Starting app with config: {:?}", &config);
+    tracing::info!("Starting autoprover with config: {:?}", &config);
     let config = Arc::new(config);
 
-    let bus = SharedMessageBus::new(BusMetrics::global("rollup".to_string()));
+    let bus = SharedMessageBus::new(BusMetrics::global("autoprover".to_string()));
 
     let client = Arc::new(NodeApiHttpClient::new(config.node_api.clone())?);
 
@@ -55,9 +51,6 @@ async fn main() -> Result<()> {
         .expect("DEGEN_PARTY_BACKEND_PKEY must be a hex string");
     let secret_key = SecretKey::from_slice(&secret_key).expect("32 bytes, within curve order");
     let public_key = PublicKey::from_secret_key(&secp, &secret_key);
-
-    //let sig = secp.sign_ecdsa(message, &secret_key);
-    //assert!(secp.verify_ecdsa(message, &sig, &public_key).is_ok());
 
     let ctx = Arc::new(degen_party::Context {
         client,
@@ -78,17 +71,6 @@ async fn main() -> Result<()> {
     let mut handler = ModulesHandler::new(&bus).await;
 
     handler
-        .build_module::<EnsureRegistration>(ctx.clone())
-        .await?;
-
-    handler
-        .build_module::<WebSocketModule<AuthenticatedMessage<InboundWebsocketMessage>, OutboundWebsocketMessage>>(
-            config.websocket.clone(),
-        )
-        .await?;
-    handler.build_module::<FakeLaneManager>(ctx.clone()).await?;
-
-    handler
         .build_module::<DAListener>(DAListenerConf {
             data_directory: config.data_directory.clone(),
             da_read_from: config.da_read_from.clone(),
@@ -96,11 +78,7 @@ async fn main() -> Result<()> {
         })
         .await?;
 
-    degen_party::rollup_execution::setup_rollup_execution(ctx.clone(), &mut handler).await?;
-    if config.run_prover {
-        tracing::info!("Setting up auto provers");
-        degen_party::proving::setup_auto_provers(ctx.clone(), &mut handler).await?;
-    }
+    degen_party::proving::setup_auto_provers(ctx.clone(), &mut handler).await?;
 
     tracing::info!("Starting modules");
 

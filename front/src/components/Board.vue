@@ -9,7 +9,14 @@ const currentGame = computed<GameState>(() => {
     return gameState.game as GameState;
 });
 
-const showGameOver = computed(() => currentGame.value && currentGame.value.phase === "GameOver");
+const showGameOver = computed(() => {
+    if (!currentGame.value) return false;
+    if (currentGame.value.phase === "GameOver") return true;
+    // If the current player has no coins left, show game over
+    const localPlayerId = getLocalPlayerId();
+    const localPlayer = currentGame.value.players.find((p) => p.id === localPlayerId);
+    return localPlayer && localPlayer.coins === 0 && currentGame.value.phase !== "Registration";
+});
 const playersSorted = computed(() => {
     if (!currentGame.value) return [];
     // Sort by coins descending, then by name
