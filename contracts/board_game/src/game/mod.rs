@@ -267,8 +267,9 @@ impl GameState {
         match (self.phase.clone(), action) {
             (_, GameAction::EndGame) => {
                 let is_backend = self.backend_identity == *caller;
+                let backend_timed_out = timestamp - self.last_interaction_time > 2 * 60 * 1000;
                 let game_timed_out = timestamp - self.last_interaction_time > 10 * 60 * 1000;
-                if is_backend || game_timed_out {
+                if (is_backend && backend_timed_out) || game_timed_out {
                     events.push(GameEvent::GameEnded {
                         winner_id: Identity::default(),
                         final_coins: 0,
