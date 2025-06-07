@@ -19,7 +19,7 @@ serde = { version = "1.0", default-features = false, features = [
 borsh = { version = "1.5.7" }
 uuid = { version = "1.6", features = ["serde"], default-features = false }
 
-sp1-zkvm = { version = "4.2.0", default-features = false, optional = true }
+sp1-zkvm = { version = "5.0.0", default-features = false, optional = true }
 client-sdk = { workspace = true, default-features = false, features = [
     "sp1",
     "rest",

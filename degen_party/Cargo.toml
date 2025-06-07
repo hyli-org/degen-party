@@ -43,7 +43,7 @@ anyhow = "1.0.93"
 hex = "0.4.3"
 secp256k1 = { version = "0.31.0" }
 
-sp1-sdk = { version = "4.2.0", default-features = false }
+sp1-sdk = { version = "5.0.0", default-features = false }
 
 tracing = "0.1.41"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
