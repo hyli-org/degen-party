@@ -4,7 +4,7 @@ FROM $DEP_IMAGE AS builder
 
 RUN apt-get update && apt-get -y install curl g++ git
 
-RUN if ! /root/.sp1/bin/cargo-prove prove -V 2>/dev/null; then \
+RUN if ! /root/.sp1/bin/cargo-prove prove -V 2>/dev/null | grep -q "38f0f14"; then \
     curl -L https://sp1up.succinct.xyz | bash && /root/.sp1/bin/sp1up; \
 fi
 
