@@ -1,6 +1,5 @@
 import { computed, reactive } from "vue";
 import { WalletContextType, WalletUpdateEvent } from "wallet-wrapper";
-import { gameState } from "../game_data/game_data";
 import { authService } from "../game_data/auth";
 
 export const walletState = reactive({
@@ -36,11 +35,3 @@ export const walletConfig =
               walletServerBaseUrl: "https://wallet.testnet.hyli.org",
               applicationWsUrl: "wss://wallet.testnet.hyli.org/ws",
           };
-
-export const sessionKeyConfig = computed(() => {
-    let ret = {
-        duration: 60 * 60 * 24 * 7 * 1000,
-        whitelist: ["testnet_chat", gameState.board_game_contract, gameState.crash_game_contract],
-    };
-    return ret;
-});

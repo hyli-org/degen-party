@@ -1,7 +1,5 @@
 import { reactive } from "vue";
-import { authService } from "../game_data/auth";
 import { v4 as uuidv4 } from "uuid";
-import { SHA256, enc, lib } from "crypto-js";
 import { walletState } from "./wallet";
 
 export interface WebSocketState {
@@ -74,7 +72,7 @@ class SharedWebSocketService {
         this.ws.onopen = () => {
             console.log("WebSocket connection opened");
             wsState.connected = true;
-            wsState.connectionStatus = "Connected";
+            wsState.connectionStatus = "Connected to Hyli";
             this.reconnectAttempts = 0;
             this.resolveConnection?.();
         };
@@ -141,7 +139,7 @@ class SharedWebSocketService {
             */
             const identity_blobs = (() => {
                 try {
-                    return walletState.createIdentityBlobs();
+                    return walletState.createIdentityBlobs?.();
                 } catch (e) {
                     console.error("Error creating identity blobs:", e);
                     return [];

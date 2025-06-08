@@ -1,8 +1,6 @@
 import { ec } from "elliptic";
 import { SHA256 } from "crypto-js";
-import { any } from "three/tsl";
-import { BorshSchema, borshSerialize } from "borsher";
-import { identity } from "@vueuse/core";
+import { BorshSchema } from "borsher";
 import { walletState } from "../utils/wallet";
 
 const SESSION_KEY_STORAGE_KEY = "blackjack_session_key";

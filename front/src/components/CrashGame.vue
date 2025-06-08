@@ -1,5 +1,5 @@
 <template>
-    <div class="crash-game">
+    <div class="relative w-full min-h-[100vh] crash-game">
         <div class="game-title">CRASH GAME</div>
 
         <div class="flex gap-8 justify-center items-stretch">
@@ -47,7 +47,7 @@
                 </div>
             </div>
 
-            <div class="game-controls card flex flex-col items-center justify-center">
+            <div class="game-controls card flex flex-col items-center justify-center min-w-[200px] max-w-[300px]">
                 <div class="">
                     <span v-if="gameEnded"> </span>
                     <h3 v-else-if="!isPlayerInGame">You did not bet, so you are missing this round !</h3>
@@ -59,8 +59,20 @@
                     >
                         <span class="btn-text"> <span class="text-3xl">🚀</span><br />CASH OUT! </span>
                     </button>
+                    <!-- How to Play Section -->
+                    <div class="how-to-play text-center mt-8">
+                        <h4 class="font-bold text-xl mb-2 text-white">How to Play</h4>
+                        <ul class="list-disc list-inside text-left">
+                            <li>The rocket (multiplier) rises from <b>1.00x</b> upwards.</li>
+                            <li>Cash out at any time to lock in your winnings!</li>
+                            <li>If you don't cash out before the crash, you lose your bet.</li>
+                            <li>
+                                The longer you wait, the higher the risk <span class="text-red-500">💥</span> ...and the
+                                bigger the reward!
+                            </li>
+                        </ul>
+                    </div>
                 </div>
-                <Chat class="hidden xl:block" />
             </div>
         </div>
         <ConfettiEffect :active="showConfetti" :duration="3000" />

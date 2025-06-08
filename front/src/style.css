@@ -1,1 +1,17 @@
 @import "tailwindcss";
+
+@custom-variant hmd {
+    @media (min-height: 720px) {
+        & {
+            @slot;
+        }
+    }
+}
+
+@custom-variant hlg {
+    @media (min-height: 840px) {
+        & {
+            @slot;
+        }
+    }
+}

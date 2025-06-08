@@ -171,23 +171,30 @@ onUnmounted(() => {
         <div class="flex h-full w-full">
             <div class="flex-1 relative">
                 <div
-                    class="absolute top-0 w-full z-1000 font-['Luckiest_Guy'] text-[4.5rem] text-[#ffd700] text-center mx-auto text-shadow-[_-2px_-2px_0_#e6a100,_2px_-2px_0_#e6a100,_-2px_2px_0_#e6a100,_2px_2px_0_#e6a100,_4px_4px_0_#b87d00,_6px_6px_0_#8b5e00] rotate-[-2deg] transition-transform duration-300 ease-in-out tracking-wide font-normal antialiased uppercase hover:scale-102 hover:rotate-[-2deg]"
+                    class="absolute top-0 px-8 z-1000 font-['Luckiest_Guy'] text-[4.5rem] text-[#ffd700] text-center mx-auto text-shadow-[_-2px_-2px_0_#e6a100,_2px_-2px_0_#e6a100,_-2px_2px_0_#e6a100,_2px_2px_0_#e6a100,_4px_4px_0_#b87d00,_6px_6px_0_#8b5e00] rotate-[-2deg] transition-transform duration-300 ease-in-out tracking-wide font-normal antialiased uppercase hover:scale-102 hover:rotate-[-2deg]"
                 >
-                    DEGEN PARTY
+                    ORANGE TRAIL
+                    <img
+                        src="/src/assets/trail_truck.png"
+                        alt="Orange Trail Truck"
+                        class="inline-block h-[4.5rem] ml-4"
+                    />
                 </div>
 
                 <Backdrop class="absolute w-full h-full" />
                 <!-- Wheel spin -->
                 <div
                     v-show="!isAnimationPlayed('FinalMinigameRound')"
-                    class="absolute top-8 right-8 z-10 bg-white p-8 rounded-[2rem] flex flex-col items-center justify-center gap-6 min-w-[320px]"
+                    :class="`absolute bottom-8 hlg:bottom-auto left-8 hlg:left-auto lg:top-8 hlg:top-8 hlg:right-8 z-10 bg-white p-8
+                    rounded-[2rem] flex flex-col items-center justify-center gap-6 min-w-[320px] ${betScreenActive ? ' hidden md:flex ' : ''}`"
                 >
                     <SpinningWheel></SpinningWheel>
                 </div>
                 <!-- Bet Controls & Timer -->
                 <div
                     v-if="betScreenActive"
-                    class="absolute bottom-8 right-8 z-10 bg-white p-8 rounded-[2rem] flex flex-col items-center justify-center gap-4 min-w-[320px] mx-auto transition-all transition-duration-500"
+                    :class="`absolute bottom-8 right-8 z-10 bg-white p-8 rounded-[2rem] flex flex-col items-center justify-center gap-4
+                    min-w-[320px] mx-auto transition-all transition-duration-500 ${betScreenActive ? '' : ' hidden md:flex '}`"
                 >
                     <div v-if="!hasBet && timer > 0" class="relative mb-4">
                         <div class="text-2xl font-bold text-black">Place your bet. Only {{ timer }}s left!</div>
@@ -263,11 +270,11 @@ onUnmounted(() => {
                     <div v-else class="text-red-400 font-bold text-2xl">Time's up! You lost 10 coins.</div>
                 </div>
             </div>
-            <div class="bg-white hidden xl:block">
+            <div class="bg-white hidden xl:block h-full">
                 <Chat />
             </div>
         </div>
-        <PlayerBar>
+        <PlayerBar class="hidden hmd:block">
             <template #default="{ player }">
                 <div v-if="bets[player.id] !== undefined" class="text-green-300 font-bold text-xs">
                     Bet: {{ bets[player.id] }} 🪙

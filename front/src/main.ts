@@ -1,8 +1,8 @@
 import { createApp } from "vue";
 import "./style.css";
+import { sharedWebSocket } from "./utils/shared-websocket";
 import App from "./App.vue";
 import router from "./router";
-import { sharedWebSocket } from "./utils/shared-websocket";
 
 // Initialize the shared WebSocket connection
 sharedWebSocket.connect().catch(console.error);

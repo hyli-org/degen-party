@@ -1,11 +1,6 @@
-# Degen Party 🎮
+# Orange Trail 🍊
 
-A delightful mini-game collection built with Vue.js. This project offers a colorful, engaging gaming experience with various mini-games and interactive features.
-
-## 🍄 Features
-
-- **Playful Interface:** Vibrant colors, engaging animations, and a festive atmosphere
-- **Mini-Games:** Simple and fun games with engaging mechanics
+Orange Trail is a game inspired by the classic Oregon Trail, but with a twist: it features a betting minigame! Set on Mars, players venture out to find resources to feed their Hyligotchi. Will you survive the harsh Martian landscape and keep your Hyligotchi thriving?
 
 ## 🏃‍♂️ Getting Started
 

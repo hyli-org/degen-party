@@ -266,10 +266,11 @@ impl GameState {
         let mut events = Vec::new();
         match (self.phase.clone(), action) {
             (_, GameAction::EndGame) => {
+                let is_ended = self.phase == GamePhase::GameOver;
                 let is_backend = self.backend_identity == *caller;
                 let backend_timed_out = timestamp - self.last_interaction_time > 2 * 60 * 1000;
                 let game_timed_out = timestamp - self.last_interaction_time > 10 * 60 * 1000;
-                if (is_backend && backend_timed_out) || game_timed_out {
+                if is_ended || (is_backend && backend_timed_out) || game_timed_out {
                     events.push(GameEvent::GameEnded {
                         winner_id: Identity::default(),
                         final_coins: 0,
@@ -293,6 +294,8 @@ impl GameState {
                     minigames.into_iter().map(|x| x.into()).collect::<Vec<_>>(),
                     random_seed,
                 );
+                // Keep track of the time to know how long the registration phase lasts.
+                self.round_started_at = timestamp;
                 self.phase = GamePhase::Registration;
                 events.push(GameEvent::GameInitialized { random_seed });
             }
@@ -331,7 +334,7 @@ impl GameState {
             (GamePhase::Registration, GameAction::StartGame) => {
                 let is_full = self.players.len() == self.max_players;
                 let registration_period_done =
-                    self.last_interaction_time.saturating_add(55 * 1000) < timestamp;
+                    self.round_started_at.saturating_add(55 * 1000) < timestamp;
                 if !is_full && !registration_period_done {
                     return Err(anyhow!(
                         "Game is not full and registration period is not over"
