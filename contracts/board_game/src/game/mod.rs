@@ -209,7 +209,7 @@ impl GameState {
             .filter_map(|(id, &bet)| {
                 self.players
                     .iter()
-                    .find(|p| p.id == *id)
+                    .find(|p| p.id == *id && p.coins > 0)
                     .map(|p| (p.id.clone(), p.name.clone(), bet))
             })
             .collect()
@@ -229,7 +229,7 @@ impl GameState {
     }
 
     fn is_registered(&self, caller: &Identity) -> bool {
-        self.players.iter().any(|p| p.id == *caller)
+        self.players.iter().any(|p| p.id == *caller && p.coins > 0)
     }
 
     /// Checks if the game should end due to players running out of coins.
@@ -403,17 +403,23 @@ impl GameState {
                     if timestamp.saturating_sub(self.round_started_at) < 30_000 {
                         return Err(anyhow!("Not enough time has passed"));
                     }
-                    // Only penalize players with coins > 0 who haven't bet
-                    for i in 0..self.players.len() {
-                        if self.players[i].coins > 0 && !self.bets.contains_key(&self.players[i].id)
-                        {
-                            if self.all_or_nothing {
-                                // In all or nothing mode, they lose everything
-                                self.update_player_coins(i, -self.players[i].coins, &mut events)?;
-                            } else {
-                                // Otherwise, penalize 10 coins
-                                self.update_player_coins(i, -10, &mut events)?;
-                            }
+                    // Collect indices of players to penalize
+                    let to_penalize: Vec<_> = self
+                        .players
+                        .iter()
+                        .enumerate()
+                        .filter(|(_, player)| {
+                            player.coins > 0 && !self.bets.contains_key(&player.id)
+                        })
+                        .map(|(i, _)| i)
+                        .collect();
+                    for &i in &to_penalize {
+                        if self.round == 0 || self.all_or_nothing {
+                            // In round 0 or all_or_nothing, set coins to 0
+                            self.players[i].coins = 0;
+                        } else {
+                            // Otherwise, penalize 10 coins
+                            self.update_player_coins(i, -10, &mut events)?;
                         }
                     }
                 }
@@ -441,7 +447,9 @@ impl GameState {
                         // Randomly pay out the bets to players
                         let bet_entries: Vec<_> =
                             std::mem::take(&mut self.bets).into_iter().collect();
-                        let mut player_indices: Vec<_> = (0..self.players.len()).collect();
+                        let mut player_indices: Vec<_> = (0..self.players.len())
+                            .filter(|&i| self.players[i].coins > 0)
+                            .collect();
                         self.dice.shuffle(&mut player_indices);
                         for (i, (bettor, amount)) in bet_entries.iter().enumerate() {
                             // Remove bet from bettor
