@@ -33,6 +33,7 @@ use std::{
     vec,
 };
 use tokio::time;
+use wallet::client::tx_executor_handler::Wallet;
 
 use crate::{
     fake_lane_manager::ConfirmedBlobTransaction,
@@ -288,6 +289,27 @@ impl RollupExecutor {
                 {
                     tracing::info!("Handling new block {}", block.block_height);
                 }
+                if let Some(eff) = block.registered_contracts.get(&ContractName::new("wallet")) {
+                    self.contracts
+                        .entry(ContractName::new("wallet"))
+                        .and_modify(|t| {
+                            _ = std::mem::replace(
+                                t,
+                                ContractBox::new(
+                                    Wallet::new(&Some(
+                                        borsh::from_slice(
+                                            eff.2
+                                                .as_ref()
+                                                .expect("Wallet contract should have metadata"),
+                                        )
+                                        .expect("Failed to deserialize wallet metadata"),
+                                    ))
+                                    .expect("Failed to create wallet"),
+                                ),
+                            );
+                        });
+                }
+
                 for (TxId(_, tx_hash), tx) in block.txs.iter() {
                     if let TransactionData::Blob(blob_tx) = &tx.transaction_data {
                         if let Err(e) = self
@@ -657,7 +679,7 @@ pub async fn setup_rollup_execution(
                 ),
                 (
                     ContractName::new("wallet"),
-                    ContractBox::new(wallet::Wallet::default()),
+                    ContractBox::new(Wallet::new(&None).expect("Failed to create wallet")),
                 ),
                 (
                     ContractName::new("secp256k1"),
@@ -679,7 +701,7 @@ pub async fn setup_rollup_execution(
                     )
                 } else if contract_name == &ContractName::new("wallet") {
                     ContractBox::new(
-                        borsh::from_slice::<wallet::Wallet>(&data).expect("Bad serialized data"),
+                        borsh::from_slice::<Wallet>(&data).expect("Bad serialized data"),
                     )
                 } else if contract_name == &ContractName::new("secp256k1") {
                     ContractBox::new(

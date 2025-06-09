@@ -34,7 +34,7 @@ version = "0.8.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5a15f179cd60c4584b8a8c596927aadc462e27f2ca70c04e0071964a73ba7a75"
 dependencies = [
- "cfg-if",
+ "cfg-if 1.0.0",
  "once_cell",
  "version_check",
  "zerocopy",
@@ -62,7 +62,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a326d47106039f38b811057215a92139f46eef7983a4b77b10930a0ea5685b1e"
 dependencies = [
  "bytes",
- "cfg-if",
+ "cfg-if 1.0.0",
  "const-hex",
  "derive_more 2.0.1",
  "hashbrown 0.15.4",
@@ -249,9 +249,9 @@ checksum = "7c02d123df017efcdfbd739ef81735b36c5ba83ec3c59c80a9d7ecc718f92e50"
 
 [[package]]
 name = "assertables"
-version = "9.5.6"
+version = "9.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f86ebf5dc2da225f63267145e25d05febf685f37ad3cc3ba0dd99d1c2927b555"
+checksum = "72129447ae3f06776127f6f88ad9da1f3ad936a20935ea84cc63ef24fdf95b17"
 
 [[package]]
 name = "async-stream"
@@ -431,7 +431,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6806a6321ec58106fea15becdad98371e28d92ccbc7c8f1b3b6dd724fe8f1002"
 dependencies = [
  "addr2line",
- "cfg-if",
+ "cfg-if 1.0.0",
  "libc",
  "miniz_oxide",
  "object",
@@ -531,6 +531,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "blake2b-rs"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a89a8565807f21b913288968e391819e7f9b2f0f46c7b89549c051cccf3a2771"
+dependencies = [
+ "cc",
+ "cty",
+]
+
+[[package]]
 name = "blake2b_simd"
 version = "1.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -550,7 +560,7 @@ dependencies = [
  "arrayref",
  "arrayvec",
  "cc",
- "cfg-if",
+ "cfg-if 1.0.0",
  "constant_time_eq",
 ]
 
@@ -642,9 +652,9 @@ checksum = "7575182f7272186991736b70173b0ea045398f984bf5ebbb3804736ce1330c9d"
 
 [[package]]
 name = "bytemuck"
-version = "1.23.0"
+version = "1.23.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9134a6ef01ce4b366b50689c94f82c14bc72bc5d0386829828a2e2752ef7958c"
+checksum = "5c76a5792e44e4abe34d3abf15636779261d45a7450612059293d1d2cfc63422"
 
 [[package]]
 name = "byteorder"
@@ -747,6 +757,12 @@ dependencies = [
 
 [[package]]
 name = "cfg-if"
+version = "0.1.10"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4785bdd1c96b2a846b2bd7cc02e86b6b3dbf14e7e53446c4f54c92a361040822"
+
+[[package]]
+name = "cfg-if"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
@@ -834,7 +850,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3b79c4069c6cad78e2e0cdfcbd26275770669fb39fd308a752dc110e83b9af32"
 dependencies = [
  "castaway",
- "cfg-if",
+ "cfg-if 1.0.0",
  "itoa",
  "rustversion",
  "ryu",
@@ -872,7 +888,7 @@ version = "1.14.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "83e22e0ed40b96a48d3db274f72fd365bd78f67af39b6bbd47e8a15e1c6207ff"
 dependencies = [
- "cfg-if",
+ "cfg-if 1.0.0",
  "cpufeatures",
  "hex",
  "proptest",
@@ -980,7 +996,7 @@ version = "1.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a97769d94ddab943e4510d138150169a2758b5ef3eb191a9ee688de3e23ef7b3"
 dependencies = [
- "cfg-if",
+ "cfg-if 1.0.0",
 ]
 
 [[package]]
@@ -1099,6 +1115,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "cty"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b365fabc795046672053e29c954733ec3b05e4be654ab130fe8f1f94d7051f35"
+
+[[package]]
 name = "darling"
 version = "0.20.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1173,7 +1195,7 @@ version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ee99d08031ca34a4d044efbbb21dff9b8c54bb9d8c82a189187c0651ffdb9fbf"
 dependencies = [
- "cfg-if",
+ "cfg-if 1.0.0",
  "dashu-base",
  "num-modular",
  "num-order",
@@ -1737,7 +1759,7 @@ version = "0.2.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "335ff9f135e4384c8150d6f27c6daed433577f86b4750418338c01a1a2528592"
 dependencies = [
- "cfg-if",
+ "cfg-if 1.0.0",
  "js-sys",
  "libc",
  "wasi 0.11.0+wasi-snapshot-preview1",
@@ -1750,7 +1772,7 @@ version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "26145e563e54f2cadc477553f1ec5ee650b00862f0a58bcd12cbdc5f0ea2d2f4"
 dependencies = [
- "cfg-if",
+ "cfg-if 1.0.0",
  "js-sys",
  "libc",
  "r-efi",
@@ -1958,7 +1980,7 @@ checksum = "df3b46402a9d5adb4c86a0cf463f42e19994e3ee891101b1841f30a545cb49a9"
 [[package]]
 name = "hyle-client-sdk"
 version = "0.13.0-rc.4"
-source = "git+https://github.com/Hyle-org/hyle.git?branch=main#6f7eda9699a3bd774108e035913ff48cb852084c"
+source = "git+https://github.com/Hyle-org/hyle.git?branch=main#a6519e829482435b8ef33a744e5a75f21375b1bc"
 dependencies = [
  "anyhow",
  "axum 0.8.4",
@@ -1978,20 +2000,21 @@ dependencies = [
 [[package]]
 name = "hyle-contract-sdk"
 version = "0.13.0-rc.4"
-source = "git+https://github.com/Hyle-org/hyle.git?branch=main#6f7eda9699a3bd774108e035913ff48cb852084c"
+source = "git+https://github.com/Hyle-org/hyle.git?branch=main#a6519e829482435b8ef33a744e5a75f21375b1bc"
 dependencies = [
  "borsh",
  "hyle-model",
  "serde",
  "sha2",
  "sp1-zkvm",
+ "sparse-merkle-tree",
  "tracing",
 ]
 
 [[package]]
 name = "hyle-crypto"
 version = "0.13.0-rc.4"
-source = "git+https://github.com/Hyle-org/hyle.git?branch=main#6f7eda9699a3bd774108e035913ff48cb852084c"
+source = "git+https://github.com/Hyle-org/hyle.git?branch=main#a6519e829482435b8ef33a744e5a75f21375b1bc"
 dependencies = [
  "anyhow",
  "blst",
@@ -2004,7 +2027,7 @@ dependencies = [
 [[package]]
 name = "hyle-model"
 version = "0.13.0-rc.4"
-source = "git+https://github.com/Hyle-org/hyle.git?branch=main#6f7eda9699a3bd774108e035913ff48cb852084c"
+source = "git+https://github.com/Hyle-org/hyle.git?branch=main#a6519e829482435b8ef33a744e5a75f21375b1bc"
 dependencies = [
  "anyhow",
  "base64",
@@ -2027,7 +2050,7 @@ dependencies = [
 [[package]]
 name = "hyle-modules"
 version = "0.13.0-rc.4"
-source = "git+https://github.com/Hyle-org/hyle.git?branch=main#6f7eda9699a3bd774108e035913ff48cb852084c"
+source = "git+https://github.com/Hyle-org/hyle.git?branch=main#a6519e829482435b8ef33a744e5a75f21375b1bc"
 dependencies = [
  "anyhow",
  "anymap",
@@ -2061,7 +2084,7 @@ dependencies = [
 [[package]]
 name = "hyle-net"
 version = "0.13.0-rc.4"
-source = "git+https://github.com/Hyle-org/hyle.git?branch=main#6f7eda9699a3bd774108e035913ff48cb852084c"
+source = "git+https://github.com/Hyle-org/hyle.git?branch=main#a6519e829482435b8ef33a744e5a75f21375b1bc"
 dependencies = [
  "anyhow",
  "axum 0.8.4",
@@ -2087,7 +2110,7 @@ dependencies = [
 [[package]]
 name = "hyle-verifiers"
 version = "0.13.0-rc.4"
-source = "git+https://github.com/Hyle-org/hyle.git?branch=main#6f7eda9699a3bd774108e035913ff48cb852084c"
+source = "git+https://github.com/Hyle-org/hyle.git?branch=main#a6519e829482435b8ef33a744e5a75f21375b1bc"
 dependencies = [
  "anyhow",
  "borsh",
@@ -2389,7 +2412,7 @@ version = "0.1.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e0242819d153cba4b4b05a5a8f2a7e9bbf97b6055b2a002b395c96b5ff3c0222"
 dependencies = [
- "cfg-if",
+ "cfg-if 1.0.0",
 ]
 
 [[package]]
@@ -2486,7 +2509,7 @@ version = "0.13.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f6e3919bbaa2945715f0bb6d3934a173d1e9a59ac23767fbaaef277265a7411b"
 dependencies = [
- "cfg-if",
+ "cfg-if 1.0.0",
  "ecdsa",
  "elliptic-curve",
  "once_cell",
@@ -2525,7 +2548,7 @@ version = "0.8.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "07033963ba89ebaf1584d767badaa2e8fcec21aedea6b8c0346d487d49c28667"
 dependencies = [
- "cfg-if",
+ "cfg-if 1.0.0",
  "windows-targets 0.53.0",
 ]
 
@@ -2692,7 +2715,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "74523f3a35e05aba87a1d978330aef40f67b0304ac79c1c00b294c9830543db6"
 dependencies = [
  "bitflags",
- "cfg-if",
+ "cfg-if 1.0.0",
  "cfg_aliases",
  "libc",
 ]
@@ -3272,7 +3295,7 @@ version = "0.9.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bc838d2a56b5b1a6c25f55575dfc605fabb63bb2365f6c2353ef9159aa69e4a5"
 dependencies = [
- "cfg-if",
+ "cfg-if 1.0.0",
  "libc",
  "redox_syscall",
  "smallvec",
@@ -3461,7 +3484,7 @@ version = "0.13.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3d33c28a30771f7f96db69893f78b857f7450d7e0237e9c8fc6427a81bae7ed1"
 dependencies = [
- "cfg-if",
+ "cfg-if 1.0.0",
  "fnv",
  "lazy_static",
  "memchr",
@@ -3872,7 +3895,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a4689e6c2294d81e88dc6261c768b63bc4fcdb852be6d1352498b114f61383b7"
 dependencies = [
  "cc",
- "cfg-if",
+ "cfg-if 1.0.0",
  "getrandom 0.2.16",
  "libc",
  "untrusted",
@@ -4082,7 +4105,7 @@ version = "2.11.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "346a3b32eba2640d17a9cb5927056b08f3de90f65b72fe09402c2ad07d684d0b"
 dependencies = [
- "cfg-if",
+ "cfg-if 1.0.0",
  "derive_more 1.0.0",
  "parity-scale-codec",
  "scale-info-derive",
@@ -4331,7 +4354,7 @@ version = "0.10.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e3bf829a2d51ab4a5ddf1352d8470c140cadc8301b2ae1789db023f01cedd6ba"
 dependencies = [
- "cfg-if",
+ "cfg-if 1.0.0",
  "cpufeatures",
  "digest",
 ]
@@ -4341,7 +4364,7 @@ name = "sha2"
 version = "0.10.8"
 source = "git+https://github.com/sp1-patches/RustCrypto-hashes?tag=patch-sha2-0.10.8-sp1-4.0.0#1f224388fdede7cef649bce0d63876d1a9e3f515"
 dependencies = [
- "cfg-if",
+ "cfg-if 1.0.0",
  "cpufeatures",
  "digest",
 ]
@@ -4519,7 +4542,7 @@ dependencies = [
  "bincode",
  "cbindgen",
  "cc",
- "cfg-if",
+ "cfg-if 1.0.0",
  "elliptic-curve",
  "generic-array 1.1.0",
  "glob",
@@ -4589,7 +4612,7 @@ version = "5.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "af6b4ff36255b8472d4c99688118638724c8fc19dcfe41b7b75e2cd817077461"
 dependencies = [
- "cfg-if",
+ "cfg-if 1.0.0",
  "dashu",
  "elliptic-curve",
  "generic-array 1.1.0",
@@ -4643,7 +4666,7 @@ checksum = "6939d6b2f63e54e5fbd208a0293027608f22511741b62fe32b6f67f6c144e0c0"
 dependencies = [
  "bincode",
  "blake3",
- "cfg-if",
+ "cfg-if 1.0.0",
  "hex",
  "lazy_static",
  "num-bigint 0.4.6",
@@ -4766,7 +4789,7 @@ dependencies = [
  "backtrace",
  "cbindgen",
  "cc",
- "cfg-if",
+ "cfg-if 1.0.0",
  "ff 0.13.1",
  "glob",
  "hashbrown 0.14.5",
@@ -4820,7 +4843,7 @@ dependencies = [
  "bincode",
  "bindgen",
  "cc",
- "cfg-if",
+ "cfg-if 1.0.0",
  "hex",
  "num-bigint 0.4.6",
  "p3-baby-bear",
@@ -4847,7 +4870,7 @@ dependencies = [
  "async-trait",
  "backoff",
  "bincode",
- "cfg-if",
+ "cfg-if 1.0.0",
  "dirs",
  "eventsource-stream",
  "futures",
@@ -4922,7 +4945,7 @@ version = "5.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "16e69fef4d915b10072461e52fd616ca2625409ede7b37a36ec910e1a52bd860"
 dependencies = [
- "cfg-if",
+ "cfg-if 1.0.0",
  "getrandom 0.2.16",
  "lazy_static",
  "libm",
@@ -4930,6 +4953,17 @@ dependencies = [
  "sha2",
  "sp1-lib",
  "sp1-primitives",
+]
+
+[[package]]
+name = "sparse-merkle-tree"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8851f6c92491ebe5528eabc1244292175a739eb0162974f9f9670a7dc748748b"
+dependencies = [
+ "blake2b-rs",
+ "cc",
+ "cfg-if 0.1.10",
 ]
 
 [[package]]
@@ -5073,7 +5107,7 @@ version = "0.30.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0a5b4ddaee55fb2bea2bf0e5000747e5f5c0de765e5a5ff87f4cd106439f4bb3"
 dependencies = [
- "cfg-if",
+ "cfg-if 1.0.0",
  "core-foundation-sys",
  "libc",
  "ntapi",
@@ -5147,7 +5181,7 @@ version = "1.1.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8b9ef9bad013ada3808854ceac7b46812a6465ba368859a37e2100283d2d719c"
 dependencies = [
- "cfg-if",
+ "cfg-if 1.0.0",
  "once_cell",
 ]
 
@@ -5793,7 +5827,7 @@ dependencies = [
 [[package]]
 name = "wallet"
 version = "0.0.0"
-source = "git+https://github.com/hyli-org/wallet.git?branch=main#68f0994fe173ed86f5481af1e467fe196bb3a757"
+source = "git+https://github.com/hyli-org/wallet.git?branch=main#769d8c8083cc6be6c7d69fbe32ebe88eec350545"
 dependencies = [
  "anyhow",
  "borsh",
@@ -5801,6 +5835,9 @@ dependencies = [
  "hyle-client-sdk",
  "hyle-contract-sdk",
  "serde",
+ "serde_with",
+ "sha2",
+ "sparse-merkle-tree",
 ]
 
 [[package]]
@@ -5833,7 +5870,7 @@ version = "0.2.100"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1edc8929d7499fc4e8f0be2262a241556cfc54a0bea223790e71446f2aab1ef5"
 dependencies = [
- "cfg-if",
+ "cfg-if 1.0.0",
  "once_cell",
  "rustversion",
  "wasm-bindgen-macro",
@@ -5859,7 +5896,7 @@ version = "0.4.50"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "555d470ec0bc3bb57890405e5d4322cc9ea83cebb085523ced7be4144dac1e61"
 dependencies = [
- "cfg-if",
+ "cfg-if 1.0.0",
  "js-sys",
  "once_cell",
  "wasm-bindgen",
@@ -6447,7 +6484,7 @@ dependencies = [
  "blake2",
  "bls12_381",
  "byteorder",
- "cfg-if",
+ "cfg-if 1.0.0",
  "group 0.12.1",
  "group 0.13.0",
  "halo2",

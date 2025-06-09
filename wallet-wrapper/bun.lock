@@ -4,15 +4,15 @@
     "": {
       "name": "wallet-wrapper",
       "dependencies": {
-        "hyli-wallet": "^0.2.16",
+        "hyli-wallet": "^0.3.2",
         "react": "^19.1.0",
         "react-dom": "^19.1.0",
       },
       "devDependencies": {
         "@eslint/js": "^9.28.0",
         "@types/react": "^19.1.6",
-        "@types/react-dom": "^19.1.5",
-        "@vitejs/plugin-react": "^4.5.0",
+        "@types/react-dom": "^19.1.6",
+        "@vitejs/plugin-react": "^4.5.1",
         "eslint": "^9.28.0",
         "eslint-plugin-react-hooks": "^5.2.0",
         "eslint-plugin-react-refresh": "^0.4.20",
@@ -231,7 +231,7 @@
 
     "@types/react": ["@types/react@19.1.6", "", { "dependencies": { "csstype": "^3.0.2" } }, "sha512-JeG0rEWak0N6Itr6QUx+X60uQmN+5t3j9r/OVDtWzFXKaj6kD1BwJzOksD0FF6iWxZlbE1kB0q9vtnU2ekqa1Q=="],
 
-    "@types/react-dom": ["@types/react-dom@19.1.5", "", { "peerDependencies": { "@types/react": "^19.0.0" } }, "sha512-CMCjrWucUBZvohgZxkjd6S9h0nZxXjzus6yDfUb+xLxYM7VvjKNH1tQrE9GWLql1XoOP4/Ds3bwFqShHUYraGg=="],
+    "@types/react-dom": ["@types/react-dom@19.1.6", "", { "peerDependencies": { "@types/react": "^19.0.0" } }, "sha512-4hOiT/dwO8Ko0gV1m/TJZYk3y0KBnY9vzDh7W+DH17b2HFSOGgdj33dhihPeuy3l0q23+4e+hoXHV6hCC4dCXw=="],
 
     "@types/react-router": ["@types/react-router@5.1.20", "", { "dependencies": { "@types/history": "^4.7.11", "@types/react": "*" } }, "sha512-jGjmu/ZqS7FjSH6owMcD5qpq19+1RS9DeVRqfl1FeBMxTDQAGwlMWOcs52NDoXaNKyG3d1cYQFMs9rCrb88o9Q=="],
 
@@ -363,7 +363,7 @@
 
     "hyli-check-secret": ["hyli-check-secret@0.3.4", "", { "dependencies": { "hyli": "^0.3.0" }, "peerDependencies": { "@aztec/bb.js": "0.82.2", "@noir-lang/noir_js": "1.0.0-beta.2", "@noir-lang/noir_wasm": "1.0.0-beta.2" } }, "sha512-RdS6FH08K3BwJZhIeOxcVpAnff6GWgn7fCA9KimMl+KQzXdo3INGYWTYS2SaPbBMdW5JivrgadmEE+g3u+Gdvw=="],
 
-    "hyli-wallet": ["hyli-wallet@0.2.19", "", { "dependencies": { "@types/crypto-js": "^4.2.2", "@types/elliptic": "^6.4.18", "@types/react-router-dom": "^5.3.3", "crypto-js": "^4.2.0", "elliptic": "^6.6.1", "hyli": "^0.3.0" }, "peerDependencies": { "hyli-check-secret": "^0.3.4", "react": "^19.1.0", "react-dom": "^19.1.0", "react-router-dom": "^7.6.0" } }, "sha512-vRSVME/p8/o8LXVCqxTnWEQYx/K57rOrAiycINB9A7qvOvfKEZYWsos1uHSbnMPjxTMRCUP8ggETVzgh9xf5dg=="],
+    "hyli-wallet": ["hyli-wallet@0.3.2", "", { "dependencies": { "@types/crypto-js": "^4.2.2", "@types/elliptic": "^6.4.18", "@types/react-router-dom": "^5.3.3", "crypto-js": "^4.2.0", "elliptic": "^6.6.1", "hyli": "^0.3.0" }, "peerDependencies": { "hyli-check-secret": "^0.3.4", "react": "^19.1.0", "react-dom": "^19.1.0", "react-router-dom": "^7.6.0" } }, "sha512-4VGpP73xGk528T5Em7VTDi/934R5uEGOU/uQa7RkC2fl/aM9auFfm7nxIPG+cyrPCVAGgkelkXcrp43/VyZ3MA=="],
 
     "ieee754": ["ieee754@1.2.1", "", {}, "sha512-dcyqhDvX1C46lXZcVqCpK+FtMRQVdIMN6/Df5js2zouUsqG7I6sFxitIC+7KYK29KdXOLHdu9zL4sFnoVQnqaA=="],
 
