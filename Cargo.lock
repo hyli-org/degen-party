@@ -4861,9 +4861,9 @@ dependencies = [
 
 [[package]]
 name = "sp1-sdk"
-version = "5.0.3"
+version = "5.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "463909ee4714c1409d8d169bafe7a61a10b4c727a3c715aff1c9b3e93c7d698a"
+checksum = "4e05659d72bc760a14e2a9fb801075d5577453318316b2bd1998e0d2781cbc1b"
 dependencies = [
  "alloy-primitives",
  "anyhow",
@@ -5827,7 +5827,7 @@ dependencies = [
 [[package]]
 name = "wallet"
 version = "0.0.0"
-source = "git+https://github.com/hyli-org/wallet.git?branch=main#769d8c8083cc6be6c7d69fbe32ebe88eec350545"
+source = "git+https://github.com/hyli-org/wallet.git?branch=main#65a1af16631455ee5531a88e33360f10c9defb92"
 dependencies = [
  "anyhow",
  "borsh",
