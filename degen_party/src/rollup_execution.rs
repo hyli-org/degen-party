@@ -290,24 +290,21 @@ impl RollupExecutor {
                     tracing::info!("Handling new block {}", block.block_height);
                 }
                 if let Some(eff) = block.registered_contracts.get(&ContractName::new("wallet")) {
-                    self.contracts
-                        .entry(ContractName::new("wallet"))
-                        .and_modify(|t| {
-                            _ = std::mem::replace(
-                                t,
-                                ContractBox::new(
-                                    Wallet::new(&Some(
-                                        borsh::from_slice(
-                                            eff.2
-                                                .as_ref()
-                                                .expect("Wallet contract should have metadata"),
-                                        )
-                                        .expect("Failed to deserialize wallet metadata"),
-                                    ))
-                                    .expect("Failed to create wallet"),
-                                ),
-                            );
-                        });
+                    let wallet = Wallet::new(&Some(
+                        borsh::from_slice(
+                            eff.2
+                                .as_ref()
+                                .expect("Wallet contract should have metadata"),
+                        )
+                        .expect("Failed to deserialize wallet metadata"),
+                    ))
+                    .expect("Failed to create wallet");
+                    self.contracts.insert(
+                        ContractName::new("wallet"),
+                        ContractBox::new(wallet.clone()),
+                    );
+                    self.settled_state
+                        .insert(ContractName::new("wallet"), ContractBox::new(wallet));
                 }
 
                 for (TxId(_, tx_hash), tx) in block.txs.iter() {
