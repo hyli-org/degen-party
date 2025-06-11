@@ -9,7 +9,8 @@ use hyle_modules::modules::{
     ModulesHandler,
 };
 use sdk::{
-    utils::as_hyle_output, Identity, RegisterContractEffect, StructuredBlobData, ZkContract,
+    utils::as_hyle_output, Identity, RegisterContractEffect, StateCommitment, StructuredBlobData,
+    ZkContract,
 };
 use sp1_sdk::Prover;
 use sp1_sdk::SP1ProvingKey;
@@ -34,6 +35,10 @@ impl TxExecutorHandler for BoardGameExecutor {
 
     fn build_commitment_metadata(&self, _blob: &sdk::Blob) -> Result<Vec<u8>> {
         Ok(self.state.commit().0)
+    }
+
+    fn get_state_commitment(&self) -> StateCommitment {
+        self.state.commit()
     }
 
     fn construct_state(
@@ -90,6 +95,10 @@ impl TxExecutorHandler for CrashGameExecutor {
 
     fn build_commitment_metadata(&self, _blob: &sdk::Blob) -> Result<Vec<u8>> {
         Ok(self.state.commit().0)
+    }
+
+    fn get_state_commitment(&self) -> StateCommitment {
+        self.state.commit()
     }
 
     fn construct_state(
