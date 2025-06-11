@@ -679,7 +679,7 @@ pub async fn setup_rollup_execution(
                     ContractBox::new(crash_game_executor.clone()),
                 ),
                 (
-                    ContractName::new("oranj"),
+                    ContractName::new("oxygen"),
                     ContractBox::new(SmtTokenProvableState::default()),
                 ),
                 (
@@ -709,7 +709,7 @@ pub async fn setup_rollup_execution(
                         borsh::from_slice::<CrashGameExecutor>(&data).expect("Bad serialized data"),
                     )
                 } else if contract_name == &ContractName::new("oranj")
-                    || contract_name == &ContractName::new("owygen")
+                    || contract_name == &ContractName::new("oxygen")
                 {
                     ContractBox::new(
                         borsh::from_slice::<SmtTokenProvableState>(&data)
