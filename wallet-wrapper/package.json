@@ -17,15 +17,15 @@
         "@noir-lang/noir_wasm": "1.0.0-beta.2"
     },
     "dependencies": {
-        "hyli-wallet": "^0.3.2",
+        "hyli-wallet": "^0.3.3",
         "react": "^19.1.0",
         "react-dom": "^19.1.0"
     },
     "devDependencies": {
         "@eslint/js": "^9.28.0",
-        "@types/react": "^19.1.6",
+        "@types/react": "^19.1.7",
         "@types/react-dom": "^19.1.6",
-        "@vitejs/plugin-react": "^4.5.1",
+        "@vitejs/plugin-react": "^4.5.2",
         "eslint": "^9.28.0",
         "eslint-plugin-react-hooks": "^5.2.0",
         "eslint-plugin-react-refresh": "^0.4.20",

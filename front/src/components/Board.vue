@@ -11,7 +11,7 @@ const currentGame = computed<GameState>(() => {
 
 const showGameOver = computed(() => {
     if (!currentGame.value) return false;
-    if (currentGame.value.phase === "GameOver") return true;
+    if (currentGame.value.phase === "RewardsDistribution" || currentGame.value.phase === "GameOver") return true;
     // If the current player has no coins left, show game over
     const localPlayerId = getLocalPlayerId();
     const localPlayer = currentGame.value.players.find((p) => p.id === localPlayerId);
@@ -62,10 +62,10 @@ const allLost = computed(() => {
                     </ol>
                 </div>
                 <button
-                    @click="boardGameService.reset()"
+                    @click="gameState.isInLobby = true"
                     class="mt-6 px-8 py-3 rounded-xl font-bold text-lg border-4 border-[#FFD700] shadow-md bg-gradient-to-b from-[#4DAAFF] to-[#0077CC] text-white hover:-translate-y-1 hover:shadow-lg transition-all"
                 >
-                    Restart Game
+                    Back to lobby
                 </button>
             </div>
         </div>

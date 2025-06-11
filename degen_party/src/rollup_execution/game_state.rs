@@ -12,6 +12,7 @@ use sdk::{
 use secp256k1::Message;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
+use smt_token::SmtTokenAction;
 use std::time::{SystemTime, UNIX_EPOCH};
 use std::{fmt::Debug, ops::Deref, vec};
 
@@ -146,6 +147,21 @@ impl super::RollupExecutor {
                     .as_blob(self.board_game.clone(), None, None),
                 );
             }
+            BoardGameAction::RegisterPlayer { deposit, .. } => {
+                blobs.push(
+                    SmtTokenAction::Transfer {
+                        sender: identity.clone(),
+                        recipient: Identity::new(self.board_game.clone().0),
+                        amount: *deposit as u128,
+                    }
+                    .as_blob(ContractName::new("oranj"), None, None),
+                );
+                blobs.push(GameActionBlob(uuid_128, action.clone()).as_blob(
+                    self.board_game.clone(),
+                    None,
+                    None,
+                ));
+            }
             _ => {
                 blobs.push(GameActionBlob(uuid_128, action.clone()).as_blob(
                     self.board_game.clone(),
@@ -176,6 +192,7 @@ impl super::RollupExecutor {
             match action {
                 BoardGameAction::EndGame => "EndGame",
                 BoardGameAction::SpinWheel => "SpinWheel",
+                BoardGameAction::DistributeRewards => "DistributeRewards",
                 _ => unreachable!(),
             }
         )
@@ -211,6 +228,25 @@ impl super::RollupExecutor {
             if likely_timed_out {
                 let tx = self.create_backend_tx(BoardGameAction::SpinWheel)?;
                 self.bus.send(tx)?;
+            }
+        } else if state.phase == GamePhase::RewardsDistribution {
+            // avoid spam
+            if self.last_claim_reward.elapsed().as_secs() > 10 {
+                self.last_claim_reward = tokio::time::Instant::now();
+                let tx = self.create_backend_tx(BoardGameAction::DistributeRewards)?;
+                let mut blobs = tx.blobs.clone();
+                for player in &self.get_board_game().players {
+                    blobs.push(
+                        SmtTokenAction::Transfer {
+                            sender: Identity::new(self.board_game.clone().0),
+                            recipient: player.id.clone(),
+                            amount: player.coins as u128,
+                        }
+                        .as_blob(ContractName::new("oxygen"), None, None),
+                    );
+                }
+                self.bus
+                    .send(BlobTransaction::new(tx.identity.clone(), blobs))?;
             }
         }
         Ok(())

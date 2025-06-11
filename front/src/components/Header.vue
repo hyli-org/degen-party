@@ -9,7 +9,7 @@ import { onWalletReady, walletConfig } from "../utils/wallet";
 const sessionKeyConfig = computed(() => {
     let ret = {
         duration: 60 * 60 * 24 * 7 * 1000,
-        whitelist: ["testnet_chat", gameState.board_game_contract, gameState.crash_game_contract],
+        whitelist: ["testnet_chat", "oranj", "oxygen", gameState.board_game_contract, gameState.crash_game_contract],
     };
     return ret;
 });

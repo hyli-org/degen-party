@@ -14,6 +14,7 @@ hyle-modules = { git = "https://github.com/Hyle-org/hyle.git", branch = "main", 
 hyle-hyllar = { git = "https://github.com/Hyle-org/hyle.git", branch = "main", default-features = false, package = "hyle-hyllar" }
 hyle-hydentity = { git = "https://github.com/Hyle-org/hyle.git", branch = "main", package = "hyle-hydentity" }
 wallet = { git = "https://github.com/hyli-org/wallet.git", branch = "main", package = "wallet", default-features = false }
+smt-token = { git = "https://github.com/hyle-org/hyle.git", branch = "main", package = "hyle-smt-token", default-features = false }
 
 contracts = { path = "contracts", default-features = false, package = "contracts" }
 board_game = { path = "contracts/board_game", package = "board_game" }
@@ -27,3 +28,4 @@ edition = "2021"
 
 [patch.crates-io]
 sha2 = { git = "https://github.com/sp1-patches/RustCrypto-hashes", package = "sha2", tag = "patch-sha2-0.10.8-sp1-4.0.0" }
+sparse-merkle-tree = { git = "https://github.com/hyli-org/sparse-merkle-tree", branch = "master" }

@@ -2,12 +2,14 @@
 import { ref, computed, watch, watchEffect, onMounted, onBeforeUnmount } from "vue";
 import { boardGameService, gameState } from "../game_data/game_data";
 import { walletState } from "../utils/wallet";
-import Chat from "../utils/Chat.vue";
+//import Chat from "../utils/Chat.vue";
+import { oranjBalance } from "../utils/balance";
 import Header from "./Header.vue";
 
 const playerName = ref(walletState?.wallet?.username ?? "Player");
 const hasJoined = ref(false);
 const status = ref("");
+const depositAmount = ref(100); // Default deposit amount
 
 const lastInteractionTime = computed(() => {
     return gameState.game?.round_started_at || 0;
@@ -53,7 +55,7 @@ const registeredPlayers = computed(() => {
 });
 
 const slotsRemaining = computed(() => {
-    if (!gameState.game) return 0;
+    if (!gameState.game) return -1;
     return gameState.game.max_players - gameState.game.players.length;
 });
 
@@ -75,7 +77,7 @@ const initAndJoinGame = async () => {
     status.value = "register";
 
     // Register the player
-    await boardGameService.registerPlayer(playerName.value);
+    await boardGameService.registerPlayer(playerName.value, depositAmount.value);
     hasJoined.value = true;
 
     status.value = "done";
@@ -98,7 +100,7 @@ const joinGame = async () => {
     status.value = "register";
 
     gameState.playerName = playerName.value;
-    await boardGameService.registerPlayer(playerName.value);
+    await boardGameService.registerPlayer(playerName.value, depositAmount.value);
     hasJoined.value = true;
     status.value = "done";
 };
@@ -107,9 +109,13 @@ const startGame = async () => {
     await boardGameService.startGame();
 };
 
-const reset = async () => {
-    await boardGameService.reset();
+const endGame = async () => {
+    await boardGameService.endGame();
 };
+const canRestartGame = computed(() => {
+    // 3 minutes to wait
+    return gameState.game && Date.now() - gameState.game.last_interaction_time > 180000;
+});
 </script>
 
 <template>
@@ -129,10 +135,14 @@ const reset = async () => {
                     >
                 </p>
                 <ul class="list-disc pl-6 text-base space-y-2">
-                    <li>Connect your wallet and enter your name to join.</li>
-                    <li>Each day, bet your resources - wisely!</li>
+                    <li>Connect your wallet to join.</li>
+                    <li>Each day, bet some $ORANJ - wisely!</li>
                     <li>Face a random hazard</li>
                     <li>Reach the colony to win!</li>
+                    <li>
+                        Your <span class="text-orange-600">$ORANJ</span> will be converted to
+                        <span class="text-blue-300">$O2</span>.
+                    </li>
                 </ul>
             </div>
             <!-- Main game/chat UI -->
@@ -154,12 +164,32 @@ const reset = async () => {
                                 />
                             </div>
 
+                            <div class="space-y-2">
+                                <label class="block text-[#FFC636]">How much $ORANJ to play with?</label>
+                                <input
+                                    v-model="depositAmount"
+                                    type="number"
+                                    :min="10"
+                                    :max="oranjBalance"
+                                    :disabled="oranjBalance <= 0"
+                                    class="w-full px-4 py-2 rounded-lg bg-[#1A0C3B] border-2 border-[#FFC636] text-white"
+                                    placeholder="100"
+                                />
+                                <p v-if="oranjBalance > 0" class="text-[#FFC636] opacity-70 italic text-sm">
+                                    You have {{ oranjBalance }} $ORANJ available.
+                                </p>
+                                <p v-else-if="oranjBalance === 0" class="text-[#FFA636] text-sm">
+                                    You don't have any $ORANJ! Get some
+                                    <a href="https://faucet.testnet.hyli.org" class="text-blue-300 underline">here</a>.
+                                </p>
+                            </div>
+
                             <button
                                 @click="initAndJoinGame"
                                 :disabled="status !== ''"
                                 class="w-full py-3 rounded-lg bg-[#FFC636] text-[#1A0C3B] font-bold hover:bg-[#FFD666] transition-colors disabled:opacity-50"
                             >
-                                Create & Join Game
+                                Start a new Game
                             </button>
 
                             <p v-if="status === 'game'" class="text-red-500">Creating game...</p>
@@ -176,6 +206,28 @@ const reset = async () => {
                                         class="w-full px-4 py-2 rounded-lg bg-[#1A0C3B] border-2 border-[#FFC636] text-white"
                                         placeholder="Enter your name"
                                     />
+                                </div>
+
+                                <div class="space-y-2">
+                                    <label class="block text-[#FFC636]">How much $ORANJ to play with?</label>
+                                    <input
+                                        v-model="depositAmount"
+                                        type="number"
+                                        :min="10"
+                                        :max="oranjBalance"
+                                        :disabled="oranjBalance <= 0"
+                                        class="w-full px-4 py-2 rounded-lg bg-[#1A0C3B] border-2 border-[#FFC636] text-white"
+                                        placeholder="100"
+                                    />
+                                    <p v-if="oranjBalance > 0" class="text-[#FFC636] opacity-70 italic text-sm">
+                                        You have {{ oranjBalance }} $ORANJ available.
+                                    </p>
+                                    <p v-else-if="oranjBalance === 0" class="text-[#FFA636] text-sm">
+                                        You don't have any $ORANJ! Get some
+                                        <a href="https://faucet.testnet.hyli.org" class="text-blue-300 underline"
+                                            >here</a
+                                        >.
+                                    </p>
                                 </div>
 
                                 <button
@@ -204,6 +256,9 @@ const reset = async () => {
                                         <span class="text-[#FFC636]">Ready!</span>
                                     </li>
                                 </ul>
+                                <p v-if="registeredPlayers.length === 0" class="text-gray-400">
+                                    No players have joined yet.
+                                </p>
 
                                 <button
                                     v-if="hasJoined"
@@ -228,11 +283,11 @@ const reset = async () => {
                             </ul>
 
                             <button
-                                @click="reset"
-                                :disabled="!playerName"
+                                @click="endGame"
+                                :disabled="!playerName || !canRestartGame"
                                 class="w-full mt-8 py-3 rounded-lg bg-[#36C6FF] text-[#1A0C3B] font-bold hover:bg-[#D666FF] transition-colors disabled:opacity-50"
                             >
-                                Start a new game
+                                Start a new Game
                             </button>
                         </div>
                     </div>
@@ -250,3 +305,11 @@ const reset = async () => {
         </div>
     </div>
 </template>
+
+<style scoped>
+input:disabled {
+    background-color: #1a0c3b;
+    color: #888;
+    opacity: 0.5;
+}
+</style>

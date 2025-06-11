@@ -34,6 +34,7 @@ export type GamePhase =
     | { StartMinigame: string }
     | { InMinigame: string }
     | "FinalMinigame"
+    | "RewardsDistribution"
     | "GameOver";
 
 export type MinigameSetup = Array<[string, string, number]>;
@@ -46,7 +47,7 @@ export type GameAction =
               random_seed: number;
           };
       }
-    | { RegisterPlayer: { name: string } }
+    | { RegisterPlayer: { name: string; deposit: number } }
     | { StartGame: null }
     | { PlaceBet: { amount: number } }
     | { SpinWheel: null }
@@ -219,7 +220,7 @@ class BoardGameService extends BaseWebSocketService {
         );
     }
 
-    async registerPlayer(name: string) {
+    async registerPlayer(name: string, deposit: number) {
         await this.send(
             {
                 type: "GameState",
@@ -229,6 +230,7 @@ class BoardGameService extends BaseWebSocketService {
                         action: {
                             RegisterPlayer: {
                                 name,
+                                deposit,
                             },
                         },
                     },
@@ -253,7 +255,7 @@ class BoardGameService extends BaseWebSocketService {
         );
     }
 
-    async reset() {
+    async endGame() {
         await this.send(
             {
                 type: "GameState",

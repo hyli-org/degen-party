@@ -17,6 +17,7 @@ use sdk::{
     hyle_model_utils::TimestampMs, BlobTransaction, Calldata, ContractName, Hashed, HyleOutput,
     Identity, LaneId, MempoolStatusEvent, NodeStateEvent, TransactionData, TxContext, TxHash, TxId,
 };
+use smt_token::client::tx_executor_handler::SmtTokenProvableState;
 use std::fmt;
 use std::{
     any::TypeId,
@@ -32,7 +33,7 @@ use std::{
     path::PathBuf,
     vec,
 };
-use tokio::time;
+use tokio::time::{self, Instant};
 use wallet::client::tx_executor_handler::Wallet;
 
 use crate::{
@@ -50,6 +51,8 @@ pub struct RollupExecutor {
     data_directory: PathBuf,
     crypto: Arc<CryptoContext>,
     store: RollupExecutorStore,
+    // Convenience, TODO refactor this ?
+    last_claim_reward: Instant,
 }
 
 impl Deref for RollupExecutor {
@@ -223,6 +226,7 @@ impl Module for RollupExecutor {
             store,
             data_directory,
             crypto: ctx.common.crypto.clone(),
+            last_claim_reward: Instant::now(),
         })
     }
 
@@ -675,6 +679,14 @@ pub async fn setup_rollup_execution(
                     ContractBox::new(crash_game_executor.clone()),
                 ),
                 (
+                    ContractName::new("oranj"),
+                    ContractBox::new(SmtTokenProvableState::default()),
+                ),
+                (
+                    ContractName::new("oranj"),
+                    ContractBox::new(SmtTokenProvableState::default()),
+                ),
+                (
                     ContractName::new("wallet"),
                     ContractBox::new(Wallet::new(&None).expect("Failed to create wallet")),
                 ),
@@ -695,6 +707,13 @@ pub async fn setup_rollup_execution(
                 } else if contract_name == &crash_game {
                     ContractBox::new(
                         borsh::from_slice::<CrashGameExecutor>(&data).expect("Bad serialized data"),
+                    )
+                } else if contract_name == &ContractName::new("oranj")
+                    || contract_name == &ContractName::new("owygen")
+                {
+                    ContractBox::new(
+                        borsh::from_slice::<SmtTokenProvableState>(&data)
+                            .expect("Bad serialized data"),
                     )
                 } else if contract_name == &ContractName::new("wallet") {
                     ContractBox::new(

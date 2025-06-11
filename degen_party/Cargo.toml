@@ -22,6 +22,7 @@ board_game = { workspace = true }
 crash_game = { workspace = true }
 contracts = { workspace = true }
 wallet = { workspace = true, features = ["client"] }
+smt-token = { workspace = true, features = ["client"] }
 
 sdk = { workspace = true, features = ["tracing"] }
 client-sdk = { workspace = true, features = ["sp1", "rest"] }

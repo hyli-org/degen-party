@@ -4,9 +4,10 @@ use borsh::{BorshDeserialize, BorshSerialize};
 use game::{GameAction, GamePhase, GameState};
 use sdk::{
     utils::parse_calldata, Blob, BlobData, BlobIndex, Calldata, ContractAction, ContractName,
-    LaneId, RunResult, StateCommitment, StructuredBlobData, ZkContract,
+    Identity, LaneId, RunResult, StateCommitment, StructuredBlobData, ZkContract,
 };
 use serde::{Deserialize, Serialize};
+use smt_token::SmtTokenAction;
 
 #[derive(Debug, Clone, Serialize, Deserialize, BorshSerialize, BorshDeserialize, PartialEq)]
 // First string is a UUID just to avoid having the same blob hashes.
@@ -28,6 +29,25 @@ impl ContractAction for GameActionBlob {
             }),
         }
     }
+}
+
+fn check_blob_in_calldata(
+    calldata: &Calldata,
+    contract_name: ContractName,
+    action: SmtTokenAction,
+) -> Result<(), String> {
+    for (_, check_blob) in calldata.blobs.iter() {
+        if check_blob.contract_name != contract_name {
+            continue;
+        };
+        let Ok(blob) = sdk::StructuredBlob::<SmtTokenAction>::try_from(check_blob.clone()) else {
+            continue;
+        };
+        if blob.data.parameters == action {
+            return Ok(());
+        }
+    }
+    Err("Action not found in calldata".into())
 }
 
 impl ZkContract for GameState {
@@ -55,6 +75,30 @@ impl ZkContract for GameState {
             // Verify that the caller matches the minigame contract name
             if exec_ctx.caller.0 != result.contract_name.0 {
                 return Err("Invalid caller for EndMinigame action".into());
+            }
+        } else if let GameAction::RegisterPlayer { deposit, .. } = &action.1 {
+            // Ensure player is depositing the correct amount of coins
+            check_blob_in_calldata(
+                contract_input,
+                ContractName::new("oranj"),
+                SmtTokenAction::Transfer {
+                    sender: contract_input.identity.clone(),
+                    recipient: Identity::new(exec_ctx.contract_name.clone().0),
+                    amount: *deposit as u128,
+                },
+            )?;
+        } else if let GameAction::DistributeRewards = &action.1 {
+            // Check that we have a transfer blob for all players
+            for player in &self.players {
+                check_blob_in_calldata(
+                    contract_input,
+                    ContractName::new("oxygen"),
+                    SmtTokenAction::Transfer {
+                        sender: Identity::new(exec_ctx.contract_name.clone().0),
+                        recipient: player.id.clone(),
+                        amount: player.coins as u128,
+                    },
+                )?;
             }
         }
 

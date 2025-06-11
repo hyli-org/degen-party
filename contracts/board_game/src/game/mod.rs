@@ -58,6 +58,7 @@ pub enum GamePhase {
     StartMinigame(ContractName),
     InMinigame(ContractName),
     FinalMinigame(ContractName),
+    RewardsDistribution,
     GameOver,
 }
 
@@ -72,6 +73,7 @@ pub enum GameAction {
     },
     RegisterPlayer {
         name: String,
+        deposit: u64, // Initial deposit in coins
     },
     StartGame,
     PlaceBet {
@@ -86,6 +88,7 @@ pub enum GameAction {
         result: MinigameResult,
     },
     EndTurn,
+    DistributeRewards,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
@@ -242,7 +245,7 @@ impl GameState {
                 winner_id: winner.id.clone(),
                 final_coins: winner.coins,
             });
-            self.phase = GamePhase::GameOver;
+            self.phase = GamePhase::RewardsDistribution;
             true
         } else if players_with_coins.is_empty() {
             events.push(GameEvent::GameEnded {
@@ -301,7 +304,7 @@ impl GameState {
             }
 
             // Registration Phase
-            (GamePhase::Registration, GameAction::RegisterPlayer { name }) => {
+            (GamePhase::Registration, GameAction::RegisterPlayer { name, deposit }) => {
                 if self.players.len() >= self.max_players {
                     return Err(anyhow!("Game is full"));
                 }
@@ -316,11 +319,19 @@ impl GameState {
                     return Err(anyhow!("Player with name {} already exists", name));
                 }
 
+                // Check deposit amount
+                if deposit == 0 {
+                    return Err(anyhow!("Deposit must be greater than zero"));
+                }
+                if deposit > 10000000 {
+                    return Err(anyhow!("Deposit exceeds maximum allowed amount"));
+                }
+
                 self.players.push(Player {
                     id: caller.clone(),
                     name: name.clone(),
                     position: 0,
-                    coins: 100,
+                    coins: deposit as i32,
                     used_uuids: Vec::new(),
                 });
 
@@ -560,13 +571,18 @@ impl GameState {
                         winner_id: winner.id.clone(),
                         final_coins: winner.coins,
                     });
-                    self.phase = GamePhase::GameOver;
+                    self.phase = GamePhase::RewardsDistribution;
                 } else {
                     self.round += 1;
                     self.bets.clear();
                     self.round_started_at = timestamp;
                     self.phase = GamePhase::Betting;
                 }
+            }
+            // Rewards Distribution Phase
+            (GamePhase::RewardsDistribution, GameAction::DistributeRewards) => {
+                // Distribution is validated in lib.rs
+                self.phase = GamePhase::GameOver;
             }
 
             // Invalid phase/action combinations

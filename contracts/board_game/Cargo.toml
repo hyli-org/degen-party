@@ -10,8 +10,16 @@ required-features = ["sp1"]
 test = false
 
 [dependencies]
-anyhow = "1.0.96"
+smt-token = { workspace = true, default-features = false }
+
 sdk = { workspace = true, features = ["tracing"] }
+client-sdk = { workspace = true, default-features = false, features = [
+    "sp1",
+    "rest",
+], optional = true }
+
+
+anyhow = "1.0.96"
 serde = { version = "1.0", default-features = false, features = [
     "derive",
     "alloc",
@@ -20,10 +28,6 @@ borsh = { version = "1.5.7" }
 uuid = { version = "1.6", features = ["serde"], default-features = false }
 
 sp1-zkvm = { version = "5.0.0", default-features = false, optional = true }
-client-sdk = { workspace = true, default-features = false, features = [
-    "sp1",
-    "rest",
-], optional = true }
 
 [dev-dependencies]
 # Active client feature for tests
