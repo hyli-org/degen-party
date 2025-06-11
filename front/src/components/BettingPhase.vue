@@ -270,9 +270,10 @@ onUnmounted(() => {
                     <div v-else class="text-red-400 font-bold text-2xl">Time's up! You lost 10 coins.</div>
                 </div>
             </div>
-            <div class="bg-white hidden xl:block h-full">
+            <!--<div class="bg-white hidden xl:block h-full">
                 <Chat />
             </div>
+            -->
         </div>
         <PlayerBar class="hidden hmd:block">
             <template #default="{ player }">

@@ -236,13 +236,16 @@ const reset = async () => {
                             </button>
                         </div>
                     </div>
-                    <div class="hidden md:flex xl:hidden items-center justify-center px-8 text-white">
+                    <!--<div class="hidden md:flex xl:hidden items-center justify-center px-8 text-white">
                         <Chat class="bg-[#2A1C4B] rounded-xl shadow-2xl min-h-[calc(min(400px,100vh))]" />
                     </div>
+                    -->
                 </div>
+                <!--
                 <div class="hidden xl:flex items-center justify-center h-full px-8 text-white">
                     <Chat class="bg-[#2A1C4B] rounded-xl shadow-2xl min-h-[calc(min(600px,100vh))]" />
                 </div>
+                -->
             </div>
         </div>
     </div>
