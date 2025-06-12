@@ -18,7 +18,6 @@ const currentPlayer = computed(() => {
     //if (!currentGame.value) return null;
     //return currentGame.value.players[currentGame.value.round % currentGame.value.players.length];
 });
-const isMyTurn = computed(() => isCurrentPlayer(localPlayerId));
 
 const currentState = computed(() => {
     if (!currentGame.value) return "Other";
@@ -34,9 +33,6 @@ const currentState = computed(() => {
         } else {
             return currentGame.value.phase;
         }
-    }
-    if (isMyTurn.value) {
-        return "MyTurn";
     }
     return "Waiting";
 });
@@ -179,7 +175,7 @@ function spinWheel() {
     <div class="relative flex flex-col items-center transition-all transition-duration-500">
         <canvas ref="canvasRef" width="256" height="256" class="mb-4" />
         <button
-            v-if="currentState === 'MyTurn' && !isAnimationPlayed('SpinWheel')"
+            v-if="currentState != 'Betting' && !isAnimationPlayed('SpinWheel')"
             @click="spinWheel"
             class="spinWheelButton"
         >

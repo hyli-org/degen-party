@@ -275,7 +275,7 @@ onUnmounted(() => {
             </div>
             -->
         </div>
-        <PlayerBar class="hidden hmd:block">
+        <PlayerBar class="hidden hmd:flex max-h-[200px] overflow-x-scroll">
             <template #default="{ player }">
                 <div v-if="bets[player.id] !== undefined" class="text-green-300 font-bold text-xs">
                     Bet: {{ bets[player.id] }} 🪙

@@ -40,4 +40,10 @@ watchEffect(() => {
     }
 });
 
+window.goToLobby = () => {
+    gameState.isInLobby = true;
+    gameState.isInMinigame = false;
+    router.push({ name: "Lobby" });
+};
+
 export default router;

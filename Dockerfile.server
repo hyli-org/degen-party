@@ -13,7 +13,7 @@ COPY Cargo.toml Cargo.lock ./
 COPY degen_party ./degen_party
 COPY contracts ./contracts
 
-RUN cargo build --bin degen_party --bin prover --release
+RUN cargo build -F nobuild --bin degen_party --bin prover --release
 
 # RUNNER
 FROM debian:bookworm-slim 
