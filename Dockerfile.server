@@ -13,7 +13,7 @@ COPY Cargo.toml Cargo.lock ./
 COPY degen_party ./degen_party
 COPY contracts ./contracts
 
-RUN cargo build --bin degen_party --release
+RUN cargo build --bin degen_party --bin prover --release
 
 # RUNNER
 FROM debian:bookworm-slim 
@@ -23,6 +23,7 @@ RUN apt-get update && apt-get -y install ca-certificates
 WORKDIR /degen_party
 
 COPY --from=builder /target/release/degen_party ./
+COPY --from=builder /target/release/prover ./
 
 VOLUME /degen_party/data
 
