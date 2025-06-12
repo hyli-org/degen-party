@@ -249,9 +249,9 @@ checksum = "7c02d123df017efcdfbd739ef81735b36c5ba83ec3c59c80a9d7ecc718f92e50"
 
 [[package]]
 name = "assertables"
-version = "9.6.0"
+version = "9.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "72129447ae3f06776127f6f88ad9da1f3ad936a20935ea84cc63ef24fdf95b17"
+checksum = "5c775ce207e5c3131cd1ced711448f31bae2ae71fe2b9becb0090470b09f9035"
 
 [[package]]
 name = "async-stream"
@@ -1960,7 +1960,7 @@ checksum = "df3b46402a9d5adb4c86a0cf463f42e19994e3ee891101b1841f30a545cb49a9"
 [[package]]
 name = "hyle-client-sdk"
 version = "0.13.0-rc.4"
-source = "git+https://github.com/Hyle-org/hyle.git?branch=main#dea677907821d7b7f1a7cd2b798c004859f566b0"
+source = "git+https://github.com/Hyle-org/hyle.git?branch=main#5417ce884953196887f3a1cbab39b7f26321b280"
 dependencies = [
  "anyhow",
  "axum 0.8.4",
@@ -1980,7 +1980,7 @@ dependencies = [
 [[package]]
 name = "hyle-contract-sdk"
 version = "0.13.0-rc.4"
-source = "git+https://github.com/Hyle-org/hyle.git?branch=main#dea677907821d7b7f1a7cd2b798c004859f566b0"
+source = "git+https://github.com/Hyle-org/hyle.git?branch=main#5417ce884953196887f3a1cbab39b7f26321b280"
 dependencies = [
  "borsh",
  "hyle-model",
@@ -1994,7 +1994,7 @@ dependencies = [
 [[package]]
 name = "hyle-crypto"
 version = "0.13.0-rc.4"
-source = "git+https://github.com/Hyle-org/hyle.git?branch=main#dea677907821d7b7f1a7cd2b798c004859f566b0"
+source = "git+https://github.com/Hyle-org/hyle.git?branch=main#5417ce884953196887f3a1cbab39b7f26321b280"
 dependencies = [
  "anyhow",
  "blst",
@@ -2007,7 +2007,7 @@ dependencies = [
 [[package]]
 name = "hyle-model"
 version = "0.13.0-rc.4"
-source = "git+https://github.com/Hyle-org/hyle.git?branch=main#dea677907821d7b7f1a7cd2b798c004859f566b0"
+source = "git+https://github.com/Hyle-org/hyle.git?branch=main#5417ce884953196887f3a1cbab39b7f26321b280"
 dependencies = [
  "anyhow",
  "base64",
@@ -2030,7 +2030,7 @@ dependencies = [
 [[package]]
 name = "hyle-modules"
 version = "0.13.0-rc.4"
-source = "git+https://github.com/Hyle-org/hyle.git?branch=main#dea677907821d7b7f1a7cd2b798c004859f566b0"
+source = "git+https://github.com/Hyle-org/hyle.git?branch=main#5417ce884953196887f3a1cbab39b7f26321b280"
 dependencies = [
  "anyhow",
  "anymap",
@@ -2042,6 +2042,7 @@ dependencies = [
  "hyle-contract-sdk",
  "hyle-net",
  "hyle-verifiers",
+ "indexmap 2.9.0",
  "opentelemetry",
  "paste",
  "prometheus",
@@ -2064,7 +2065,7 @@ dependencies = [
 [[package]]
 name = "hyle-net"
 version = "0.13.0-rc.4"
-source = "git+https://github.com/Hyle-org/hyle.git?branch=main#dea677907821d7b7f1a7cd2b798c004859f566b0"
+source = "git+https://github.com/Hyle-org/hyle.git?branch=main#5417ce884953196887f3a1cbab39b7f26321b280"
 dependencies = [
  "anyhow",
  "axum 0.8.4",
@@ -2090,7 +2091,7 @@ dependencies = [
 [[package]]
 name = "hyle-smt-token"
 version = "0.13.0-rc.4"
-source = "git+https://github.com/Hyle-org/hyle.git?branch=main#dea677907821d7b7f1a7cd2b798c004859f566b0"
+source = "git+https://github.com/Hyle-org/hyle.git?branch=main#5417ce884953196887f3a1cbab39b7f26321b280"
 dependencies = [
  "anyhow",
  "borsh",
@@ -2104,7 +2105,7 @@ dependencies = [
 [[package]]
 name = "hyle-verifiers"
 version = "0.13.0-rc.4"
-source = "git+https://github.com/Hyle-org/hyle.git?branch=main#dea677907821d7b7f1a7cd2b798c004859f566b0"
+source = "git+https://github.com/Hyle-org/hyle.git?branch=main#5417ce884953196887f3a1cbab39b7f26321b280"
 dependencies = [
  "anyhow",
  "borsh",
@@ -5816,7 +5817,7 @@ dependencies = [
 [[package]]
 name = "wallet"
 version = "0.0.0"
-source = "git+https://github.com/hyli-org/wallet.git?branch=main#b40062e31ff3ed49b6eb4d3085d02d8d0cf81dfe"
+source = "git+https://github.com/hyli-org/wallet.git?branch=main#533e229e80c0d73509723ebfcc91a284cfd6cbda"
 dependencies = [
  "anyhow",
  "borsh",
