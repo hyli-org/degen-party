@@ -117,6 +117,7 @@ async fn main() -> Result<()> {
     let public_key = PublicKey::from_secret_key(&secp, &secret_key);
 
     let ctx = Arc::new(degen_party::Context {
+        config: Arc::new(degen_party::Conf::default()),
         client,
         crypto: degen_party::CryptoContext {
             secp,

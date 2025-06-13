@@ -5,6 +5,9 @@ node_api = "http://localhost:4321"
 da_read_from = "127.0.0.1:4141"
 
 run_prover = false
+buffer_blocks = 3
+max_txs_per_proof = 10
+tx_working_window_size = 50
 
 start_block = 0
 

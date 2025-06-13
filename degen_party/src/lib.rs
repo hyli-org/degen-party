@@ -21,6 +21,7 @@ pub struct CryptoContext {
 }
 
 pub struct Context {
+    pub config: Arc<Conf>,
     pub client: Arc<NodeApiHttpClient>,
     pub crypto: Arc<CryptoContext>,
     pub data_directory: PathBuf,
@@ -66,6 +67,9 @@ pub struct Conf {
     pub data_directory: PathBuf,
 
     pub run_prover: bool,
+    pub buffer_blocks: u32,
+    pub max_txs_per_proof: usize,
+    pub tx_working_window_size: usize,
 
     pub start_block: u64,
 

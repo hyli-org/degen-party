@@ -60,6 +60,7 @@ async fn main() -> Result<()> {
     //assert!(secp.verify_ecdsa(message, &sig, &public_key).is_ok());
 
     let ctx = Arc::new(degen_party::Context {
+        config: config.clone(),
         client,
         crypto: degen_party::CryptoContext {
             secp: secp.clone(),

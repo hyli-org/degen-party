@@ -154,9 +154,9 @@ pub async fn setup_auto_provers(
                 contract_name: ctx.board_game.clone(),
                 node: ctx.client.clone(),
                 default_state: board_game_executor,
-                buffer_blocks: 4,
-                max_txs_per_proof: 10,
-                tx_working_window_size: 30,
+                buffer_blocks: ctx.config.buffer_blocks,
+                max_txs_per_proof: ctx.config.max_txs_per_proof,
+                tx_working_window_size: ctx.config.tx_working_window_size,
             }
             .into(),
         )
@@ -182,9 +182,9 @@ pub async fn setup_auto_provers(
             contract_name: ctx.crash_game.clone(),
             node: ctx.client.clone(),
             default_state: crash_game_executor,
-            buffer_blocks: 4,
-            max_txs_per_proof: 10,
-            tx_working_window_size: 30,
+            buffer_blocks: ctx.config.buffer_blocks,
+            max_txs_per_proof: ctx.config.max_txs_per_proof,
+            tx_working_window_size: ctx.config.tx_working_window_size,
         }))
         .await?;
 
