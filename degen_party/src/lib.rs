@@ -98,9 +98,7 @@ impl Conf {
             .add_source(
                 Environment::with_prefix("hyle")
                     .separator("__")
-                    .prefix_separator("_")
-                    .list_separator(",")
-                    .try_parsing(true),
+                    .prefix_separator("_"),
             )
             .build()?
             .try_deserialize()?;

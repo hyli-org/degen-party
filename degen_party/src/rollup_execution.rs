@@ -1,12 +1,14 @@
 use ::crash_game::ChainEvent;
+use anyhow::Context as _;
 use anyhow::Result;
 use board_game::game::GameEvent;
 use borsh::{BorshDeserialize, BorshSerialize};
+use client_sdk::rest_client::NodeApiClient;
 use client_sdk::transaction_builder::TxExecutorHandler;
 use crash_game::CrashGameEvent;
 use game_state::GameStateEvent;
 use hyle_modules::{
-    bus::{BusClientSender, SharedMessageBus},
+    bus::{BusClientReceiver, BusClientSender, SharedMessageBus},
     log_error, module_bus_client, module_handle_messages,
     modules::{
         websocket::{WsBroadcastMessage, WsInMessage},
@@ -14,8 +16,9 @@ use hyle_modules::{
     },
 };
 use sdk::{
-    hyle_model_utils::TimestampMs, BlobTransaction, Calldata, ContractName, Hashed, HyleOutput,
-    Identity, LaneId, MempoolStatusEvent, NodeStateEvent, TransactionData, TxContext, TxHash, TxId,
+    hyle_model_utils::TimestampMs, BlobTransaction, BlockHeight, Calldata, ContractName, Hashed,
+    HyleOutput, Identity, LaneId, MempoolStatusEvent, NodeStateEvent, TransactionData, TxContext,
+    TxHash, TxId,
 };
 use smt_token::client::tx_executor_handler::SmtTokenProvableState;
 use std::fmt;
@@ -173,6 +176,11 @@ pub struct RollupExecutorStore {
     pub settled_state: HashMap<ContractName, ContractBox>,
     board_game: ContractName,
     crash_game: ContractName,
+    // Temporary (?), for logging purposes, keep track of the last processed block.
+    last_processed_block: BlockHeight,
+    // When starting, fast-forward to this block height. Once "None", we're caught up.
+    #[borsh(skip)]
+    catching_up_to: Option<BlockHeight>,
 }
 
 #[derive(Default, BorshDeserialize)]
@@ -182,6 +190,7 @@ pub struct DeserRollupExecutorStore {
     settled_state: HashMap<ContractName, Vec<u8>>,
     board_game: ContractName,
     crash_game: ContractName,
+    last_processed_block: BlockHeight,
 }
 
 pub struct RollupExecutorCtx {
@@ -210,7 +219,16 @@ impl Module for RollupExecutor {
         let data_directory = ctx.common.data_directory.clone();
         let file = data_directory.join("rollup_executor.bin");
 
-        let store = match Self::load_from_disk::<DeserRollupExecutorStore>(file.as_path()) {
+        let catching_up_to = Some(
+            ctx.common
+                .client
+                .get_block_height()
+                .await
+                .unwrap_or_default(),
+        );
+        let catching_up_to = Some(BlockHeight(38000));
+
+        let mut store = match Self::load_from_disk::<DeserRollupExecutorStore>(file.as_path()) {
             Some(store) => RollupExecutorStore::deser_with(store, ctx.contract_deserializer),
             None => RollupExecutorStore {
                 contracts: ctx.initial_contracts.clone(),
@@ -218,8 +236,12 @@ impl Module for RollupExecutor {
                 unsettled_txs: Vec::new(),
                 board_game: ctx.common.board_game.clone(),
                 crash_game: ctx.common.crash_game.clone(),
+                catching_up_to,
+                last_processed_block: BlockHeight(0),
             },
         };
+        // Even when deserializing, we set the catching up to height.
+        store.catching_up_to = catching_up_to;
 
         Ok(RollupExecutor {
             bus,
@@ -232,6 +254,23 @@ impl Module for RollupExecutor {
 
     async fn run(&mut self) -> Result<()> {
         let mut update_interval = time::interval(std::time::Duration::from_millis(50));
+        update_interval.set_missed_tick_behavior(time::MissedTickBehavior::Skip);
+
+        if let Some(height) = self.catching_up_to {
+            tracing::info!(
+                "Catching up to block height {}, at {}",
+                height,
+                self.store.last_processed_block
+            );
+            while self.store.last_processed_block < height {
+                let event = self.bus.recv().await.context("During startup")?;
+                self.handle_node_state_event(event)
+                    .await
+                    .context("During startup")?;
+            }
+            self.catching_up_to = None;
+            tracing::info!("Caught up to block height {}", height);
+        }
 
         module_handle_messages! {
             on_bus self.bus,
@@ -253,7 +292,7 @@ impl Module for RollupExecutor {
                 }
             }
             listen<NodeStateEvent> event => {
-                _ = log_error!(self.handle_node_state_event(event).await, "handle note state event")
+                _ = log_error!(self.handle_node_state_event(event).await, "handle note state event");
             }
             listen<MempoolStatusEvent> event => {
                 // Temporarily off.
@@ -287,9 +326,24 @@ impl RollupExecutor {
     async fn handle_node_state_event(&mut self, event: NodeStateEvent) -> Result<()> {
         match event {
             NodeStateEvent::NewBlock(block) => {
+                if self.store.last_processed_block.0 > 0
+                    && block.block_height != self.store.last_processed_block + 1
+                {
+                    tracing::warn!(
+                        "Received NodeStateEvent for block height {}, expected {}",
+                        block.block_height,
+                        self.store.last_processed_block + 1
+                    );
+                    if block.block_height < self.store.last_processed_block + 1 {
+                        return Ok(());
+                    }
+                }
+                self.store.last_processed_block = block.block_height;
+
                 if !block.txs.is_empty()
                     || !block.timed_out_txs.is_empty()
                     || !block.failed_txs.is_empty()
+                    || !block.successful_txs.is_empty()
                 {
                     tracing::info!("Handling new block {}", block.block_height);
                 }
@@ -359,6 +413,17 @@ impl RollupExecutor {
         tx_ctx: Option<TxContext>,
         quality: DataQuality,
     ) -> Result<()> {
+        // Fast mode when catching up.
+        if self.catching_up_to.is_some() {
+            let tx_ctx = tx_ctx.unwrap_or(TxContext {
+                lane_id,
+                timestamp: TimestampMs(SystemTime::now().duration_since(UNIX_EPOCH)?.as_millis()),
+                ..Default::default()
+            });
+            self.unsettled_txs.push((blob_tx.clone(), tx_ctx));
+            return Ok(());
+        }
+
         if let Some((tx, ctx)) = self
             .unsettled_txs
             .iter_mut()
@@ -469,6 +534,8 @@ impl RollupExecutorStore {
             settled_state,
             board_game: deser_store.board_game,
             crash_game: deser_store.crash_game,
+            catching_up_to: None,
+            last_processed_block: deser_store.last_processed_block,
         }
     }
 
@@ -478,16 +545,23 @@ impl RollupExecutorStore {
         contracts: &mut HashMap<ContractName, ContractBox>,
         blob_tx: &BlobTransaction,
         tx_ctx: Option<TxContext>,
-        process_partial: bool,
+        force_partial: bool,
     ) -> anyhow::Result<Vec<(HyleOutput, ContractName)>> {
         // 1. Clone all involved contracts' state
         let mut temp_contracts: BTreeMap<ContractName, ContractBox> = BTreeMap::new();
         let mut skipped_contracts = 0;
+        let mut process_partial = true;
         for blob in &blob_tx.blobs {
             if let Some(contract) = contracts.get(&blob.contract_name) {
                 temp_contracts.insert(blob.contract_name.clone(), contract.clone());
-            // Ignore check secret - we can't verify it but we'll assume it's OK for now.
-            } else if &blob.contract_name.0 != "check_secret" {
+            } else {
+                // Ignore check secret - we can't verify it but we'll assume it's OK for now.
+                // Don't verify faucet, but assume it'll settle.
+                let mut run_still =
+                    &blob.contract_name.0 == "check_secret" || &blob.contract_name.0 == "faucet";
+                // If TX is from hyli@wallet, we also run it.
+                run_still = run_still || blob_tx.identity.0 == "hyli@wallet";
+                process_partial = process_partial && run_still;
                 skipped_contracts += 1;
             }
         }
@@ -496,7 +570,7 @@ impl RollupExecutorStore {
             return Ok(vec![]);
         }
         if skipped_contracts > 0 {
-            if process_partial {
+            if force_partial || process_partial {
                 tracing::debug!(
                     "Processing partial blob transaction {} with {} skipped contracts",
                     blob_tx.hashed(),
@@ -558,6 +632,10 @@ impl RollupExecutorStore {
     }
 
     pub fn rerun_from_settled(&mut self) {
+        if self.catching_up_to.is_some() {
+            // If we are catching up, we don't rerun from settled state.
+            return;
+        }
         // Revert each contract to the settled state.
         for (contract_name, state) in &self.settled_state {
             self.contracts.insert(contract_name.clone(), state.clone());
@@ -581,7 +659,7 @@ impl RollupExecutorStore {
             else {
                 return Ok(());
             };
-            tracing::warn!("Cancelling transaction {} at position {}", tx_hash, tx_pos);
+            tracing::debug!("Cancelling transaction {} at position {}", tx_hash, tx_pos);
             let _ = self.unsettled_txs.remove(tx_pos);
             removed += 1;
         }
@@ -643,6 +721,8 @@ impl RollupExecutorStore {
                 .collect(),
             board_game,
             crash_game,
+            catching_up_to: None,
+            last_processed_block: BlockHeight(0),
         }
     }
 }
