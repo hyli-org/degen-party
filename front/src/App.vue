@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { ref } from "vue";
+import { watchEffect } from "vue";
 import { useRoute } from "vue-router";
 
+import { declareCustomElement } from "testnet-maintenance-widget";
 import { HyliWalletElement } from "wallet-wrapper";
-import { watchEffect } from "vue";
 
+declareCustomElement();
 customElements.define("hyli-wallet", HyliWalletElement);
 
 const route = useRoute();
@@ -12,9 +14,13 @@ const routeFullPath = ref(route.fullPath);
 watchEffect(() => {
     routeFullPath.value = route.fullPath;
 });
+
+// If not on localhost, use the production node URL
+const nodeurl = window.location.hostname === "localhost" ? undefined : "https://node.testnet.hyli.org";
 </script>
 
 <template>
+    <maintenance-widget :nodeurl="nodeurl" />
     <RouterView :key="routeFullPath" />
 </template>
 

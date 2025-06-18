@@ -21,15 +21,16 @@
         "hyli-wallet": "^0.2.20",
         "three": "^0.174.0",
         "uuid": "^11.1.0",
-        "vue": "^3.5.16",
+        "vue": "^3.5.17",
         "vue-router": "^4.5.1",
-        "wallet-wrapper": "file:../wallet-wrapper"
+        "wallet-wrapper": "file:../wallet-wrapper",
+        "testnet-maintenance-widget": "^0.1.0"
     },
     "devDependencies": {
         "@vitejs/plugin-vue": "^5.2.4",
         "@vue/tsconfig": "^0.7.0",
         "autoprefixer": "^10.4.21",
-        "postcss": "^8.5.5",
+        "postcss": "^8.5.6",
         "prettier": "3.5.3",
         "tailwindcss": "^4.1.10",
         "typescript": "~5.7.3",
