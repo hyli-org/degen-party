@@ -7,6 +7,7 @@ import {
     getLocalPlayerId,
     boardGameService,
     isCurrentPlayer,
+    isObserver,
 } from "../game_data/game_data";
 import Backdrop from "./Backdrop.vue";
 import { addIdentityToMessage } from "../game_data/auth";
@@ -78,8 +79,7 @@ function setCustomBet(amount: number) {
 }
 
 const betScreenActive = computed(() => {
-    console.log("betScreenActive", isAnimationPlayed("DoneBetting"));
-    return !isAnimationPlayed("DoneBetting");
+    return !isObserver() && !isAnimationPlayed("DoneBetting");
 });
 
 const timer = ref(30);

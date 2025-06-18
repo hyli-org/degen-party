@@ -288,6 +288,11 @@ export function isCurrentPlayer(id: string): boolean {
     return id === gameState.game.players[gameState.game.round % gameState.game.players.length]?.id;
 }
 
+export function isObserver(): boolean {
+    if (!gameState.game) return false;
+    return !gameState.game.players.some((p) => p.id === getLocalPlayerId());
+}
+
 export function playerColor(id: string): string {
     if (!gameState.game) return "#000000";
     const player = gameState.game.players.find((p) => p.id === id);

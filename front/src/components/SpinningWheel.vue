@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch, nextTick } from "vue";
-import { gameState, getLocalPlayerId, boardGameService, isCurrentPlayer } from "../game_data/game_data";
+import { gameState, getLocalPlayerId, boardGameService, isCurrentPlayer, isObserver } from "../game_data/game_data";
 import {
     animState,
     currentRoundEvents,
@@ -11,13 +11,6 @@ import {
 import { watchEffect } from "vue";
 
 const currentGame = computed(() => gameState.game);
-const localPlayerId = getLocalPlayerId();
-
-const currentPlayer = computed(() => {
-    return true; // TODO
-    //if (!currentGame.value) return null;
-    //return currentGame.value.players[currentGame.value.round % currentGame.value.players.length];
-});
 
 const currentState = computed(() => {
     if (!currentGame.value) return "Other";
@@ -25,7 +18,6 @@ const currentState = computed(() => {
     isAnimationPlayed("BettingTimeUp");
     if (currentGame.value.phase != "WheelSpin") {
         if (currentGame.value.phase == "Betting") {
-            console.log("Betting phase", Date.now() - currentGame.value.round_started_at);
             if (Date.now() - currentGame.value.round_started_at > 30 * 1000) {
             } else {
                 return "Betting";
@@ -175,7 +167,7 @@ function spinWheel() {
     <div class="relative flex flex-col items-center transition-all transition-duration-500">
         <canvas ref="canvasRef" width="256" height="256" class="mb-4" />
         <button
-            v-if="currentState != 'Betting' && !isAnimationPlayed('SpinWheel')"
+            v-if="currentState != 'Betting' && !isAnimationPlayed('SpinWheel') && !isObserver()"
             @click="spinWheel"
             class="spinWheelButton"
         >
