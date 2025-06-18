@@ -145,6 +145,8 @@ impl ContractAction for ChainActionBlob {
     }
 }
 
+impl sdk::FullStateRevert for GameState {}
+
 impl ZkContract for GameState {
     fn execute(&mut self, contract_input: &Calldata) -> RunResult {
         let (action, mut exec_ctx) =

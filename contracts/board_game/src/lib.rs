@@ -50,6 +50,8 @@ fn check_blob_in_calldata(
     Err("Action not found in calldata".into())
 }
 
+impl sdk::FullStateRevert for GameState {}
+
 impl ZkContract for GameState {
     fn execute(&mut self, contract_input: &Calldata) -> RunResult {
         let (action, exec_ctx) =
