@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { ref, computed, watch, watchEffect, onMounted, onBeforeUnmount } from "vue";
-import { boardGameService, gameState } from "../game_data/game_data";
+import { boardGameService, gameState, getLocalPlayerId } from "../game_data/game_data";
 import { walletState } from "../utils/wallet";
 //import Chat from "../utils/Chat.vue";
 import { oranjBalance } from "../utils/balance";
 import Header from "./Header.vue";
+import Chat from "../utils/Chat.vue";
 
 const playerName = ref(walletState?.wallet?.username ?? "Player");
 const hasJoined = ref(false);
@@ -12,11 +13,11 @@ const status = ref("");
 const depositAmount = ref(100); // Default deposit amount
 
 const lastInteractionTime = computed(() => {
-    return gameState.game?.round_started_at || 0;
+    return gameState.game?.round_started_at || Date.now();
 });
 
 watchEffect(() => {
-    hasJoined.value = !!gameState.game?.players.find((player) => player.name === walletState?.wallet?.username);
+    hasJoined.value = !!gameState.game?.players.find((player) => player.id === getLocalPlayerId());
 });
 
 watch(
@@ -291,16 +292,13 @@ const canRestartGame = computed(() => {
                             </button>
                         </div>
                     </div>
-                    <!--<div class="hidden md:flex xl:hidden items-center justify-center px-8 text-white">
+                    <div class="hidden md:flex xl:hidden items-center justify-center px-8 text-white">
                         <Chat class="bg-[#2A1C4B] rounded-xl shadow-2xl min-h-[calc(min(400px,100vh))]" />
                     </div>
-                    -->
                 </div>
-                <!--
                 <div class="hidden xl:flex items-center justify-center h-full px-8 text-white">
                     <Chat class="bg-[#2A1C4B] rounded-xl shadow-2xl min-h-[calc(min(600px,100vh))]" />
                 </div>
-                -->
             </div>
         </div>
     </div>

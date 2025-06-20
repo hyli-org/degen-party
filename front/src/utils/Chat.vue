@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { ref } from "vue";
 import { getLocalPlayerId } from "../game_data/game_data";
 import { addIdentityToMessage } from "../game_data/auth";
 import { TestnetChatElement } from "hyli-testnet-chat";
+import { walletState } from "./wallet";
 
 if (!customElements.get("testnet-chat")) customElements.define("testnet-chat", TestnetChatElement);
 
@@ -13,6 +13,7 @@ const indexerUrl =
 
 <template>
     <testnet-chat
+        v-if="false && !!walletState.wallet"
         :nickname="getLocalPlayerId()"
         :processBlobTx="addIdentityToMessage"
         :node_url="nodeUrl"
@@ -25,6 +26,13 @@ const indexerUrl =
     border: none !important;
 }
 :deep(.messages-list) {
-    border-color: black !important;
+    border-color: #d94524 !important;
+    max-height: initial !important;
+}
+:deep(.message) {
+    background-color: #2a1c4b;
+}
+:deep(*) {
+    color: white !important;
 }
 </style>

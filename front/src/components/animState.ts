@@ -159,3 +159,56 @@ watch(
         animTimer = requestAnimationFrame(advanceAnim);
     },
 );
+
+// Wheel spin logic
+
+const wheelOptions = [
+    { label: "Quiet day", color: "#36C6FF", outcome: 0 },
+    { label: "Minigame", color: "#FF4D4D", outcome: 3 },
+    { label: "Fumble", color: "#00C49A", outcome: 1 },
+    { label: "Minigame", color: "#FF4D4D", outcome: 4 },
+    { label: "All or Nothing", color: "#FFB347", outcome: 2 },
+    //{ label: "Minigame", color: "#FF4D4D", outcome: 5 },
+];
+
+const spinning = ref(false);
+export const spinAngle = ref(0); // in radians
+const targetAngle = ref(0); // in radians
+const spinDuration = 2; // seconds
+const lastOutcome = ref<number | null>(null);
+
+const animateSpin = () => {
+    if (!spinning.value) return;
+    const elapsed = animState.timeInRound - getAnimationPlayedTime("SpinWheel");
+    let t = Math.min(1, elapsed / spinDuration);
+    // Ease out cubic
+    t = 1 - Math.pow(1 - t, 3);
+    spinAngle.value = targetAngle.value * t;
+    if (t < 1) {
+        requestAnimationFrame(animateSpin);
+    } else {
+        spinning.value = false;
+        spinAngle.value = targetAngle.value;
+    }
+};
+
+const startSpinAnimation = (outcome: number) => {
+    markAnimationPlayed("SpinWheel");
+    // The wheel should land so that the outcome slice is at the top (pointer)
+    const sliceAngle = (2 * Math.PI) / wheelOptions.length;
+    // Add several full spins for effect
+    const fullSpins = 3;
+    const outcomeIndex = wheelOptions.findIndex((option) => option.outcome === outcome);
+    const outcomeAngle = sliceAngle * outcomeIndex;
+    targetAngle.value = fullSpins * 2 * Math.PI - outcomeAngle;
+    spinning.value = true;
+    animateSpin();
+    lastOutcome.value = outcome;
+};
+
+watchEffect(() => {
+    const outcome = currentRoundEvents.value?.outcome;
+    if (outcome === undefined || outcome === -1 || isAnimationPlayed("SpinWheel")) return;
+    spinAngle.value = 0;
+    startSpinAnimation(outcome);
+});

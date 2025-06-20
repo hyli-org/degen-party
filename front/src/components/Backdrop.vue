@@ -161,11 +161,16 @@ function getSpiralPosition(idx: number, total: number) {
                 <span v-else class="ghost">?</span>
             </div>
 
+            <!-- lg:left-1/2 lg:-translate-x-1/2 lg:translate-y-[4em] lg:w-[300px] -->
             <div
                 v-for="marker in eventMarkers"
                 :key="marker.round"
                 :class="
-                    `event-box transition-all duration-500 absolute left-12 w-[calc(50%-8rem)] -translate-y-1/2 p-4 bg-white/80 rounded-lg shadow-lg z-10` +
+                    `event-box transition-all duration-500 absolute 
+                        left-1/2 -translate-x-1/2 -translate-y-[9em] w-[calc(100%-2em)]
+                            sm:left-12 sm:w-[calc(50%-8rem)] sm:-translate-y-1/2 sm:translate-x-0
+                            xl:translate-x-0 xl:left-12 xl:w-[calc(50%-8rem)] xl:-translate-y-1/2
+                        p-4 bg-white/80 rounded-lg shadow-lg z-10` +
                     (marker.rel > animState.currentRoundIndex + 1 ||
                     (marker.rel === animState.currentRoundIndex + 1 && percentTravelled < 0.3)
                         ? ' ghost'
@@ -260,7 +265,7 @@ function getSpiralPosition(idx: number, total: number) {
 .mars-bg {
     position: absolute;
     inset: 0;
-    background: url("../assets/mars.png") repeat center center;
+    background: url("../assets/mars.jpg") repeat center center;
     background-size: 256px;
 }
 .trail {

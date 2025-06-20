@@ -249,9 +249,9 @@ checksum = "7c02d123df017efcdfbd739ef81735b36c5ba83ec3c59c80a9d7ecc718f92e50"
 
 [[package]]
 name = "assertables"
-version = "9.7.0"
+version = "9.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b0dc4de91137e2e60c2114a673d49405e1c0c97156274ad69eace2fae4027a1a"
+checksum = "b8ea58571e7a793f14036fcb1e63b4350b5121a8765d194c0efc234e752c8199"
 
 [[package]]
 name = "async-stream"
@@ -5854,7 +5854,7 @@ dependencies = [
 [[package]]
 name = "wallet"
 version = "0.0.0"
-source = "git+https://github.com/hyli-org/wallet.git?branch=main#e206e237fae9f6f619a3d56941b5a7e6ca29bdd2"
+source = "git+https://github.com/hyli-org/wallet.git?branch=main#968e345d36ed6f7872deb0b2dca1a561fcdca9df"
 dependencies = [
  "anyhow",
  "borsh",
