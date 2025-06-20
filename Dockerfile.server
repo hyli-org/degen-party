@@ -28,6 +28,6 @@ COPY --from=builder /target/release/prover ./
 
 VOLUME /degen_party/data
 
-EXPOSE 8082
+EXPOSE 8082 4000
 
 CMD ["./degen_party"]

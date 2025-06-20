@@ -82,6 +82,11 @@ pub struct Conf {
     pub da_read_from: String,
     /// Websocket configuration
     pub websocket: WebSocketConfig,
+
+    /// Server port exposing metrics
+    pub rest_server_port: u16,
+
+    pub rest_server_max_body_size: usize,
 }
 
 impl Conf {
