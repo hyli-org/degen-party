@@ -11,6 +11,9 @@ tx_working_window_size = 50
 
 start_block = 0
 
+rest_server_port = 4000
+rest_server_max_body_size = 10_485_760 # 10 MB
+
 [contracts]
 board_game = "board_game"
 crash_game = "crash_game"

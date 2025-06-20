@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+use axum::Router;
 use clap::{command, Parser};
 use client_sdk::rest_client::NodeApiHttpClient;
 use degen_party::Conf;
@@ -6,11 +7,13 @@ use hyle_modules::{
     bus::{metrics::BusMetrics, SharedMessageBus},
     modules::{
         da_listener::{DAListener, DAListenerConf},
+        rest::{RestApi, RestApiRunContext},
         ModulesHandler,
     },
     utils::logger::setup_tracing,
 };
-use sdk::ContractName;
+use prometheus::Registry;
+use sdk::{api::NodeInfo, ContractName};
 use secp256k1::{PublicKey, Secp256k1, SecretKey};
 use std::{env, sync::Arc};
 
@@ -68,6 +71,19 @@ async fn main() -> Result<()> {
 
     tracing::info!("Setting up modules");
 
+    let registry = Registry::new();
+    // Init global metrics meter we expose as an endpoint
+    let provider = opentelemetry_sdk::metrics::SdkMeterProvider::builder()
+        .with_reader(
+            opentelemetry_prometheus::exporter()
+                .with_registry(registry.clone())
+                .build()
+                .context("starting prometheus exporter")?,
+        )
+        .build();
+
+    opentelemetry::global::set_meter_provider(provider.clone());
+
     // Initialize modules
     let mut handler = ModulesHandler::new(&bus).await;
 
@@ -80,6 +96,21 @@ async fn main() -> Result<()> {
         .await?;
 
     degen_party::proving::setup_auto_provers(ctx.clone(), &mut handler).await?;
+
+    handler
+        .build_module::<RestApi>(RestApiRunContext {
+            port: config.rest_server_port,
+            max_body_size: config.rest_server_max_body_size,
+            registry,
+            router: Router::new(),
+            openapi: Default::default(),
+            info: NodeInfo {
+                id: "degen".to_string(),
+                da_address: config.da_read_from.clone(),
+                pubkey: None,
+            },
+        })
+        .await?;
 
     tracing::info!("Starting modules");
 
