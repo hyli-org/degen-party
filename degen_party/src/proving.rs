@@ -182,7 +182,7 @@ pub async fn setup_auto_provers(
             prover: crash_game_prover,
             contract_name: ctx.crash_game.clone(),
             node: ctx.client.clone(),
-            api: Some(ctx.api.clone()),
+            api: None, // This one is none to not conflict with the board game prover
             default_state: crash_game_executor,
             buffer_blocks: ctx.config.buffer_blocks,
             max_txs_per_proof: ctx.config.max_txs_per_proof,
