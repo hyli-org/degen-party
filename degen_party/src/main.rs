@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+use axum::Router;
 use clap::{command, Parser};
 use client_sdk::rest_client::NodeApiHttpClient;
 use degen_party::{
@@ -10,13 +11,16 @@ use hyle_modules::{
     modules::{
         da_listener::{DAListener, DAListenerConf},
         websocket::WebSocketModule,
-        ModulesHandler,
+        BuildApiContextInner, ModulesHandler,
     },
     utils::logger::setup_tracing,
 };
 use sdk::ContractName;
 use secp256k1::{PublicKey, Secp256k1, SecretKey};
-use std::{env, sync::Arc};
+use std::{
+    env,
+    sync::{Arc, Mutex},
+};
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -41,6 +45,7 @@ async fn main() -> Result<()> {
     }
 
     tracing::info!("Starting app with config: {:?}", &config);
+
     let config = Arc::new(config);
 
     let bus = SharedMessageBus::new(BusMetrics::global("rollup".to_string()));
@@ -56,8 +61,11 @@ async fn main() -> Result<()> {
     let secret_key = SecretKey::from_slice(&secret_key).expect("32 bytes, within curve order");
     let public_key = PublicKey::from_secret_key(&secp, &secret_key);
 
-    //let sig = secp.sign_ecdsa(message, &secret_key);
-    //assert!(secp.verify_ecdsa(message, &sig, &public_key).is_ok());
+    // Unused in practice for now.
+    let api = Arc::new(BuildApiContextInner {
+        router: Mutex::new(Some(Router::new())),
+        openapi: Default::default(),
+    });
 
     let ctx = Arc::new(degen_party::Context {
         config: config.clone(),
@@ -68,6 +76,7 @@ async fn main() -> Result<()> {
             public_key,
         }
         .into(),
+        api,
         data_directory: config.data_directory.clone(),
         board_game: ContractName::new(config.contracts.board_game.clone()),
         crash_game: ContractName::new(config.contracts.crash_game.clone()),

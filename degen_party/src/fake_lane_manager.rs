@@ -51,7 +51,7 @@ impl Module for FakeLaneManager {
         info!("Fake Lane Manager is running");
 
         module_handle_messages! {
-            on_bus self.bus,
+            on_self self,
             listen<BlobTransaction> msg => {
                 if let Err(e) = self.process_transaction(msg).await {
                     error!("Error sending transaction: {:?}", e);

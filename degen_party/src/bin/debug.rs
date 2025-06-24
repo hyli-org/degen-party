@@ -1,20 +1,24 @@
 use anyhow::{Context, Result};
+use axum::Router;
 use clap::{command, Parser};
 use client_sdk::rest_client::NodeApiHttpClient;
 use config::{Config, Environment, File};
-use degen_party::{debug::DebugAnalyzer, rollup_execution::setup_rollup_execution};
+use degen_party::debug::DebugAnalyzer;
 use hyle_modules::{
     bus::{metrics::BusMetrics, SharedMessageBus},
     modules::{
         da_listener::{DAListener, DAListenerConf},
-        ModulesHandler,
+        BuildApiContextInner, ModulesHandler,
     },
-    utils::logger::setup_tracing,
 };
 use sdk::ContractName;
 use secp256k1::{PublicKey, Secp256k1, SecretKey};
 use serde::{Deserialize, Serialize};
-use std::{env, path::PathBuf, sync::Arc};
+use std::{
+    env,
+    path::PathBuf,
+    sync::{Arc, Mutex},
+};
 use tracing::level_filters::LevelFilter;
 use tracing_subscriber::{layer::SubscriberExt, EnvFilter};
 
@@ -116,6 +120,12 @@ async fn main() -> Result<()> {
     let secret_key = SecretKey::from_slice(&secret_key).expect("32 bytes, within curve order");
     let public_key = PublicKey::from_secret_key(&secp, &secret_key);
 
+    // Unused in practice for now.
+    let api = Arc::new(BuildApiContextInner {
+        router: Mutex::new(Some(Router::new())),
+        openapi: Default::default(),
+    });
+
     let ctx = Arc::new(degen_party::Context {
         config: Arc::new(degen_party::Conf::default()),
         client,
@@ -125,6 +135,7 @@ async fn main() -> Result<()> {
             public_key,
         }
         .into(),
+        api,
         data_directory: config.data_directory.clone(),
         board_game: ContractName::new(config.contracts.board_game.clone()),
         crash_game: ContractName::new(config.contracts.crash_game.clone()),

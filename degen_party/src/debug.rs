@@ -10,7 +10,6 @@ use crossterm::{
     event::{self, Event, KeyCode, KeyModifiers},
     execute, terminal,
 };
-use hyle_modules::log_error;
 use hyle_modules::{
     bus::SharedMessageBus, module_bus_client, module_handle_messages, modules::Module,
 };
@@ -24,7 +23,7 @@ use sdk::{
 };
 use std::ops::Deref;
 use tokio::time::MissedTickBehavior;
-use tracing::{error, info, warn};
+use tracing::{error, info};
 
 use crate::proving::{BoardGameExecutor, CrashGameExecutor};
 use crate::rollup_execution::{ContractBox, RollupExecutorStore};
@@ -163,7 +162,7 @@ impl Module for DebugAnalyzer {
         interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
 
         module_handle_messages! {
-            on_bus self.bus,
+            on_self self,
             listen<NodeStateEvent> msg => {
                 let NodeStateEvent::NewBlock(block) = msg;
                 if let Err(e) = self.process_block(block).await {
@@ -251,7 +250,7 @@ impl DebugAnalyzer {
             .drain(0..self.ui_state.selected + 1)
             .collect::<Vec<_>>();
         txs.dedup_by(|a, b| a.1 == b.1);
-        for (k, tx, tx_ctx, which) in txs {
+        for (k, tx, tx_ctx, _which) in txs {
             if self.tx_status.get(&k.tx_id) == Some(&TxStatus::TimedOut) {
                 continue; // Skip timed out transactions
             }
@@ -264,7 +263,7 @@ impl DebugAnalyzer {
                 )
                 .map(|x| {
                     x.into_iter()
-                        .map(|(k, v)| {
+                        .map(|(k, _)| {
                             borsh::from_slice::<Vec<GameEvent>>(&k.program_outputs)
                                 .map(|output| format!("{:?}", output))
                                 .unwrap_or_default()
@@ -381,7 +380,7 @@ impl DebugAnalyzer {
             // Transaction list
             let items: Vec<ListItem> = transactions
                 .iter()
-                .map(|(k, tx, ctx, which)| {
+                .map(|(k, tx, _ctx, which)| {
                     let status = self
                         .tx_status
                         .get(&k.tx_id)

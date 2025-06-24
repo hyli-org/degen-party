@@ -3,6 +3,7 @@ use std::{path::PathBuf, sync::Arc};
 use client_sdk::rest_client::NodeApiHttpClient;
 use config::{Config, Environment};
 use hyle_modules::modules::websocket::WebSocketConfig;
+use hyle_modules::modules::SharedBuildApiCtx;
 use rollup_execution::crash_game::{CrashGameCommand, CrashGameEvent};
 use rollup_execution::game_state::{GameStateCommand, GameStateEvent};
 use sdk::{Blob, ContractName, Identity};
@@ -24,6 +25,7 @@ pub struct Context {
     pub config: Arc<Conf>,
     pub client: Arc<NodeApiHttpClient>,
     pub crypto: Arc<CryptoContext>,
+    pub api: SharedBuildApiCtx,
     pub data_directory: PathBuf,
     pub board_game: ContractName,
     pub crash_game: ContractName,

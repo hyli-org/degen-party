@@ -272,7 +272,7 @@ impl Module for RollupExecutor {
         }
 
         module_handle_messages! {
-            on_bus self.bus,
+            on_self self,
             listen<WsInMessage<AuthenticatedMessage<InboundWebsocketMessage>>> msg => {
                 let AuthenticatedMessage {
                     message,

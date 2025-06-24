@@ -8,14 +8,17 @@ use hyle_modules::{
     modules::{
         da_listener::{DAListener, DAListenerConf},
         rest::{RestApi, RestApiRunContext},
-        ModulesHandler,
+        BuildApiContextInner, ModulesHandler,
     },
     utils::logger::setup_tracing,
 };
 use prometheus::Registry;
 use sdk::{api::NodeInfo, ContractName};
 use secp256k1::{PublicKey, Secp256k1, SecretKey};
-use std::{env, sync::Arc};
+use std::{
+    env,
+    sync::{Arc, Mutex},
+};
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -55,6 +58,11 @@ async fn main() -> Result<()> {
     let secret_key = SecretKey::from_slice(&secret_key).expect("32 bytes, within curve order");
     let public_key = PublicKey::from_secret_key(&secp, &secret_key);
 
+    let api = Arc::new(BuildApiContextInner {
+        router: Mutex::new(Some(Router::new())),
+        openapi: Default::default(),
+    });
+
     let ctx = Arc::new(degen_party::Context {
         config: config.clone(),
         client,
@@ -64,6 +72,7 @@ async fn main() -> Result<()> {
             public_key,
         }
         .into(),
+        api: api.clone(),
         data_directory: config.data_directory.clone(),
         board_game: ContractName::new(config.contracts.board_game.clone()),
         crash_game: ContractName::new(config.contracts.crash_game.clone()),
@@ -97,13 +106,17 @@ async fn main() -> Result<()> {
 
     degen_party::proving::setup_auto_provers(ctx.clone(), &mut handler).await?;
 
+    // Should come last so the other modules have nested their own routes.
+    let router = api.router.lock().unwrap().take().unwrap();
+    let openapi = api.openapi.lock().unwrap().clone();
+
     handler
         .build_module::<RestApi>(RestApiRunContext {
             port: config.rest_server_port,
             max_body_size: config.rest_server_max_body_size,
             registry,
-            router: Router::new(),
-            openapi: Default::default(),
+            router,
+            openapi,
             info: NodeInfo {
                 id: "degen".to_string(),
                 da_address: config.da_read_from.clone(),
