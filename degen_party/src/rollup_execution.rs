@@ -6,6 +6,7 @@ use borsh::{BorshDeserialize, BorshSerialize};
 use client_sdk::rest_client::NodeApiClient;
 use client_sdk::transaction_builder::TxExecutorHandler;
 use crash_game::CrashGameEvent;
+use futures::FutureExt;
 use game_state::GameStateEvent;
 use hyle_modules::{
     bus::{BusClientReceiver, BusClientSender, SharedMessageBus},
@@ -169,7 +170,7 @@ enum DataQuality {
     Consensus,
 }
 
-#[derive(Clone, BorshSerialize)]
+#[derive(BorshSerialize)]
 pub struct RollupExecutorStore {
     unsettled_txs: Vec<(BlobTransaction, TxContext)>,
     pub contracts: HashMap<ContractName, ContractBox>,
@@ -181,6 +182,8 @@ pub struct RollupExecutorStore {
     // When starting, fast-forward to this block height. Once "None", we're caught up.
     #[borsh(skip)]
     catching_up_to: Option<BlockHeight>,
+    #[borsh(skip)]
+    reprocessing_task: Option<tokio::task::JoinHandle<HashMap<ContractName, ContractBox>>>,
 }
 
 #[derive(Default, BorshDeserialize)]
@@ -210,6 +213,32 @@ pub struct RollupExecutorBusClient {
     receiver(ConfirmedBlobTransaction),
 }
 }
+
+impl Clone for RollupExecutorStore {
+    fn clone(&self) -> Self {
+        RollupExecutorStore {
+            unsettled_txs: self.unsettled_txs.clone(),
+            contracts: self.contracts.clone(),
+            settled_state: self.settled_state.clone(),
+            board_game: self.board_game.clone(),
+            crash_game: self.crash_game.clone(),
+            last_processed_block: self.last_processed_block.clone(),
+            catching_up_to: None,
+            reprocessing_task: None,
+        }
+    }
+}
+
+pub fn poll_option<F>(
+    opt: Option<&mut tokio::task::JoinHandle<F>>,
+    cx: &mut std::task::Context<'_>,
+) -> std::task::Poll<Option<Result<F, tokio::task::JoinError>>> {
+    match opt {
+        Some(fut) => fut.poll_unpin(cx).map(Some),
+        None => std::task::Poll::Pending,
+    }
+}
+
 impl Module for RollupExecutor {
     type Context = RollupExecutorCtx;
 
@@ -237,6 +266,7 @@ impl Module for RollupExecutor {
                 crash_game: ctx.common.crash_game.clone(),
                 catching_up_to,
                 last_processed_block: BlockHeight(0),
+                reprocessing_task: None,
             },
         };
         // Even when deserializing, we set the catching up to height.
@@ -299,6 +329,15 @@ impl Module for RollupExecutor {
             }
             listen<ConfirmedBlobTransaction> event => {
                 _ = log_error!(self.handle_optimistic_tx(event.0, event.1, None, DataQuality::Internal).await, "handle optimistic tx");
+            }
+            res = std::future::poll_fn(|cx| poll_option(self.store.reprocessing_task.as_mut(), cx)) => {
+                if let Some(Ok(contracts)) = res {
+                    tracing::info!("Reprocessing task finished, updating contracts");
+                    self.store.contracts = contracts.clone();
+                } else if let Some(Err(e)) = res {
+                    tracing::error!("Error in reprocessing task: {:?}", e);
+                }
+                self.store.reprocessing_task = None;
             }
             _ = update_interval.tick() => {
                 _ = log_error!(self.board_game_on_tick().await, "board game on tick");
@@ -535,6 +574,7 @@ impl RollupExecutorStore {
             crash_game: deser_store.crash_game,
             catching_up_to: None,
             last_processed_block: deser_store.last_processed_block,
+            reprocessing_task: None,
         }
     }
 
@@ -635,15 +675,25 @@ impl RollupExecutorStore {
             // If we are catching up, we don't rerun from settled state.
             return;
         }
+        if let Some(task) = self.reprocessing_task.take() {
+            // If we have a task running, cancel it.
+            tracing::debug!("Cancelling previous reprocessing task");
+            let _ = task.abort();
+        }
         // Revert each contract to the settled state.
+        let mut contracts = HashMap::new();
         for (contract_name, state) in &self.settled_state {
-            self.contracts.insert(contract_name.clone(), state.clone());
+            contracts.insert(contract_name.clone(), state.clone());
         }
-        // Re-execute all unsettled transactions from that safe state - ignore errors.
-        for (blob_tx, tx_ctx) in &self.unsettled_txs {
-            let _ =
-                Self::execute_blob_tx(&mut self.contracts, blob_tx, Some(tx_ctx.clone()), false);
-        }
+        // Spin a task to re-execute all transactions from the safe state - ignore errors
+        let txs = self.unsettled_txs.clone();
+        self.reprocessing_task = Some(tokio::spawn(async move {
+            for (blob_tx, tx_ctx) in txs {
+                let _ =
+                    Self::execute_blob_tx(&mut contracts, &blob_tx, Some(tx_ctx.clone()), false);
+            }
+            contracts
+        }));
     }
 
     /// This function is called when the transaction is confirmed as failed.
@@ -722,6 +772,7 @@ impl RollupExecutorStore {
             crash_game,
             catching_up_to: None,
             last_processed_block: BlockHeight(0),
+            reprocessing_task: None,
         }
     }
 }
