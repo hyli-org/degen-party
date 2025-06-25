@@ -81,7 +81,7 @@ const endGame = async () => {
                 </div>
                 <div v-else class="text-5xl font-extrabold text-[#FFD700] drop-shadow-lg mb-2">YOU LOST</div>
 
-                <div v-if="youLost" class="text-2xl font-bold text-[#8B0000] mb-4">
+                <div v-if="!showGameOver && youLost" class="text-2xl font-bold text-[#8B0000] mb-4">
                     You lost! 😢 Better luck next time!
                 </div>
                 <div v-else-if="allLost" class="text-2xl font-bold text-[#8B0000] mb-4">
@@ -90,7 +90,7 @@ const endGame = async () => {
                 <div v-else class="text-2xl font-bold text-[#8B0000] mb-4">
                     Winner: <span class="text-green-600">{{ winner?.name }}</span> 🏆 (+100 coins!)
                 </div>
-                <div v-if="!youLost" class="w-full">
+                <div v-if="showGameOver" class="w-full">
                     <div class="text-lg font-bold text-gray-700 mb-2">Final Standings:</div>
                     <ol class="list-decimal pl-6 space-y-2">
                         <li v-for="(player, idx) in playersSorted" :key="player.id" class="flex items-center gap-3">
@@ -108,7 +108,7 @@ const endGame = async () => {
                     </ol>
                 </div>
                 <button
-                    v-if="!youLost"
+                    v-if="showGameOver"
                     @click="gameState.isInLobby = true"
                     class="mt-6 px-8 py-3 rounded-xl font-bold text-lg border-4 border-[#FFD700] shadow-md bg-gradient-to-b from-[#4DAAFF] to-[#0077CC] text-white hover:-translate-y-1 hover:shadow-lg transition-all"
                 >
