@@ -85,6 +85,19 @@ class CrashGameService extends BaseWebSocketService {
         );
     }
 
+    sendState() {
+        this.send(
+            {
+                type: "CrashGame",
+                payload: {
+                    type: "SendState",
+                    payload: null,
+                },
+            },
+            "SendState",
+        );
+    }
+
     returnToBoard() {
         this.send(
             {

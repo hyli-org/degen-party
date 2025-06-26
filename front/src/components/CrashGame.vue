@@ -161,7 +161,19 @@ const gameEnded = computed(
             (crashGameState.minigame_verifiable?.state == "Crashed" ||
                 crashGameState.minigame_verifiable?.state == "Uninitialized")),
 );
-const currentMultiplier = computed(() => crashGameState.minigame_backend?.current_multiplier ?? 1);
+
+// Optimistic calculation of the multiplier to work around backend lags.
+const lastUpdateTime = ref(0);
+watchEffect(() => {
+    if (crashGameState.minigame_backend?.current_time) {
+        lastUpdateTime.value = Date.now();
+    }
+});
+const currentMultiplier = computed(() => {
+    if (!gameStarted.value) return 1.0;
+    let time = calculateGameTime.value + (Date.now() - lastUpdateTime.value) / 1000;
+    return Math.exp(time * 0.2);
+});
 
 const isPlayerInGame = computed(() => {
     return crashGameState.minigame_verifiable?.players?.[getLocalPlayerId()] !== undefined;

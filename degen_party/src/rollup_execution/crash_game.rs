@@ -25,6 +25,7 @@ use crate::{proving::CrashGameExecutor, OutboundWebsocketMessage};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", content = "payload")]
 pub enum CrashGameCommand {
+    SendState,
     CashOut { player_id: Identity },
     End,
 }
@@ -61,6 +62,10 @@ impl super::RollupExecutor {
     ) -> Result<()> {
         let uuid_128: u128 = uuid::Uuid::parse_str(uuid)?.as_u128();
         let mut blobs = match event {
+            CrashGameCommand::SendState => {
+                let state = self.get_crash_game().clone();
+                return self.broadcast_state_update(state, vec![]);
+            }
             CrashGameCommand::CashOut { player_id } => {
                 self.handle_cash_out(uuid_128, player_id).await
             }

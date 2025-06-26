@@ -2,6 +2,7 @@ import { computed, reactive } from "vue";
 import { BaseWebSocketService } from "../utils/base-websocket";
 import { authService } from "./auth";
 import { walletState } from "../utils/wallet";
+import { crashGameService } from "./crash";
 
 export interface MinigameResult {
     contract_name: string;
@@ -140,6 +141,13 @@ class BoardGameService extends BaseWebSocketService {
         if (data.type === "GameStateEvent") {
             const event = data.payload;
             if (event.type === "StateUpdated") {
+                if (!gameState.game) {
+                    // Switch to minigame screen if it seems we should.
+                    try {
+                        if ("InMinigame" in event.payload.state.phase) gameState.isInMinigame = true;
+                        crashGameService.sendState();
+                    } catch (_e) {}
+                }
                 gameState.game = event.payload.state;
                 if (gameState.game?.players.length === 0) gameState.isInLobby = true;
                 else if (
