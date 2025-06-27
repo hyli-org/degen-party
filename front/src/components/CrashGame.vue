@@ -169,20 +169,19 @@ watchEffect(() => {
         lastUpdateTime.value = Date.now();
     }
 });
-const currentMultiplier = ref(0);
+const currentMultiplier = ref(1);
 let updateMult = () => {
-    if (!gameStarted.value) return 0.0;
+    if (!gameStarted.value) return 1.0;
     if (gameEnded.value) {
-        currentMultiplier.value = crashGameState.minigame_backend?.current_multiplier || 1.0;
-        return;
+        return crashGameState.minigame_backend?.current_multiplier || 1.0;
     }
     let time = calculateGameTime.value + (Date.now() - lastUpdateTime.value) / 1000;
-    currentMultiplier.value = Math.exp(time * 0.2);
+    return Math.exp(time * 0.2);
 };
 let raf;
 onMounted(() => {
     let loop = () => {
-        updateMult();
+        currentMultiplier.value = updateMult();
         raf = requestAnimationFrame(loop);
     };
     raf = requestAnimationFrame(loop);
