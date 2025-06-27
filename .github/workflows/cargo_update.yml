@@ -13,19 +13,31 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get -y install curl g++ git libssl-dev pkg-config
+
       - name: Set up Rust
         uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
           override: true
 
+      - name: Install sp1up if needed
+        run: |
+          if ! /root/.sp1/bin/cargo-prove prove -V 2>/dev/null | grep -q "38f0f14"; then
+            curl -L https://sp1up.succinct.xyz | bash
+            /root/.sp1/bin/sp1up
+          fi
+
       - name: Run cargo update
         run: cargo update
 
-      - name: Run cargo build
-        run: cargo build --verbose
+      - name: Run custom cargo build
+        run: cargo build -F nobuild --bin degen_party --bin prover --verbose
 
-      - name: Run cargo test
+      - name: Run cargo tests
         run: cargo test --verbose
 
       - name: Commit changes
@@ -45,7 +57,7 @@ jobs:
           title: "chore: Cargo update on $(date +'%Y-%m-%d')"
           body: |
             Automatic `cargo update` to refresh dependencies.
-            Build and tests passed successfully.
+            Custom build flags and sp1up setup included.
           labels: |
             dependencies
             automated-pr
