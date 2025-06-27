@@ -97,7 +97,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed, onUnmounted, defineEmits, watch, watchEffect } from "vue";
+import { ref, onMounted, computed, onUnmounted, defineEmits, watch, watchEffect, onBeforeUnmount } from "vue";
 import ConfettiEffect from "./ConfettiEffect.vue";
 import { crashGameService, crashGameState } from "../game_data/crash";
 import { gameState, getLocalPlayerId } from "../game_data/game_data";
@@ -169,10 +169,26 @@ watchEffect(() => {
         lastUpdateTime.value = Date.now();
     }
 });
-const currentMultiplier = computed(() => {
+const currentMultiplier = ref(0);
+let updateMult = () => {
     if (!gameStarted.value) return 1.0;
+    if (gameEnded.value) {
+        currentMultiplier.value = crashGameState.minigame_backend?.current_multiplier || 1.0;
+        return;
+    }
     let time = calculateGameTime.value + (Date.now() - lastUpdateTime.value) / 1000;
-    return Math.exp(time * 0.2);
+    currentMultiplier.value = Math.exp(time * 0.2);
+};
+let raf;
+onMounted(() => {
+    let loop = () => {
+        updateMult();
+        raf = requestAnimationFrame(loop);
+    };
+    raf = requestAnimationFrame(loop);
+});
+onBeforeUnmount(() => {
+    cancelAnimationFrame(raf);
 });
 
 const isPlayerInGame = computed(() => {
