@@ -1,0 +1,43 @@
+name: Cargo Update and PR
+
+on:
+  schedule:
+    - cron: '0 4 * * 1' # Tous les lundis à 4h00 UTC
+  workflow_dispatch: # Permet de lancer manuellement
+
+jobs:
+  cargo-update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Rust
+        uses: actions/setup-rust@v1
+        with:
+          rust-version: stable
+
+      - name: Run cargo update
+        run: cargo update
+
+      - name: Commit changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -b cargo-update-$(date +%Y%m%d)
+          git add Cargo.lock
+          git commit -m "chore: cargo update on $(date +'%Y-%m-%d')"
+          git push origin HEAD
+
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v6
+        with:
+          commit-message: "chore: cargo update on $(date +'%Y-%m-%d')"
+          branch: cargo-update-$(date +%Y%m%d)
+          title: "chore: Cargo update on $(date +'%Y-%m-%d')"
+          body: |
+            Automatic `cargo update` to refresh dependencies.
+            Please review the changes and merge if everything looks good.
+          labels: |
+            dependencies
+            automated-pr
