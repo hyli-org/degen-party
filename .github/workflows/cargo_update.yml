@@ -26,9 +26,9 @@ jobs:
 
       - name: Install sp1up if needed
         run: |
-          if ! /root/.sp1/bin/cargo-prove prove -V 2>/dev/null | grep -q "38f0f14"; then
+          if ! ~/.sp1/bin/cargo-prove prove -V 2>/dev/null | grep -q "38f0f14"; then
             curl -L https://sp1up.succinct.xyz | bash
-            /root/.sp1/bin/sp1up
+            ~/.sp1/bin/sp1up
           fi
 
       - name: Run cargo update
