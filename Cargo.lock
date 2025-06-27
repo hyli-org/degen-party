@@ -66,7 +66,7 @@ dependencies = [
  "const-hex",
  "derive_more 2.0.1",
  "hashbrown 0.15.4",
- "indexmap 2.9.0",
+ "indexmap 2.10.0",
  "itoa",
  "k256",
  "paste",
@@ -717,7 +717,7 @@ checksum = "3fce8dd7fcfcbf3a0a87d8f515194b49d6135acab73e18bd380d1d93bb1a15eb"
 dependencies = [
  "clap",
  "heck 0.4.1",
- "indexmap 2.9.0",
+ "indexmap 2.10.0",
  "log",
  "proc-macro2",
  "quote",
@@ -1063,9 +1063,9 @@ dependencies = [
 
 [[package]]
 name = "crunchy"
-version = "0.2.3"
+version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "43da5946c66ffcc7745f48db692ffbb10a83bfe0afd96235c5c2a4fb23994929"
+checksum = "460fbee9c2c2f33933d720630a6a0bac33ba7053db5344fac858d4b8952d77d5"
 
 [[package]]
 name = "crypto-bigint"
@@ -1813,7 +1813,7 @@ dependencies = [
  "futures-core",
  "futures-sink",
  "http",
- "indexmap 2.9.0",
+ "indexmap 2.10.0",
  "slab",
  "tokio",
  "tokio-util",
@@ -1966,7 +1966,7 @@ checksum = "df3b46402a9d5adb4c86a0cf463f42e19994e3ee891101b1841f30a545cb49a9"
 [[package]]
 name = "hyle-client-sdk"
 version = "0.13.0-rc.4"
-source = "git+https://github.com/Hyle-org/hyle.git?branch=main#ef8e84e4a2c4dc63fe95b6cc94c0b775e2114484"
+source = "git+https://github.com/Hyle-org/hyle.git?branch=main#3b14e324ddf5115f450f0f7edca80f1026ff2196"
 dependencies = [
  "anyhow",
  "axum 0.8.4",
@@ -1986,7 +1986,7 @@ dependencies = [
 [[package]]
 name = "hyle-contract-sdk"
 version = "0.13.0-rc.4"
-source = "git+https://github.com/Hyle-org/hyle.git?branch=main#ef8e84e4a2c4dc63fe95b6cc94c0b775e2114484"
+source = "git+https://github.com/Hyle-org/hyle.git?branch=main#3b14e324ddf5115f450f0f7edca80f1026ff2196"
 dependencies = [
  "borsh",
  "hyle-model",
@@ -2000,7 +2000,7 @@ dependencies = [
 [[package]]
 name = "hyle-crypto"
 version = "0.13.0-rc.4"
-source = "git+https://github.com/Hyle-org/hyle.git?branch=main#ef8e84e4a2c4dc63fe95b6cc94c0b775e2114484"
+source = "git+https://github.com/Hyle-org/hyle.git?branch=main#3b14e324ddf5115f450f0f7edca80f1026ff2196"
 dependencies = [
  "anyhow",
  "blst",
@@ -2013,7 +2013,7 @@ dependencies = [
 [[package]]
 name = "hyle-model"
 version = "0.13.0-rc.4"
-source = "git+https://github.com/Hyle-org/hyle.git?branch=main#ef8e84e4a2c4dc63fe95b6cc94c0b775e2114484"
+source = "git+https://github.com/Hyle-org/hyle.git?branch=main#3b14e324ddf5115f450f0f7edca80f1026ff2196"
 dependencies = [
  "anyhow",
  "base64",
@@ -2036,7 +2036,7 @@ dependencies = [
 [[package]]
 name = "hyle-modules"
 version = "0.13.0-rc.4"
-source = "git+https://github.com/Hyle-org/hyle.git?branch=main#ef8e84e4a2c4dc63fe95b6cc94c0b775e2114484"
+source = "git+https://github.com/Hyle-org/hyle.git?branch=main#3b14e324ddf5115f450f0f7edca80f1026ff2196"
 dependencies = [
  "anyhow",
  "anymap",
@@ -2049,7 +2049,7 @@ dependencies = [
  "hyle-contract-sdk",
  "hyle-net",
  "hyle-verifiers",
- "indexmap 2.9.0",
+ "indexmap 2.10.0",
  "opentelemetry",
  "paste",
  "prometheus",
@@ -2072,7 +2072,7 @@ dependencies = [
 [[package]]
 name = "hyle-net"
 version = "0.13.0-rc.4"
-source = "git+https://github.com/Hyle-org/hyle.git?branch=main#ef8e84e4a2c4dc63fe95b6cc94c0b775e2114484"
+source = "git+https://github.com/Hyle-org/hyle.git?branch=main#3b14e324ddf5115f450f0f7edca80f1026ff2196"
 dependencies = [
  "anyhow",
  "axum 0.8.4",
@@ -2098,7 +2098,7 @@ dependencies = [
 [[package]]
 name = "hyle-smt-token"
 version = "0.13.0-rc.4"
-source = "git+https://github.com/Hyle-org/hyle.git?branch=main#ef8e84e4a2c4dc63fe95b6cc94c0b775e2114484"
+source = "git+https://github.com/Hyle-org/hyle.git?branch=main#3b14e324ddf5115f450f0f7edca80f1026ff2196"
 dependencies = [
  "anyhow",
  "borsh",
@@ -2112,7 +2112,7 @@ dependencies = [
 [[package]]
 name = "hyle-verifiers"
 version = "0.13.0-rc.4"
-source = "git+https://github.com/Hyle-org/hyle.git?branch=main#ef8e84e4a2c4dc63fe95b6cc94c0b775e2114484"
+source = "git+https://github.com/Hyle-org/hyle.git?branch=main#3b14e324ddf5115f450f0f7edca80f1026ff2196"
 dependencies = [
  "anyhow",
  "borsh",
@@ -2367,9 +2367,9 @@ dependencies = [
 
 [[package]]
 name = "indexmap"
-version = "2.9.0"
+version = "2.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cea70ddb795996207ad57735b50c5982d8844f38ba9ee5f1aedcfb708a2aa11e"
+checksum = "fe4cd85333e22411419a0bcae1297d25e58c9443848b11dc6a86fefe8c78a661"
 dependencies = [
  "equivalent",
  "hashbrown 0.15.4",
@@ -2562,9 +2562,9 @@ checksum = "f9fbbcab51052fe104eb5e5d351cf728d30a5be1fe14d9be8a3b097481fb97de"
 
 [[package]]
 name = "libredox"
-version = "0.1.3"
+version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c0ff37bd590ca25063e35af745c343cb7a0271906fb7b37e4813e8f79f00268d"
+checksum = "1580801010e535496706ba011c15f8532df6b42297d2e471fec38ceadd8c0638"
 dependencies = [
  "bitflags",
  "libc",
@@ -4324,7 +4324,7 @@ dependencies = [
  "chrono",
  "hex",
  "indexmap 1.9.3",
- "indexmap 2.9.0",
+ "indexmap 2.10.0",
  "schemars",
  "serde",
  "serde_derive",
@@ -5389,7 +5389,7 @@ version = "0.19.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1b5bb770da30e5cbfde35a2d7b9b8a2c4b8ef89548a7a6aeab5c9a576e3e7421"
 dependencies = [
- "indexmap 2.9.0",
+ "indexmap 2.10.0",
  "toml_datetime",
  "winnow 0.5.40",
 ]
@@ -5400,7 +5400,7 @@ version = "0.22.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "41fe8c660ae4257887cf66394862d21dbca4a6ddd26f04a3560410406a2f819a"
 dependencies = [
- "indexmap 2.9.0",
+ "indexmap 2.10.0",
  "serde",
  "serde_spanned",
  "toml_datetime",
@@ -5760,7 +5760,7 @@ version = "5.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2fcc29c80c21c31608227e0912b2d7fddba57ad76b606890627ba8ee7964e993"
 dependencies = [
- "indexmap 2.9.0",
+ "indexmap 2.10.0",
  "serde",
  "serde_json",
  "utoipa-gen",
@@ -5854,7 +5854,7 @@ dependencies = [
 [[package]]
 name = "wallet"
 version = "0.0.0"
-source = "git+https://github.com/hyli-org/wallet.git?branch=main#20ea3fd075859dc7a8ea10932087b546e14a2ca0"
+source = "git+https://github.com/hyli-org/wallet.git?branch=main#15e7ee131536f37ea6af3c2a29c217b3e8223921"
 dependencies = [
  "anyhow",
  "borsh",
@@ -6503,7 +6503,7 @@ dependencies = [
  "arbitrary",
  "crc32fast",
  "flate2",
- "indexmap 2.9.0",
+ "indexmap 2.10.0",
  "memchr",
  "zopfli",
 ]
