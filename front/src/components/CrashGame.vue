@@ -171,7 +171,7 @@ watchEffect(() => {
 });
 const currentMultiplier = ref(0);
 let updateMult = () => {
-    if (!gameStarted.value) return 1.0;
+    if (!gameStarted.value) return 0.0;
     if (gameEnded.value) {
         currentMultiplier.value = crashGameState.minigame_backend?.current_multiplier || 1.0;
         return;
