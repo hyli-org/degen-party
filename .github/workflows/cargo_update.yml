@@ -3,22 +3,30 @@ name: Cargo Update and PR
 on:
   schedule:
     - cron: '0 4 * * 1' # Tous les lundis à 4h00 UTC
-  workflow_dispatch: # Permet de lancer manuellement
+  workflow_dispatch: # Déclenchement manuel possible
 
 jobs:
   cargo-update:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Set up Rust
-        uses: actions/setup-rust@v1
+        uses: actions-rs/toolchain@v1
         with:
-          rust-version: stable
+          toolchain: stable
+          override: true
 
       - name: Run cargo update
         run: cargo update
+
+      - name: Run cargo build
+        run: cargo build --verbose
+
+      - name: Run cargo test
+        run: cargo test --verbose
 
       - name: Commit changes
         run: |
@@ -37,7 +45,7 @@ jobs:
           title: "chore: Cargo update on $(date +'%Y-%m-%d')"
           body: |
             Automatic `cargo update` to refresh dependencies.
-            Please review the changes and merge if everything looks good.
+            Build and tests passed successfully.
           labels: |
             dependencies
             automated-pr
