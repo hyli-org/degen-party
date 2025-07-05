@@ -3,11 +3,11 @@ use anyhow::Context as _;
 use anyhow::Result;
 use board_game::game::GameEvent;
 use borsh::{BorshDeserialize, BorshSerialize};
-use client_sdk::rest_client::NodeApiClient;
 use client_sdk::transaction_builder::TxExecutorHandler;
 use crash_game::CrashGameEvent;
 use futures::FutureExt;
 use game_state::GameStateEvent;
+use hyle_modules::utils::native_verifier_handler::NativeVerifierHandler;
 use hyle_modules::{
     bus::{BusClientReceiver, BusClientSender, SharedMessageBus},
     log_error, module_bus_client, module_handle_messages,
@@ -18,10 +18,9 @@ use hyle_modules::{
 };
 use sdk::{
     hyle_model_utils::TimestampMs, BlobTransaction, BlockHeight, Calldata, ContractName, Hashed,
-    HyleOutput, Identity, LaneId, MempoolStatusEvent, NodeStateEvent, TransactionData, TxContext,
-    TxHash, TxId,
+    Identity, LaneId, MempoolStatusEvent, NodeStateEvent, TransactionData, TxContext, TxHash, TxId,
 };
-use smt_token::client::tx_executor_handler::SmtTokenProvableState;
+use smt_token::client::light_executor::LightSmtExecutor;
 use std::fmt;
 use std::{
     any::TypeId,
@@ -71,7 +70,32 @@ impl DerefMut for RollupExecutor {
     }
 }
 
-pub trait RollupContract: TxExecutorHandler + Debug + Send + Sync {
+pub(crate) trait RollupExecWrapper {
+    fn handle(&mut self, calldata: &Calldata) -> Result<(bool, Vec<u8>)>;
+}
+
+pub trait MarkerExec: TxExecutorHandler {}
+impl MarkerExec for Wallet {}
+impl MarkerExec for NativeVerifierHandler {}
+impl MarkerExec for BoardGameExecutor {}
+impl MarkerExec for CrashGameExecutor {}
+
+impl<T: MarkerExec> RollupExecWrapper for T {
+    fn handle(&mut self, calldata: &Calldata) -> Result<(bool, Vec<u8>)> {
+        TxExecutorHandler::handle(self, calldata)
+            .map_err(|e| anyhow::anyhow!("Error handling calldata: {}", e))
+            .map(|ho| (ho.success, ho.program_outputs))
+    }
+}
+
+impl RollupExecWrapper for LightSmtExecutor {
+    fn handle(&mut self, calldata: &Calldata) -> Result<(bool, Vec<u8>)> {
+        self.handle(calldata)
+            .map(|r| (r.success, r.program_outputs))
+    }
+}
+
+pub(crate) trait RollupContract: RollupExecWrapper + Debug + Send + Sync {
     fn clone_box(&self) -> Box<dyn RollupContract>;
     fn borsh_serialize_box(&self) -> Result<Vec<u8>, std::io::Error>;
     fn as_any(&self) -> &dyn std::any::Any;
@@ -81,7 +105,7 @@ pub trait RollupContract: TxExecutorHandler + Debug + Send + Sync {
 impl<T> RollupContract for T
 where
     T: 'static
-        + TxExecutorHandler
+        + RollupExecWrapper
         + BorshSerialize
         + BorshDeserialize
         + Clone
@@ -104,7 +128,7 @@ where
 }
 
 // Wrapper for contract trait objects with manual Clone/Debug
-pub struct ContractBox {
+pub(crate) struct ContractBox {
     type_id: TypeId,
     inner: Box<dyn RollupContract + Send + Sync>,
 }
@@ -112,7 +136,7 @@ pub struct ContractBox {
 impl ContractBox {
     pub fn new<T>(inner: T) -> Self
     where
-        T: TxExecutorHandler
+        T: RollupExecWrapper
             + Clone
             + Debug
             + BorshSerialize
@@ -512,10 +536,9 @@ impl RollupExecutor {
         let hyle_outputs = hyle_outputs?;
 
         // Special for degen-party: process events and send updates to WS
-        for (hyle_output, contract_name) in &hyle_outputs {
+        for ((_success, output), contract_name) in &hyle_outputs {
             if contract_name == &self.board_game {
-                let events: Vec<GameEvent> =
-                    borsh::from_slice(&hyle_output.program_outputs).unwrap();
+                let events: Vec<GameEvent> = borsh::from_slice(&output).unwrap();
                 self.bus.send(WsBroadcastMessage {
                     message: OutboundWebsocketMessage::GameStateEvent(
                         GameStateEvent::StateUpdated {
@@ -527,8 +550,7 @@ impl RollupExecutor {
                     ),
                 })?;
             } else if contract_name == &self.crash_game {
-                let events: Vec<ChainEvent> =
-                    borsh::from_slice(&hyle_output.program_outputs).unwrap();
+                let events: Vec<ChainEvent> = borsh::from_slice(&output).unwrap();
                 let state = Some(self.get_crash_game().clone());
                 self.bus.send(WsBroadcastMessage {
                     message: OutboundWebsocketMessage::CrashGame(CrashGameEvent::StateUpdated {
@@ -585,7 +607,7 @@ impl RollupExecutorStore {
         blob_tx: &BlobTransaction,
         tx_ctx: Option<TxContext>,
         force_partial: bool,
-    ) -> anyhow::Result<Vec<(HyleOutput, ContractName)>> {
+    ) -> anyhow::Result<Vec<((bool, Vec<u8>), ContractName)>> {
         // 1. Clone all involved contracts' state
         let mut temp_contracts: BTreeMap<ContractName, ContractBox> = BTreeMap::new();
         let mut skipped_contracts = 0;
@@ -648,18 +670,17 @@ impl RollupExecutorStore {
                         blob.contract_name
                     );
                 }
-                Ok(hyle_output) => {
-                    if !hyle_output.success {
+                Ok((success, output)) => {
+                    if !success {
                         anyhow::bail!(
                             "Hyle output for tx {} on blob index {} for {} is not successful: {:?}",
                             blob_tx.hashed(),
                             calldata.index,
                             blob.contract_name,
-                            String::from_utf8(hyle_output.program_outputs.clone())
-                                .unwrap_or(hex::encode(&hyle_output.program_outputs)),
+                            output,
                         );
                     }
-                    hyle_outputs.push((hyle_output, blob.contract_name.clone()));
+                    hyle_outputs.push(((success, output), blob.contract_name.clone()));
                 }
             }
         }
@@ -810,11 +831,11 @@ pub async fn setup_rollup_execution(
                 ),
                 (
                     ContractName::new("oxygen"),
-                    ContractBox::new(SmtTokenProvableState::default()),
+                    ContractBox::new(LightSmtExecutor::default()),
                 ),
                 (
                     ContractName::new("oranj"),
-                    ContractBox::new(SmtTokenProvableState::default()),
+                    ContractBox::new(LightSmtExecutor::default()),
                 ),
                 (
                     ContractName::new("wallet"),
@@ -842,8 +863,7 @@ pub async fn setup_rollup_execution(
                     || contract_name == &ContractName::new("oxygen")
                 {
                     ContractBox::new(
-                        borsh::from_slice::<SmtTokenProvableState>(&data)
-                            .expect("Bad serialized data"),
+                        borsh::from_slice::<LightSmtExecutor>(&data).expect("Bad serialized data"),
                     )
                 } else if contract_name == &ContractName::new("wallet") {
                     ContractBox::new(

@@ -23,7 +23,7 @@ pub struct FakeLaneManagerBusClient {
 /// Fake Lane Manager module
 pub struct FakeLaneManager {
     bus: FakeLaneManagerBusClient,
-    hyle_client: Arc<NodeApiHttpClient>,
+    hyle_client: Arc<dyn NodeApiClient + Send + Sync>,
     lane_id: LaneId,
 }
 

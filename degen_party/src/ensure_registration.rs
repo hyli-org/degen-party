@@ -22,7 +22,7 @@ pub struct EnsureRegistrationBusClient {
 
 pub struct EnsureRegistration {
     bus: EnsureRegistrationBusClient,
-    hyle_client: Arc<NodeApiHttpClient>,
+    hyle_client: Arc<dyn NodeApiClient + Send + Sync>,
     #[allow(unused)]
     board_game: ContractName,
     #[allow(unused)]

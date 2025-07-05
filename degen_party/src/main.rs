@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use axum::Router;
 use clap::{command, Parser};
-use client_sdk::rest_client::NodeApiHttpClient;
+use client_sdk::rest_client::{test::NodeApiMockClient, NodeApiHttpClient};
 use degen_party::{
     ensure_registration::EnsureRegistration, fake_lane_manager::FakeLaneManager,
     AuthenticatedMessage, Conf, InboundWebsocketMessage, OutboundWebsocketMessage,
@@ -27,6 +27,9 @@ use std::{
 pub struct Args {
     #[arg(long, default_value = "config.toml")]
     pub config_file: Vec<String>,
+
+    #[arg(short, long, default_value = "false")]
+    pub no_init: bool,
 }
 
 #[tokio::main]
@@ -87,9 +90,11 @@ async fn main() -> Result<()> {
     // Initialize modules
     let mut handler = ModulesHandler::new(&bus).await;
 
-    handler
-        .build_module::<EnsureRegistration>(ctx.clone())
-        .await?;
+    if !args.no_init {
+        handler
+            .build_module::<EnsureRegistration>(ctx.clone())
+            .await?;
+    }
 
     handler
         .build_module::<WebSocketModule<AuthenticatedMessage<InboundWebsocketMessage>, OutboundWebsocketMessage>>(
