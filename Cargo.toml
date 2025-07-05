@@ -37,7 +37,7 @@ sparse-merkle-tree = { git = "https://github.com/hyli-org/sparse-merkle-tree", b
 # hyle-modules = { path = "../hyle/crates/hyle-modules", package = "hyle-modules" }
 
 [patch."https://github.com/Hyle-org/hyle"]
-hyle-smt-token = { git = "https://github.com/hyli-org/hyle.git", branch = "light_smt_executor", package = "hyle-smt-token" }
-sdk = { git = "https://github.com/hyli-org/hyle.git", branch = "light_smt_executor", package = "hyle-contract-sdk" }
-client-sdk = { git = "https://github.com/hyli-org/hyle.git", branch = "light_smt_executor", package = "hyle-client-sdk" }
-hyle-modules = { git = "https://github.com/hyli-org/hyle.git", branch = "light_smt_executor", package = "hyle-modules" }
+hyle-smt-token = { git = "https://github.com/hyli-org/hyli.git", branch = "light_smt_executor", package = "hyle-smt-token" }
+sdk = { git = "https://github.com/hyli-org/hyli.git", branch = "light_smt_executor", package = "hyle-contract-sdk" }
+client-sdk = { git = "https://github.com/hyli-org/hyli.git", branch = "light_smt_executor", package = "hyle-client-sdk" }
+hyle-modules = { git = "https://github.com/hyli-org/hyli.git", branch = "light_smt_executor", package = "hyle-modules" }
