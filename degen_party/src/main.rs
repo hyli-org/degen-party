@@ -32,8 +32,17 @@ pub struct Args {
     pub no_init: bool,
 }
 
-#[tokio::main]
-async fn main() -> Result<()> {
+fn main() {
+    tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .disable_lifo_slot()
+        .build()
+        .unwrap()
+        .block_on(main_fn())
+        .unwrap();
+}
+
+async fn main_fn() -> Result<()> {
     let args = Args::parse();
     let config = Conf::new(args.config_file).context("Failed to load config")?;
 

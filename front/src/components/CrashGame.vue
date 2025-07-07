@@ -53,7 +53,7 @@
                     <h3 v-else-if="!isPlayerInGame">You did not bet, so you are missing this round !</h3>
                     <button
                         v-else-if="!gameEnded"
-                        :disabled="!gameStarted || hasPlayerCashedOut"
+                        :disabled="!gameStarted || hasPlayerCashedOut || isAnimationPlayed('crashGameCashout')"
                         class="action-button cashout-action"
                         @click="handleActionButton"
                     >
@@ -129,7 +129,10 @@ const calculateGameTime = computed(
 
 const handleActionButton = () => {
     if (!gameEnded.value) {
-        crashGameService.cashOut();
+        markAnimationPlayed("crashGameCashout");
+        if (!isAnimationPlayed("crashGameCashout")) {
+            crashGameService.cashOut();
+        }
     } else {
         console.log("Game ended, returning to board...");
         gameState.isInMinigame = false;
