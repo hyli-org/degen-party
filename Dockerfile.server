@@ -9,7 +9,7 @@ RUN if ! /root/.sp1/bin/cargo-prove prove -V 2>/dev/null | grep -q "38f0f14"; th
 fi
 
 # Build application
-COPY Cargo.toml Cargo.lock ./
+COPY Cargo.toml Cargo.lock .cargo ./
 COPY degen_party ./degen_party
 COPY contracts ./contracts
 COPY elf ./elf
