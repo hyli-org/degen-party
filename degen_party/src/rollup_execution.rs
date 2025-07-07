@@ -310,7 +310,6 @@ impl Module for RollupExecutor {
                 .await
                 .unwrap_or_default(),
         );
-        let catching_up_to = Some(BlockHeight(350000));
 
         let mut store = match Self::load_from_disk::<DeserRollupExecutorStore>(file.as_path()) {
             Some(store) => RollupExecutorStore::deser_with(store, ctx.contract_deserializer),
