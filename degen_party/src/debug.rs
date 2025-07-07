@@ -258,14 +258,14 @@ impl DebugAnalyzer {
                 RollupExecutorStore::execute_blob_tx(
                     &mut rse.settled_state,
                     &tx,
-                    Some(tx_ctx.clone()),
+                    Some(&tx_ctx),
                     true,
                 )
                 .map(|x| {
                     x.into_iter()
-                        .map(|(k, _)| {
-                            borsh::from_slice::<Vec<GameEvent>>(&k.program_outputs)
-                                .map(|output| format!("{:?}", output))
+                        .map(|((_, o), _)| {
+                            borsh::from_slice::<Vec<GameEvent>>(&o)
+                                .map(|output| format!("{output:?}"))
                                 .unwrap_or_default()
                         })
                         .collect::<Vec<_>>()

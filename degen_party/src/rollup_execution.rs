@@ -3,6 +3,8 @@ use anyhow::Context as _;
 use anyhow::Result;
 use board_game::game::GameEvent;
 use borsh::{BorshDeserialize, BorshSerialize};
+use client_sdk::light_executor::LightContractExecutor;
+use client_sdk::light_executor::LightExecutorOutput;
 use client_sdk::transaction_builder::TxExecutorHandler;
 use crash_game::CrashGameEvent;
 use futures::FutureExt;
@@ -16,6 +18,7 @@ use hyle_modules::{
         Module, ModulesHandler,
     },
 };
+use sdk::BlobIndex;
 use sdk::{
     hyle_model_utils::TimestampMs, BlobTransaction, BlockHeight, Calldata, ContractName, Hashed,
     Identity, LaneId, MempoolStatusEvent, NodeStateEvent, TransactionData, TxContext, TxHash, TxId,
@@ -70,8 +73,14 @@ impl DerefMut for RollupExecutor {
     }
 }
 
+/// Essentially a newtyped trait LightExecutorOutput
 pub(crate) trait RollupExecWrapper {
-    fn handle(&mut self, calldata: &Calldata) -> Result<(bool, Vec<u8>)>;
+    fn handle(
+        &mut self,
+        tx: &BlobTransaction,
+        index: BlobIndex,
+        tx_ctx: Option<&TxContext>,
+    ) -> Result<LightExecutorOutput>;
 }
 
 pub trait MarkerExec: TxExecutorHandler {}
@@ -81,17 +90,39 @@ impl MarkerExec for BoardGameExecutor {}
 impl MarkerExec for CrashGameExecutor {}
 
 impl<T: MarkerExec> RollupExecWrapper for T {
-    fn handle(&mut self, calldata: &Calldata) -> Result<(bool, Vec<u8>)> {
-        TxExecutorHandler::handle(self, calldata)
+    fn handle(
+        &mut self,
+        blob_tx: &BlobTransaction,
+        index: BlobIndex,
+        tx_ctx: Option<&TxContext>,
+    ) -> Result<LightExecutorOutput> {
+        // TODO: make this cleaner
+        let calldata = Calldata {
+            identity: blob_tx.identity.clone(),
+            tx_hash: blob_tx.hashed(),
+            private_input: vec![],
+            blobs: blob_tx.blobs.clone().into(),
+            index: index.into(),
+            tx_ctx: tx_ctx.cloned(),
+            tx_blob_count: blob_tx.blobs.len(),
+        };
+        TxExecutorHandler::handle(self, &calldata)
             .map_err(|e| anyhow::anyhow!("Error handling calldata: {}", e))
-            .map(|ho| (ho.success, ho.program_outputs))
+            .map(|ho| LightExecutorOutput {
+                success: ho.success,
+                program_outputs: ho.program_outputs,
+            })
     }
 }
 
 impl RollupExecWrapper for LightSmtExecutor {
-    fn handle(&mut self, calldata: &Calldata) -> Result<(bool, Vec<u8>)> {
-        self.handle(calldata)
-            .map(|r| (r.success, r.program_outputs))
+    fn handle(
+        &mut self,
+        tx: &BlobTransaction,
+        index: BlobIndex,
+        tx_ctx: Option<&TxContext>,
+    ) -> Result<LightExecutorOutput> {
+        self.handle_blob(tx, index, tx_ctx, ())
     }
 }
 
@@ -279,6 +310,7 @@ impl Module for RollupExecutor {
                 .await
                 .unwrap_or_default(),
         );
+        let catching_up_to = Some(BlockHeight(350000));
 
         let mut store = match Self::load_from_disk::<DeserRollupExecutorStore>(file.as_path()) {
             Some(store) => RollupExecutorStore::deser_with(store, ctx.contract_deserializer),
@@ -520,7 +552,7 @@ impl RollupExecutor {
         let hyle_outputs = RollupExecutorStore::execute_blob_tx(
             &mut self.contracts,
             &blob_tx,
-            Some(tx_ctx.clone()),
+            Some(&tx_ctx),
             false,
         );
 
@@ -605,7 +637,7 @@ impl RollupExecutorStore {
     pub fn execute_blob_tx(
         contracts: &mut HashMap<ContractName, ContractBox>,
         blob_tx: &BlobTransaction,
-        tx_ctx: Option<TxContext>,
+        tx_ctx: Option<&TxContext>,
         force_partial: bool,
     ) -> anyhow::Result<Vec<((bool, Vec<u8>), ContractName)>> {
         // 1. Clone all involved contracts' state
@@ -652,35 +684,29 @@ impl RollupExecutorStore {
                 continue;
             };
 
-            let calldata = Calldata {
-                identity: blob_tx.identity.clone(),
-                tx_hash: blob_tx.hashed(),
-                private_input: vec![],
-                blobs: blob_tx.blobs.clone().into(),
-                index: blob_index.into(),
-                tx_ctx: tx_ctx.clone(),
-                tx_blob_count: blob_tx.blobs.len(),
-            };
-            match contract.handle(&calldata) {
+            match contract.handle(blob_tx, BlobIndex(blob_index), tx_ctx) {
                 Err(e) => {
                     anyhow::bail!(
                         "Error while executing tx {} on blob index {} for {}: {e}",
                         blob_tx.hashed(),
-                        calldata.index,
+                        blob_index,
                         blob.contract_name
                     );
                 }
-                Ok((success, output)) => {
+                Ok(LightExecutorOutput {
+                    success,
+                    program_outputs,
+                }) => {
                     if !success {
                         anyhow::bail!(
                             "Hyle output for tx {} on blob index {} for {} is not successful: {:?}",
                             blob_tx.hashed(),
-                            calldata.index,
+                            blob_index,
                             blob.contract_name,
-                            output,
+                            String::from_utf8(program_outputs).unwrap_or_default(),
                         );
                     }
-                    hyle_outputs.push(((success, output), blob.contract_name.clone()));
+                    hyle_outputs.push(((success, program_outputs), blob.contract_name.clone()));
                 }
             }
         }
@@ -710,8 +736,7 @@ impl RollupExecutorStore {
         let txs = self.unsettled_txs.clone();
         self.reprocessing_task = Some(tokio::spawn(async move {
             for (blob_tx, tx_ctx) in txs {
-                let _ =
-                    Self::execute_blob_tx(&mut contracts, &blob_tx, Some(tx_ctx.clone()), false);
+                let _ = Self::execute_blob_tx(&mut contracts, &blob_tx, Some(&tx_ctx), false);
             }
             contracts
         }));
@@ -755,7 +780,7 @@ impl RollupExecutorStore {
                 );
                 successful += 1;
                 if let Err(e) =
-                    Self::execute_blob_tx(&mut self.settled_state, &blob_tx, Some(tx_ctx), true)
+                    Self::execute_blob_tx(&mut self.settled_state, &blob_tx, Some(&tx_ctx), true)
                 {
                     // This _really_ should not happen, as we are executing a successful transaction on settled state.
                     // Probably indicates misconfiguration or desync from the chain.
