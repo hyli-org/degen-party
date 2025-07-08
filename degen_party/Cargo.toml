@@ -69,6 +69,7 @@ opt-level = 3
 debug = true
 
 [profile.release]
+inherits = "release"
 debug = true
 
 [profile.profiling]
