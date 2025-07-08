@@ -16,8 +16,14 @@ COPY elf ./elf
 
 RUN cargo build -F nobuild --bin degen_party --bin prover --release
 
-# RUNNER
+# RUNNER .
 FROM debian:bookworm-slim 
+
+RUN apt-get update && apt-get install -y linux-perf
+RUN cargo install flamegraph
+
+# Add additional perf privileges
+RUN echo "kernel.perf_event_paranoid = -1" >>/etc/sysctl.conf
 
 RUN apt-get update && apt-get -y install ca-certificates
 
