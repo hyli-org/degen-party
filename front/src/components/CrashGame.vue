@@ -129,8 +129,8 @@ const calculateGameTime = computed(
 
 const handleActionButton = () => {
     if (!gameEnded.value) {
-        markAnimationPlayed("crashGameCashout");
         if (!isAnimationPlayed("crashGameCashout")) {
+            markAnimationPlayed("crashGameCashout");
             crashGameService.cashOut();
         }
     } else {
