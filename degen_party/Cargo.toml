@@ -70,3 +70,7 @@ debug = true
 
 [profile.release]
 debug = true
+
+[profile.profiling]
+debug = true
+
