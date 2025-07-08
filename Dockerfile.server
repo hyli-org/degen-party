@@ -20,7 +20,19 @@ RUN cargo build -F nobuild --bin degen_party --bin prover --release
 # RUNNER
 FROM debian:bookworm-slim 
 
-RUN apt-get update && apt-get -y install ca-certificates
+RUN apt-get update && apt-get install -y linux-perf
+
+RUN apt-get update && apt-get -y install ca-certificates curl git
+
+# Installer flamegraph
+RUN git clone https://github.com/brendangregg/Flamegraph.git /opt/Flamegraph
+
+# Mettre les scripts dans le PATH
+ENV PATH="/opt/Flamegraph:$PATH"
+
+# Add additional perf privileges
+RUN echo "kernel.perf_event_paranoid = -1" >>/etc/sysctl.conf
+
 
 WORKDIR /degen_party
 
