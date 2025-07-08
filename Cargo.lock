@@ -5880,7 +5880,7 @@ dependencies = [
 [[package]]
 name = "wallet"
 version = "0.0.0"
-source = "git+https://github.com/hyli-org/wallet.git?branch=light_smt#0f478d62398079f759c442d0eedc5dd79426cbfb"
+source = "git+https://github.com/hyli-org/wallet.git?branch=light_smt#9b0f52a182766b6935989b175ce23f7b44d351b6"
 dependencies = [
  "anyhow",
  "borsh",
