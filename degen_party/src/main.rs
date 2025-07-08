@@ -9,6 +9,7 @@ use degen_party::{
 use hyle_modules::{
     bus::{metrics::BusMetrics, SharedMessageBus},
     modules::{
+        admin::{AdminApi, AdminApiRunContext},
         da_listener::{DAListener, DAListenerConf},
         websocket::WebSocketModule,
         BuildApiContextInner, ModulesHandler,
@@ -111,6 +112,15 @@ async fn main_fn() -> Result<()> {
         )
         .await?;
     handler.build_module::<FakeLaneManager>(ctx.clone()).await?;
+
+    handler
+        .build_module::<AdminApi>(AdminApiRunContext {
+            port: config.rest_server_port + 1,
+            router: axum::Router::new(),
+            max_body_size: 100 * 1024 * 1024, // 100 MB
+            data_directory: config.data_directory.clone(),
+        })
+        .await?;
 
     handler
         .build_module::<DAListener>(DAListenerConf {

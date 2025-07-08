@@ -1966,7 +1966,7 @@ checksum = "df3b46402a9d5adb4c86a0cf463f42e19994e3ee891101b1841f30a545cb49a9"
 [[package]]
 name = "hyle-client-sdk"
 version = "0.13.0-rc.4"
-source = "git+https://github.com/hyli-org/hyli.git?branch=light_smt_executor#e9d13e46ad1283fc4379a37591a1907f324a6c06"
+source = "git+https://github.com/Hyle-org/hyle.git?branch=main#ad508654dec4d31af0f1a8d68673324fb15b9f8e"
 dependencies = [
  "anyhow",
  "axum 0.8.4",
@@ -1986,7 +1986,7 @@ dependencies = [
 [[package]]
 name = "hyle-contract-sdk"
 version = "0.13.0-rc.4"
-source = "git+https://github.com/hyli-org/hyli.git?branch=light_smt_executor#e9d13e46ad1283fc4379a37591a1907f324a6c06"
+source = "git+https://github.com/Hyle-org/hyle.git?branch=main#ad508654dec4d31af0f1a8d68673324fb15b9f8e"
 dependencies = [
  "borsh",
  "hyle-model",
@@ -2000,7 +2000,7 @@ dependencies = [
 [[package]]
 name = "hyle-crypto"
 version = "0.13.0-rc.4"
-source = "git+https://github.com/hyli-org/hyli.git?branch=light_smt_executor#e9d13e46ad1283fc4379a37591a1907f324a6c06"
+source = "git+https://github.com/Hyle-org/hyle.git?branch=main#ad508654dec4d31af0f1a8d68673324fb15b9f8e"
 dependencies = [
  "anyhow",
  "blst",
@@ -2013,7 +2013,7 @@ dependencies = [
 [[package]]
 name = "hyle-model"
 version = "0.13.0-rc.4"
-source = "git+https://github.com/hyli-org/hyli.git?branch=light_smt_executor#e9d13e46ad1283fc4379a37591a1907f324a6c06"
+source = "git+https://github.com/Hyle-org/hyle.git?branch=main#ad508654dec4d31af0f1a8d68673324fb15b9f8e"
 dependencies = [
  "anyhow",
  "base64",
@@ -2036,7 +2036,7 @@ dependencies = [
 [[package]]
 name = "hyle-modules"
 version = "0.13.0-rc.4"
-source = "git+https://github.com/hyli-org/hyli.git?branch=light_smt_executor#e9d13e46ad1283fc4379a37591a1907f324a6c06"
+source = "git+https://github.com/Hyle-org/hyle.git?branch=main#ad508654dec4d31af0f1a8d68673324fb15b9f8e"
 dependencies = [
  "anyhow",
  "anymap",
@@ -2072,7 +2072,7 @@ dependencies = [
 [[package]]
 name = "hyle-net"
 version = "0.13.0-rc.4"
-source = "git+https://github.com/hyli-org/hyli.git?branch=light_smt_executor#e9d13e46ad1283fc4379a37591a1907f324a6c06"
+source = "git+https://github.com/Hyle-org/hyle.git?branch=main#ad508654dec4d31af0f1a8d68673324fb15b9f8e"
 dependencies = [
  "anyhow",
  "axum 0.8.4",
@@ -2098,7 +2098,7 @@ dependencies = [
 [[package]]
 name = "hyle-smt-token"
 version = "0.13.0-rc.4"
-source = "git+https://github.com/hyli-org/hyli.git?branch=light_smt_executor#e9d13e46ad1283fc4379a37591a1907f324a6c06"
+source = "git+https://github.com/Hyle-org/hyle.git?branch=main#ad508654dec4d31af0f1a8d68673324fb15b9f8e"
 dependencies = [
  "anyhow",
  "borsh",
@@ -2112,7 +2112,7 @@ dependencies = [
 [[package]]
 name = "hyle-verifiers"
 version = "0.13.0-rc.4"
-source = "git+https://github.com/hyli-org/hyli.git?branch=light_smt_executor#e9d13e46ad1283fc4379a37591a1907f324a6c06"
+source = "git+https://github.com/Hyle-org/hyle.git?branch=main#ad508654dec4d31af0f1a8d68673324fb15b9f8e"
 dependencies = [
  "anyhow",
  "borsh",
@@ -2178,9 +2178,9 @@ dependencies = [
 
 [[package]]
 name = "hyper-util"
-version = "0.1.14"
+version = "0.1.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dc2fdfdbff08affe55bb779f33b053aa1fe5dd5b54c257343c17edfa55711bdb"
+checksum = "7f66d5bd4c6f02bf0542fad85d626775bab9258cf795a4256dcaf3161114d1df"
 dependencies = [
  "base64",
  "bytes",
@@ -5880,7 +5880,7 @@ dependencies = [
 [[package]]
 name = "wallet"
 version = "0.0.0"
-source = "git+https://github.com/hyli-org/wallet.git?branch=main#db29e687b6ea5e195d84e87531bc166dea7bcc50"
+source = "git+https://github.com/hyli-org/wallet.git?branch=light_smt#0f478d62398079f759c442d0eedc5dd79426cbfb"
 dependencies = [
  "anyhow",
  "borsh",

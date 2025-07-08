@@ -13,7 +13,7 @@ client-sdk = { git = "https://github.com/Hyle-org/hyle.git", branch = "main", de
 hyle-modules = { git = "https://github.com/Hyle-org/hyle.git", branch = "main", package = "hyle-modules" }
 hyle-hyllar = { git = "https://github.com/Hyle-org/hyle.git", branch = "main", default-features = false, package = "hyle-hyllar" }
 hyle-hydentity = { git = "https://github.com/Hyle-org/hyle.git", branch = "main", package = "hyle-hydentity" }
-wallet = { git = "https://github.com/hyli-org/wallet.git", branch = "main", package = "wallet", default-features = false }
+wallet = { git = "https://github.com/hyli-org/wallet.git", branch = "light_smt", package = "wallet", default-features = false }
 smt-token = { git = "https://github.com/hyle-org/hyle.git", branch = "main", package = "hyle-smt-token", default-features = false }
 
 contracts = { path = "contracts", default-features = false, package = "contracts" }
@@ -35,9 +35,3 @@ sparse-merkle-tree = { git = "https://github.com/hyli-org/sparse-merkle-tree", b
 # hyle-client-sdk = { path = "../hyle/crates/client-sdk", package = "hyle-client-sdk" }
 # hyle-smt-token = { path = "../hyle/crates/contracts/smt-token", package = "hyle-smt-token" }
 # hyle-modules = { path = "../hyle/crates/hyle-modules", package = "hyle-modules" }
-
-[patch."https://github.com/Hyle-org/hyle"]
-hyle-smt-token = { git = "https://github.com/hyli-org/hyli.git", branch = "light_smt_executor", package = "hyle-smt-token" }
-sdk = { git = "https://github.com/hyli-org/hyli.git", branch = "light_smt_executor", package = "hyle-contract-sdk" }
-client-sdk = { git = "https://github.com/hyli-org/hyli.git", branch = "light_smt_executor", package = "hyle-client-sdk" }
-hyle-modules = { git = "https://github.com/hyli-org/hyli.git", branch = "light_smt_executor", package = "hyle-modules" }
