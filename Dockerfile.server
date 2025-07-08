@@ -30,7 +30,7 @@ ENV PATH="/opt/Flamegraph:$PATH"
 # Add additional perf privileges
 RUN echo "kernel.perf_event_paranoid = -1" >>/etc/sysctl.conf
 
-RUN apt-get update && apt-get -y install ca-certificates
+RUN apt-get update && apt-get -y install ca-certificates curl git
 
 WORKDIR /degen_party
 
