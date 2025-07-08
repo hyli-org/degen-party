@@ -16,7 +16,7 @@ COPY elf ./elf
 
 RUN cargo build -F nobuild --bin degen_party --bin prover --release
 
-# RUNNER .
+# RUNNER
 FROM debian:bookworm-slim 
 
 RUN apt-get update && apt-get install -y linux-perf
