@@ -10,6 +10,7 @@ fi
 
 # Build application
 COPY Cargo.toml Cargo.lock ./
+COPY .cargo ./.cargo
 COPY degen_party ./degen_party
 COPY contracts ./contracts
 COPY elf ./elf

@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use axum::Router;
 use clap::{command, Parser};
-use client_sdk::rest_client::NodeApiHttpClient;
+use client_sdk::rest_client::{test::NodeApiMockClient, NodeApiHttpClient};
 use degen_party::{
     ensure_registration::EnsureRegistration, fake_lane_manager::FakeLaneManager,
     AuthenticatedMessage, Conf, InboundWebsocketMessage, OutboundWebsocketMessage,
@@ -9,6 +9,7 @@ use degen_party::{
 use hyle_modules::{
     bus::{metrics::BusMetrics, SharedMessageBus},
     modules::{
+        admin::{AdminApi, AdminApiRunContext},
         da_listener::{DAListener, DAListenerConf},
         websocket::WebSocketModule,
         BuildApiContextInner, ModulesHandler,
@@ -27,10 +28,22 @@ use std::{
 pub struct Args {
     #[arg(long, default_value = "config.toml")]
     pub config_file: Vec<String>,
+
+    #[arg(short, long, default_value = "false")]
+    pub no_init: bool,
 }
 
-#[tokio::main]
-async fn main() -> Result<()> {
+fn main() {
+    tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .disable_lifo_slot()
+        .build()
+        .unwrap()
+        .block_on(main_fn())
+        .unwrap();
+}
+
+async fn main_fn() -> Result<()> {
     let args = Args::parse();
     let config = Conf::new(args.config_file).context("Failed to load config")?;
 
@@ -87,9 +100,11 @@ async fn main() -> Result<()> {
     // Initialize modules
     let mut handler = ModulesHandler::new(&bus).await;
 
-    handler
-        .build_module::<EnsureRegistration>(ctx.clone())
-        .await?;
+    if !args.no_init {
+        handler
+            .build_module::<EnsureRegistration>(ctx.clone())
+            .await?;
+    }
 
     handler
         .build_module::<WebSocketModule<AuthenticatedMessage<InboundWebsocketMessage>, OutboundWebsocketMessage>>(
@@ -97,6 +112,15 @@ async fn main() -> Result<()> {
         )
         .await?;
     handler.build_module::<FakeLaneManager>(ctx.clone()).await?;
+
+    handler
+        .build_module::<AdminApi>(AdminApiRunContext {
+            port: config.rest_server_port + 1,
+            router: axum::Router::new(),
+            max_body_size: 100 * 1024 * 1024, // 100 MB
+            data_directory: config.data_directory.clone(),
+        })
+        .await?;
 
     handler
         .build_module::<DAListener>(DAListenerConf {

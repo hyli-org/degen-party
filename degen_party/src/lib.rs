@@ -1,6 +1,6 @@
 use std::{path::PathBuf, sync::Arc};
 
-use client_sdk::rest_client::NodeApiHttpClient;
+use client_sdk::rest_client::{NodeApiClient, NodeApiHttpClient};
 use config::{Config, Environment};
 use hyle_modules::modules::websocket::WebSocketConfig;
 use hyle_modules::modules::SharedBuildApiCtx;
@@ -23,7 +23,7 @@ pub struct CryptoContext {
 
 pub struct Context {
     pub config: Arc<Conf>,
-    pub client: Arc<NodeApiHttpClient>,
+    pub client: Arc<dyn NodeApiClient + Send + Sync>,
     pub crypto: Arc<CryptoContext>,
     pub api: SharedBuildApiCtx,
     pub data_directory: PathBuf,

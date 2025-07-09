@@ -3,11 +3,13 @@ use anyhow::Context as _;
 use anyhow::Result;
 use board_game::game::GameEvent;
 use borsh::{BorshDeserialize, BorshSerialize};
-use client_sdk::rest_client::NodeApiClient;
+use client_sdk::light_executor::LightContractExecutor;
+use client_sdk::light_executor::LightExecutorOutput;
 use client_sdk::transaction_builder::TxExecutorHandler;
 use crash_game::CrashGameEvent;
 use futures::FutureExt;
 use game_state::GameStateEvent;
+use hyle_modules::utils::native_verifier_handler::NativeVerifierHandler;
 use hyle_modules::{
     bus::{BusClientReceiver, BusClientSender, SharedMessageBus},
     log_error, module_bus_client, module_handle_messages,
@@ -16,12 +18,12 @@ use hyle_modules::{
         Module, ModulesHandler,
     },
 };
+use sdk::BlobIndex;
 use sdk::{
     hyle_model_utils::TimestampMs, BlobTransaction, BlockHeight, Calldata, ContractName, Hashed,
-    HyleOutput, Identity, LaneId, MempoolStatusEvent, NodeStateEvent, TransactionData, TxContext,
-    TxHash, TxId,
+    Identity, LaneId, MempoolStatusEvent, NodeStateEvent, TransactionData, TxContext, TxHash, TxId,
 };
-use smt_token::client::tx_executor_handler::SmtTokenProvableState;
+use smt_token::client::light_executor::LightSmtExecutor;
 use std::fmt;
 use std::{
     any::TypeId,
@@ -38,7 +40,7 @@ use std::{
     vec,
 };
 use tokio::time::{self, Instant};
-use wallet::client::tx_executor_handler::Wallet;
+use wallet::client::light_executor::LightWalletExecutor;
 
 use crate::{
     fake_lane_manager::ConfirmedBlobTransaction,
@@ -71,7 +73,70 @@ impl DerefMut for RollupExecutor {
     }
 }
 
-pub trait RollupContract: TxExecutorHandler + Debug + Send + Sync {
+/// Essentially a newtyped trait LightExecutorOutput
+pub(crate) trait RollupExecWrapper {
+    fn handle(
+        &mut self,
+        tx: &BlobTransaction,
+        index: BlobIndex,
+        tx_ctx: Option<&TxContext>,
+    ) -> Result<LightExecutorOutput>;
+}
+
+pub trait MarkerExec: TxExecutorHandler {}
+impl MarkerExec for NativeVerifierHandler {}
+impl MarkerExec for BoardGameExecutor {}
+impl MarkerExec for CrashGameExecutor {}
+
+impl<T: MarkerExec> RollupExecWrapper for T {
+    fn handle(
+        &mut self,
+        blob_tx: &BlobTransaction,
+        index: BlobIndex,
+        tx_ctx: Option<&TxContext>,
+    ) -> Result<LightExecutorOutput> {
+        // TODO: make this cleaner
+        let calldata = Calldata {
+            identity: blob_tx.identity.clone(),
+            tx_hash: blob_tx.hashed(),
+            private_input: vec![],
+            blobs: blob_tx.blobs.clone().into(),
+            index: index.into(),
+            tx_ctx: tx_ctx.cloned(),
+            tx_blob_count: blob_tx.blobs.len(),
+        };
+        TxExecutorHandler::handle(self, &calldata)
+            .map_err(|e| anyhow::anyhow!("Error handling calldata: {}", e))
+            .map(|ho| LightExecutorOutput {
+                success: ho.success,
+                program_outputs: ho.program_outputs,
+            })
+    }
+}
+
+impl RollupExecWrapper for LightSmtExecutor {
+    fn handle(
+        &mut self,
+        tx: &BlobTransaction,
+        index: BlobIndex,
+        tx_ctx: Option<&TxContext>,
+    ) -> Result<LightExecutorOutput> {
+        self.handle_blob(tx, index, tx_ctx, ())
+    }
+}
+
+impl RollupExecWrapper for LightWalletExecutor {
+    fn handle(
+        &mut self,
+        tx: &BlobTransaction,
+        index: BlobIndex,
+        tx_ctx: Option<&TxContext>,
+    ) -> Result<LightExecutorOutput> {
+        self.handle_blob(tx, index, tx_ctx, ())
+    }
+}
+
+pub(crate) trait RollupContract: RollupExecWrapper + Debug + Send + Sync {
     fn clone_box(&self) -> Box<dyn RollupContract>;
     fn borsh_serialize_box(&self) -> Result<Vec<u8>, std::io::Error>;
     fn as_any(&self) -> &dyn std::any::Any;
@@ -81,7 +146,7 @@ pub trait RollupContract: TxExecutorHandler + Debug + Send + Sync {
 impl<T> RollupContract for T
 where
     T: 'static
-        + TxExecutorHandler
+        + RollupExecWrapper
         + BorshSerialize
         + BorshDeserialize
         + Clone
@@ -104,7 +169,7 @@ where
 }
 
 // Wrapper for contract trait objects with manual Clone/Debug
-pub struct ContractBox {
+pub(crate) struct ContractBox {
     type_id: TypeId,
     inner: Box<dyn RollupContract + Send + Sync>,
 }
@@ -112,7 +177,7 @@ pub struct ContractBox {
 impl ContractBox {
     pub fn new<T>(inner: T) -> Self
     where
-        T: TxExecutorHandler
+        T: RollupExecWrapper
             + Clone
             + Debug
             + BorshSerialize
@@ -164,6 +229,7 @@ impl BorshSerialize for ContractBox {
     }
 }
 
+#[derive(Debug)]
 enum DataQuality {
     Internal,
     Mempool,
@@ -334,6 +400,24 @@ impl Module for RollupExecutor {
                 if let Some(Ok(contracts)) = res {
                     tracing::info!("Reprocessing task finished, updating contracts");
                     self.store.contracts = contracts.clone();
+                    // Send WS messages
+                    self.bus.send(WsBroadcastMessage {
+                        message: OutboundWebsocketMessage::GameStateEvent(
+                            GameStateEvent::StateUpdated {
+                                state: Some(self.get_board_game().clone()),
+                                events: vec![],
+                                board_game: self.board_game.clone(),
+                                crash_game: self.crash_game.clone(),
+                            },
+                        ),
+                    })?;
+                    let state = Some(self.get_crash_game().clone());
+                    self.bus.send(WsBroadcastMessage {
+                        message: OutboundWebsocketMessage::CrashGame(CrashGameEvent::StateUpdated {
+                            state,
+                            events: vec![],
+                        }),
+                    })?;
                 } else if let Some(Err(e)) = res {
                     tracing::error!("Error in reprocessing task: {:?}", e);
                 }
@@ -345,6 +429,10 @@ impl Module for RollupExecutor {
             }
         };
 
+        self.persist().await
+    }
+
+    async fn persist(&mut self) -> Result<()> {
         let _ = log_error!(
             Self::save_on_disk::<RollupExecutorStore>(
                 self.data_directory
@@ -355,7 +443,6 @@ impl Module for RollupExecutor {
             ),
             "Saving prover"
         );
-
         Ok(())
     }
 }
@@ -386,7 +473,7 @@ impl RollupExecutor {
                     tracing::info!("Handling new block {}", block.block_height);
                 }
                 if let Some(eff) = block.registered_contracts.get(&ContractName::new("wallet")) {
-                    let wallet = Wallet::new(&Some(
+                    let wallet = LightWalletExecutor::new(&Some(
                         borsh::from_slice(
                             eff.2
                                 .as_ref()
@@ -496,7 +583,7 @@ impl RollupExecutor {
         let hyle_outputs = RollupExecutorStore::execute_blob_tx(
             &mut self.contracts,
             &blob_tx,
-            Some(tx_ctx.clone()),
+            Some(&tx_ctx),
             false,
         );
 
@@ -512,10 +599,9 @@ impl RollupExecutor {
         let hyle_outputs = hyle_outputs?;
 
         // Special for degen-party: process events and send updates to WS
-        for (hyle_output, contract_name) in &hyle_outputs {
+        for ((_success, output), contract_name) in &hyle_outputs {
             if contract_name == &self.board_game {
-                let events: Vec<GameEvent> =
-                    borsh::from_slice(&hyle_output.program_outputs).unwrap();
+                let events: Vec<GameEvent> = borsh::from_slice(&output).unwrap();
                 self.bus.send(WsBroadcastMessage {
                     message: OutboundWebsocketMessage::GameStateEvent(
                         GameStateEvent::StateUpdated {
@@ -527,8 +613,7 @@ impl RollupExecutor {
                     ),
                 })?;
             } else if contract_name == &self.crash_game {
-                let events: Vec<ChainEvent> =
-                    borsh::from_slice(&hyle_output.program_outputs).unwrap();
+                let events: Vec<ChainEvent> = borsh::from_slice(&output).unwrap();
                 let state = Some(self.get_crash_game().clone());
                 self.bus.send(WsBroadcastMessage {
                     message: OutboundWebsocketMessage::CrashGame(CrashGameEvent::StateUpdated {
@@ -539,7 +624,10 @@ impl RollupExecutor {
             }
         }
 
-        tracing::info!("Optimistically executed transaction {}", blob_tx.hashed(),);
+        tracing::info!(
+            "Optimistically executed transaction {} (source {quality:?})",
+            blob_tx.hashed(),
+        );
 
         Ok(())
     }
@@ -580,12 +668,12 @@ impl RollupExecutorStore {
 
     /// This function executes the blob transaction and returns the outputs of the contract.
     /// Errors on unknown blobs (if we care about the TX at all) or unsuccessful outputs.
-    pub fn execute_blob_tx(
+    pub(crate) fn execute_blob_tx(
         contracts: &mut HashMap<ContractName, ContractBox>,
         blob_tx: &BlobTransaction,
-        tx_ctx: Option<TxContext>,
+        tx_ctx: Option<&TxContext>,
         force_partial: bool,
-    ) -> anyhow::Result<Vec<(HyleOutput, ContractName)>> {
+    ) -> anyhow::Result<Vec<((bool, Vec<u8>), ContractName)>> {
         // 1. Clone all involved contracts' state
         let mut temp_contracts: BTreeMap<ContractName, ContractBox> = BTreeMap::new();
         let mut skipped_contracts = 0;
@@ -630,36 +718,29 @@ impl RollupExecutorStore {
                 continue;
             };
 
-            let calldata = Calldata {
-                identity: blob_tx.identity.clone(),
-                tx_hash: blob_tx.hashed(),
-                private_input: vec![],
-                blobs: blob_tx.blobs.clone().into(),
-                index: blob_index.into(),
-                tx_ctx: tx_ctx.clone(),
-                tx_blob_count: blob_tx.blobs.len(),
-            };
-            match contract.handle(&calldata) {
+            match contract.handle(blob_tx, BlobIndex(blob_index), tx_ctx) {
                 Err(e) => {
                     anyhow::bail!(
                         "Error while executing tx {} on blob index {} for {}: {e}",
                         blob_tx.hashed(),
-                        calldata.index,
+                        blob_index,
                         blob.contract_name
                     );
                 }
-                Ok(hyle_output) => {
-                    if !hyle_output.success {
+                Ok(LightExecutorOutput {
+                    success,
+                    program_outputs,
+                }) => {
+                    if !success {
                         anyhow::bail!(
                             "Hyle output for tx {} on blob index {} for {} is not successful: {:?}",
                             blob_tx.hashed(),
-                            calldata.index,
+                            blob_index,
                             blob.contract_name,
-                            String::from_utf8(hyle_output.program_outputs.clone())
-                                .unwrap_or(hex::encode(&hyle_output.program_outputs)),
+                            String::from_utf8(program_outputs).unwrap_or_default(),
                         );
                     }
-                    hyle_outputs.push((hyle_output, blob.contract_name.clone()));
+                    hyle_outputs.push(((success, program_outputs), blob.contract_name.clone()));
                 }
             }
         }
@@ -689,8 +770,7 @@ impl RollupExecutorStore {
         let txs = self.unsettled_txs.clone();
         self.reprocessing_task = Some(tokio::spawn(async move {
             for (blob_tx, tx_ctx) in txs {
-                let _ =
-                    Self::execute_blob_tx(&mut contracts, &blob_tx, Some(tx_ctx.clone()), false);
+                let _ = Self::execute_blob_tx(&mut contracts, &blob_tx, Some(&tx_ctx), false);
             }
             contracts
         }));
@@ -734,7 +814,7 @@ impl RollupExecutorStore {
                 );
                 successful += 1;
                 if let Err(e) =
-                    Self::execute_blob_tx(&mut self.settled_state, &blob_tx, Some(tx_ctx), true)
+                    Self::execute_blob_tx(&mut self.settled_state, &blob_tx, Some(&tx_ctx), true)
                 {
                     // This _really_ should not happen, as we are executing a successful transaction on settled state.
                     // Probably indicates misconfiguration or desync from the chain.
@@ -810,15 +890,17 @@ pub async fn setup_rollup_execution(
                 ),
                 (
                     ContractName::new("oxygen"),
-                    ContractBox::new(SmtTokenProvableState::default()),
+                    ContractBox::new(LightSmtExecutor::default()),
                 ),
                 (
                     ContractName::new("oranj"),
-                    ContractBox::new(SmtTokenProvableState::default()),
+                    ContractBox::new(LightSmtExecutor::default()),
                 ),
                 (
                     ContractName::new("wallet"),
-                    ContractBox::new(Wallet::new(&None).expect("Failed to create wallet")),
+                    ContractBox::new(
+                        LightWalletExecutor::new(&None).expect("Failed to create wallet"),
+                    ),
                 ),
                 (
                     ContractName::new("secp256k1"),
@@ -842,12 +924,12 @@ pub async fn setup_rollup_execution(
                     || contract_name == &ContractName::new("oxygen")
                 {
                     ContractBox::new(
-                        borsh::from_slice::<SmtTokenProvableState>(&data)
-                            .expect("Bad serialized data"),
+                        borsh::from_slice::<LightSmtExecutor>(&data).expect("Bad serialized data"),
                     )
                 } else if contract_name == &ContractName::new("wallet") {
                     ContractBox::new(
-                        borsh::from_slice::<Wallet>(&data).expect("Bad serialized data"),
+                        borsh::from_slice::<LightWalletExecutor>(&data)
+                            .expect("Bad serialized data"),
                     )
                 } else if contract_name == &ContractName::new("secp256k1") {
                     ContractBox::new(
