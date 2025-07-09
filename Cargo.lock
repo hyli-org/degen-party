@@ -725,7 +725,7 @@ dependencies = [
  "serde_json",
  "syn 2.0.104",
  "tempfile",
- "toml",
+ "toml 0.8.23",
 ]
 
 [[package]]
@@ -844,13 +844,13 @@ dependencies = [
 
 [[package]]
 name = "config"
-version = "0.15.11"
+version = "0.15.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "595aae20e65c3be792d05818e8c63025294ac3cb7e200f11459063a352a6ef80"
+checksum = "9baeea16b4f8fc242a701d2abacd87d3b024af0325fb0b59dd16bc14c214c2af"
 dependencies = [
  "pathdiff",
  "serde",
- "toml",
+ "toml 0.9.0",
  "winnow 0.7.11",
 ]
 
@@ -1966,7 +1966,7 @@ checksum = "df3b46402a9d5adb4c86a0cf463f42e19994e3ee891101b1841f30a545cb49a9"
 [[package]]
 name = "hyle-client-sdk"
 version = "0.13.0-rc.4"
-source = "git+https://github.com/Hyle-org/hyle.git?branch=main#ad508654dec4d31af0f1a8d68673324fb15b9f8e"
+source = "git+https://github.com/Hyle-org/hyle.git?branch=main#2149925e6cdd6bd1c607e56f072ea7447f165f6b"
 dependencies = [
  "anyhow",
  "axum 0.8.4",
@@ -1986,7 +1986,7 @@ dependencies = [
 [[package]]
 name = "hyle-contract-sdk"
 version = "0.13.0-rc.4"
-source = "git+https://github.com/Hyle-org/hyle.git?branch=main#ad508654dec4d31af0f1a8d68673324fb15b9f8e"
+source = "git+https://github.com/Hyle-org/hyle.git?branch=main#2149925e6cdd6bd1c607e56f072ea7447f165f6b"
 dependencies = [
  "borsh",
  "hyle-model",
@@ -2000,7 +2000,7 @@ dependencies = [
 [[package]]
 name = "hyle-crypto"
 version = "0.13.0-rc.4"
-source = "git+https://github.com/Hyle-org/hyle.git?branch=main#ad508654dec4d31af0f1a8d68673324fb15b9f8e"
+source = "git+https://github.com/Hyle-org/hyle.git?branch=main#2149925e6cdd6bd1c607e56f072ea7447f165f6b"
 dependencies = [
  "anyhow",
  "blst",
@@ -2013,7 +2013,7 @@ dependencies = [
 [[package]]
 name = "hyle-model"
 version = "0.13.0-rc.4"
-source = "git+https://github.com/Hyle-org/hyle.git?branch=main#ad508654dec4d31af0f1a8d68673324fb15b9f8e"
+source = "git+https://github.com/Hyle-org/hyle.git?branch=main#2149925e6cdd6bd1c607e56f072ea7447f165f6b"
 dependencies = [
  "anyhow",
  "base64",
@@ -2036,7 +2036,7 @@ dependencies = [
 [[package]]
 name = "hyle-modules"
 version = "0.13.0-rc.4"
-source = "git+https://github.com/Hyle-org/hyle.git?branch=main#ad508654dec4d31af0f1a8d68673324fb15b9f8e"
+source = "git+https://github.com/Hyle-org/hyle.git?branch=main#2149925e6cdd6bd1c607e56f072ea7447f165f6b"
 dependencies = [
  "anyhow",
  "anymap",
@@ -2072,7 +2072,7 @@ dependencies = [
 [[package]]
 name = "hyle-net"
 version = "0.13.0-rc.4"
-source = "git+https://github.com/Hyle-org/hyle.git?branch=main#ad508654dec4d31af0f1a8d68673324fb15b9f8e"
+source = "git+https://github.com/Hyle-org/hyle.git?branch=main#2149925e6cdd6bd1c607e56f072ea7447f165f6b"
 dependencies = [
  "anyhow",
  "axum 0.8.4",
@@ -2098,7 +2098,7 @@ dependencies = [
 [[package]]
 name = "hyle-smt-token"
 version = "0.13.0-rc.4"
-source = "git+https://github.com/Hyle-org/hyle.git?branch=main#ad508654dec4d31af0f1a8d68673324fb15b9f8e"
+source = "git+https://github.com/Hyle-org/hyle.git?branch=main#2149925e6cdd6bd1c607e56f072ea7447f165f6b"
 dependencies = [
  "anyhow",
  "borsh",
@@ -2112,7 +2112,7 @@ dependencies = [
 [[package]]
 name = "hyle-verifiers"
 version = "0.13.0-rc.4"
-source = "git+https://github.com/Hyle-org/hyle.git?branch=main#ad508654dec4d31af0f1a8d68673324fb15b9f8e"
+source = "git+https://github.com/Hyle-org/hyle.git?branch=main#2149925e6cdd6bd1c607e56f072ea7447f165f6b"
 dependencies = [
  "anyhow",
  "borsh",
@@ -4326,6 +4326,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "serde_spanned"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "40734c41988f7306bb04f0ecf60ec0f3f1caa34290e4e8ea471dcd3346483b83"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "serde_urlencoded"
 version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5395,9 +5404,22 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dc1beb996b9d83529a9e75c17a1686767d148d70663143c7854d8b4a09ced362"
 dependencies = [
  "serde",
- "serde_spanned",
- "toml_datetime",
+ "serde_spanned 0.6.9",
+ "toml_datetime 0.6.11",
  "toml_edit 0.22.27",
+]
+
+[[package]]
+name = "toml"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f271e09bde39ab52250160a67e88577e0559ad77e9085de6e9051a2c4353f8f8"
+dependencies = [
+ "serde",
+ "serde_spanned 1.0.0",
+ "toml_datetime 0.7.0",
+ "toml_parser",
+ "winnow 0.7.11",
 ]
 
 [[package]]
@@ -5410,13 +5432,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "toml_datetime"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bade1c3e902f58d73d3f294cd7f20391c1cb2fbcb643b73566bc773971df91e3"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "toml_edit"
 version = "0.19.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1b5bb770da30e5cbfde35a2d7b9b8a2c4b8ef89548a7a6aeab5c9a576e3e7421"
 dependencies = [
  "indexmap 2.10.0",
- "toml_datetime",
+ "toml_datetime 0.6.11",
  "winnow 0.5.40",
 ]
 
@@ -5428,9 +5459,18 @@ checksum = "41fe8c660ae4257887cf66394862d21dbca4a6ddd26f04a3560410406a2f819a"
 dependencies = [
  "indexmap 2.10.0",
  "serde",
- "serde_spanned",
- "toml_datetime",
+ "serde_spanned 0.6.9",
+ "toml_datetime 0.6.11",
  "toml_write",
+ "winnow 0.7.11",
+]
+
+[[package]]
+name = "toml_parser"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b5c1c469eda89749d2230d8156a5969a69ffe0d6d01200581cdc6110674d293e"
+dependencies = [
  "winnow 0.7.11",
 ]
 
@@ -5880,7 +5920,7 @@ dependencies = [
 [[package]]
 name = "wallet"
 version = "0.0.0"
-source = "git+https://github.com/hyli-org/wallet.git?branch=light_smt#9b0f52a182766b6935989b175ce23f7b44d351b6"
+source = "git+https://github.com/hyli-org/wallet.git?branch=main#95ebd52d9fd0c4a0928db7b4d337ec0729849b94"
 dependencies = [
  "anyhow",
  "borsh",
